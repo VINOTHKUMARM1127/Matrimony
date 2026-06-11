@@ -4,7 +4,6 @@
     "slug": "MATRIMONY",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "primaryColor": "#E8631A",
     "scheme": "lotmatch",
     "userInterfaceStyle": "light",
@@ -13,16 +12,11 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#E8631A"
       },
       "package": "com.vinoth_kumarm_27.MATRIMONY"
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
+    "web": {},
     "plugins": [
       [
         "expo-image-picker",

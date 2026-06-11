@@ -1,3 +1,8 @@
+// Polyfill __DEV__ for web
+if (typeof global.__DEV__ === 'undefined') {
+  global.__DEV__ = process.env.NODE_ENV !== 'production';
+}
+
 import { registerRootComponent } from 'expo';
 
 import App from './App';
