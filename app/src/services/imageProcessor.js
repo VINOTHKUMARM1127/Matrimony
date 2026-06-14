@@ -150,10 +150,12 @@ export const uploadImage = async (uri, userId, bucket = STORAGE_BUCKETS.PROFILE_
   const arrayBuffer = decode(base64);
 
   const bucketName = process.env.EXPO_PUBLIC_R2_BUCKET_NAME || bucket;
+  const buffer = new Uint8Array(arrayBuffer);
+  
   const command = new PutObjectCommand({
     Bucket: bucketName,
     Key: fileName,
-    Body: arrayBuffer,
+    Body: buffer,
     ContentType: 'image/webp',
   });
 

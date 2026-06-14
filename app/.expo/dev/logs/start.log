@@ -1,0 +1,14 @@
+{"_e":"root:init","_t":1779508499211,"format":"v0-jsonl","version":"56.1.10"}
+{"_e":"env:mode","_t":1779508499213,"nodeEnv":"development","babelEnv":"development","mode":"development"}
+{"_e":"env:load","_t":1779508499220,"mode":"development","files":["../..\\..\\.env"],"env":{"EXPO_PUBLIC_APP_ENV":"development","EXPO_PUBLIC_RAZORPAY_KEY_ID":"rzp_test_SHuWD5xQvLRsaW","EXPO_PUBLIC_RAZORPAY_KEY_SECRET":"hve7tOiJL9EECxXLCvRScaXQ","EXPO_PUBLIC_SUPABASE_ANON_KEY":"sb_publishable_Ooy8sys4x6Xw7_1xxfkdjA_255rRNSZ","EXPO_PUBLIC_SUPABASE_URL":"https://pcdtgwelrwyvtqixqufc.supabase.co"}}
+{"_e":"devserver:start","_t":1779508500069,"mode":"development","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../..\\..\\app","serverComponents":false,"serverActions":false,"serverRendering":false,"apiRoutes":false,"exporting":false}
+{"_e":"metro:config","_t":1779508500882,"serverRoot":"../..\\..","projectRoot":"../..\\..","exporting":false,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":false,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"metro:instantiate","_t":1779508512303,"atlas":false,"workers":10,"host":"::","port":8081}
+{"_e":"metro:client_log","_t":1779508523062,"level":"error","data":["Project is incompatible with this version of Expo Go\n\nThis project requires a newer version of Expo Go.\n\nHow to fix this error:\nDownload the latest version of Expo Go from the Play Store."]}
+{"_e":"root:init","_t":1779508667001,"format":"v0-jsonl","version":"56.1.10"}
+{"_e":"env:mode","_t":1779508667002,"nodeEnv":"development","babelEnv":"development","mode":"development"}
+{"_e":"env:load","_t":1779508667008,"mode":"development","files":["../..\\..\\.env"],"env":{"EXPO_PUBLIC_APP_ENV":"development","EXPO_PUBLIC_RAZORPAY_KEY_ID":"rzp_test_SHuWD5xQvLRsaW","EXPO_PUBLIC_RAZORPAY_KEY_SECRET":"hve7tOiJL9EECxXLCvRScaXQ","EXPO_PUBLIC_SUPABASE_ANON_KEY":"sb_publishable_Ooy8sys4x6Xw7_1xxfkdjA_255rRNSZ","EXPO_PUBLIC_SUPABASE_URL":"https://pcdtgwelrwyvtqixqufc.supabase.co"}}
+{"_e":"devserver:start","_t":1779508667531,"mode":"development","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../..\\..\\app","serverComponents":false,"serverActions":false,"serverRendering":false,"apiRoutes":false,"exporting":false}
+{"_e":"metro:config","_t":1779508668004,"serverRoot":"../..\\..","projectRoot":"../..\\..","exporting":false,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":false,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"metro:instantiate","_t":1779508678579,"atlas":false,"workers":10,"host":"::","port":8081}
+{"_e":"metro:client_log","_t":1779508683252,"level":"error","data":["Project is incompatible with this version of Expo Go\n\nThis project requires a newer version of Expo Go.\n\nHow to fix this error:\nDownload the latest version of Expo Go from the Play Store."]}

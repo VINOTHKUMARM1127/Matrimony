@@ -24,6 +24,7 @@ export const fetchAllUsers = async () => {
     .from('profiles')
     .select(`
       *,
+      photos(*),
       subscriptions(*)
     `)
     .order('created_at', { ascending: false });
@@ -152,10 +153,26 @@ export const resetUserPassword = async (userId, newPassword) => {
   return await response.json();
 };
 
+import { deletePhotoFromR2 } from './imageApi';
+
 /**
  * Delete a User
  */
 export const deleteUser = async (userId) => {
+  // 1. Clean up user photos from Cloudflare R2
+  try {
+    const { data: userPhotos } = await supabaseAdmin.from('photos').select('storage_path').eq('user_id', userId);
+    if (userPhotos && userPhotos.length > 0) {
+      for (const p of userPhotos) {
+        if (p.storage_path) {
+          await deletePhotoFromR2(p.storage_path).catch(err => console.warn('Failed to delete from R2:', err));
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Error fetching photos for cleanup:', err);
+  }
+
   // First try the secure RPC function to bypass GoTrue Auth API errors completely
   const { error: rpcError } = await supabase.rpc('delete_auth_user', { target_user_id: userId });
   
@@ -183,11 +200,49 @@ export const deleteUser = async (userId) => {
 };
 
 /**
+ * Add Profile Photo
+ */
+export const addPhoto = async (userId, publicUrl) => {
+  if (!supabaseAdmin) throw new Error('Service Role Key required');
+
+  const { data, error } = await supabaseAdmin
+    .from('photos')
+    .insert({
+      user_id: userId,
+      storage_path: publicUrl,
+      thumbnail_path: publicUrl,
+      is_primary: true,
+      display_order: 0,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+/**
+ * Delete Profile Photo DB Record
+ */
+export const deletePhoto = async (photoId) => {
+  if (!supabaseAdmin) throw new Error('Service Role Key required');
+
+  const { error } = await supabaseAdmin
+    .from('photos')
+    .delete()
+    .eq('id', photoId);
+
+  if (error) throw error;
+  return true;
+};
+
+/**
  * Update User Profile
  */
 export const updateUser = async (userId, profileData) => {
-  // Uses regular supabase client. Requires an RLS policy on the profiles table!
-  const { data, error } = await supabase
+  if (!supabaseAdmin) throw new Error('Service Role Key required for Admin updates');
+
+  const { data, error } = await supabaseAdmin
     .from('profiles')
     .update(profileData)
     .eq('id', userId)
@@ -237,19 +292,19 @@ export const bulkUploadUsers = async (usersList) => {
       const newUserId = authData.id;
 
       // 2. Insert Profile
-      const { error: profileError } = await supabase
+      const { error: profileError } = await supabaseAdmin
         .from('profiles')
         .insert({
           id: newUserId,
-          display_name: user.display_name,
-          gender: user.gender,
-          date_of_birth: user.date_of_birth,
-          phone: user.phone,
-          religion: user.religion,
-          caste: user.caste,
-          city: user.city,
-          education: user.education,
-          occupation: user.occupation,
+          display_name: user.display_name || 'No Name',
+          gender: user.gender || null,
+          date_of_birth: user.date_of_birth || null,
+          phone: user.phone || null,
+          religion: user.religion || null,
+          caste: user.caste || null,
+          city: user.city || null,
+          education: user.education || null,
+          occupation: user.occupation || null,
           is_profile_complete: true,
           profile_completion_percent: 100
         });

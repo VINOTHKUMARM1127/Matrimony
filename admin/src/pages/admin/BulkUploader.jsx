@@ -28,8 +28,19 @@ const BulkUploader = () => {
       throw new Error('JSON data must be an array of user objects.');
     }
 
-    if (jsonArray.length > 0 && !jsonArray[0].email) {
-      throw new Error('Invalid JSON format. Expected objects with "email", "password", etc.');
+    if (jsonArray.length === 0) {
+      throw new Error('JSON array is empty.');
+    }
+
+    // Validate required fields
+    const requiredFields = ['email', 'password', 'display_name', 'gender'];
+    for (let i = 0; i < jsonArray.length; i++) {
+      const user = jsonArray[i];
+      for (const field of requiredFields) {
+        if (!user[field]) {
+          throw new Error(`Row ${i + 1} (${user.email || 'Unknown'}): Missing required field "${field}".`);
+        }
+      }
     }
 
     const uploadResults = await adminApi.bulkUploadUsers(jsonArray);
@@ -54,7 +65,7 @@ const BulkUploader = () => {
         await processJsonArray(json);
       } catch (err) {
         console.error(err);
-        alert(`Error parsing JSON: ${err.message}`);
+        alert(`Error: ${err.message}`);
       } finally {
         setIsUploading(false);
       }
@@ -73,10 +84,32 @@ const BulkUploader = () => {
       await processJsonArray(json);
     } catch (err) {
       console.error(err);
-      alert(`Error parsing pasted JSON: ${err.message}`);
+      alert(`Error: ${err.message}`);
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const sampleJsonStr = `[
+  {
+    "email": "sample@example.com",
+    "password": "TempPassword123!",
+    "display_name": "Arun Kumar",
+    "gender": "male",
+    "date_of_birth": "1994-08-20",
+    "phone": "9876543210",
+    "religion": "Hindu",
+    "caste": "Mudaliar",
+    "city": "Chennai",
+    "education": "B.E. / B.Tech.",
+    "occupation": "Software Engineer"
+  }
+]`;
+
+  const copySample = () => {
+    navigator.clipboard.writeText(sampleJsonStr)
+      .then(() => alert('Sample JSON copied to clipboard!'))
+      .catch(err => alert('Failed to copy text: ' + err));
   };
 
   return (
@@ -149,7 +182,7 @@ const BulkUploader = () => {
             </label>
             <textarea
               className="w-full h-64 p-4 border border-neutral-200 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder={'[\n  {\n    "email": "user@example.com",\n    "password": "SecurePass123",\n    ...\n  }\n]'}
+              placeholder={'[\n  {\n    "email": "user@example.com",\n    "password": "SecurePass123",\n    "display_name": "John Doe",\n    "gender": "male"\n  }\n]'}
               value={pastedJson}
               onChange={(e) => setPastedJson(e.target.value)}
             ></textarea>
@@ -203,23 +236,17 @@ const BulkUploader = () => {
       )}
 
       <Card className="p-6 bg-primary-50 border border-primary-100">
-        <h3 className="font-bold text-primary-900 mb-2">Sample JSON Format</h3>
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h3 className="font-bold text-primary-900 mb-1">Sample JSON Format</h3>
+            <p className="text-xs text-primary-700">Required fields: email, password, display_name, gender</p>
+          </div>
+          <Button variant="outline" onClick={copySample} className="bg-white hover:bg-neutral-50 text-xs py-1.5 px-3">
+            Copy Sample JSON
+          </Button>
+        </div>
         <pre className="bg-white p-4 rounded-lg text-xs overflow-x-auto text-neutral-800 border border-primary-100">
-{`[
-  {
-    "email": "sample@example.com",
-    "password": "TempPassword123!",
-    "display_name": "Arun Kumar",
-    "gender": "male",
-    "date_of_birth": "1994-08-20",
-    "phone": "9876543210",
-    "religion": "Hindu",
-    "caste": "Mudaliar",
-    "city": "Chennai",
-    "education": "B.E. / B.Tech.",
-    "occupation": "Software Engineer"
-  }
-]`}
+{sampleJsonStr}
         </pre>
       </Card>
     </div>

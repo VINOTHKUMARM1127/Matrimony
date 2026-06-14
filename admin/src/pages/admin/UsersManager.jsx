@@ -9,6 +9,9 @@ const UsersManager = () => {
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterGender, setFilterGender] = useState('');
+  const [filterTier, setFilterTier] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -32,17 +35,39 @@ const UsersManager = () => {
   };
 
   useEffect(() => {
-    if (!searchTerm) {
-      setFilteredUsers(users);
-      return;
+    let result = users;
+
+    if (searchTerm) {
+      const lower = searchTerm.toLowerCase();
+      result = result.filter(u => 
+        u.display_name?.toLowerCase().includes(lower) || 
+        u.email?.toLowerCase().includes(lower) ||
+        u.phone?.includes(lower)
+      );
     }
-    const lower = searchTerm.toLowerCase();
-    setFilteredUsers(users.filter(u => 
-      u.display_name?.toLowerCase().includes(lower) || 
-      u.email?.toLowerCase().includes(lower) ||
-      u.phone?.includes(lower)
-    ));
-  }, [searchTerm, users]);
+
+    if (filterGender) {
+      result = result.filter(u => u.gender === filterGender);
+    }
+
+    if (filterTier) {
+      if (filterTier === 'free') {
+        result = result.filter(u => !u.is_premium || u.tier === 'free');
+      } else {
+        result = result.filter(u => u.tier === filterTier);
+      }
+    }
+
+    if (filterStatus) {
+      if (filterStatus === 'complete') {
+        result = result.filter(u => u.is_profile_complete === true);
+      } else if (filterStatus === 'incomplete') {
+        result = result.filter(u => u.is_profile_complete === false || u.is_profile_complete === null);
+      }
+    }
+
+    setFilteredUsers(result);
+  }, [searchTerm, filterGender, filterTier, filterStatus, users]);
 
   const handleUpdatePlan = async (userId, planType) => {
     if (!window.confirm(`Update plan to ${planType} for this user?`)) return;
@@ -123,18 +148,66 @@ const UsersManager = () => {
             <UserMinus size={18} />
             Clean Up Incomplete Accounts
           </Button>
-
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search users..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:border-primary-500"
-            />
-          </div>
         </div>
+      </div>
+
+      <div className="bg-white p-4 rounded-xl border border-neutral-200 mb-6 flex flex-wrap gap-4 items-center">
+        <div className="relative w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
+          <input 
+            type="text" 
+            placeholder="Search users..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:border-primary-500"
+          />
+        </div>
+
+        <select 
+          value={filterGender} 
+          onChange={(e) => setFilterGender(e.target.value)}
+          className="px-3 py-2 border border-neutral-200 rounded-lg focus:outline-none focus:border-primary-500 bg-white"
+        >
+          <option value="">All Genders</option>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+        </select>
+
+        <select 
+          value={filterTier} 
+          onChange={(e) => setFilterTier(e.target.value)}
+          className="px-3 py-2 border border-neutral-200 rounded-lg focus:outline-none focus:border-primary-500 bg-white"
+        >
+          <option value="">All Plans</option>
+          <option value="free">Free</option>
+          <option value="silver">Silver</option>
+          <option value="gold">Gold</option>
+          <option value="platinum">Platinum</option>
+        </select>
+
+        <select 
+          value={filterStatus} 
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="px-3 py-2 border border-neutral-200 rounded-lg focus:outline-none focus:border-primary-500 bg-white"
+        >
+          <option value="">All Profiles</option>
+          <option value="complete">Completed</option>
+          <option value="incomplete">Incomplete</option>
+        </select>
+
+        {(searchTerm || filterGender || filterTier || filterStatus) && (
+          <button 
+            onClick={() => {
+              setSearchTerm('');
+              setFilterGender('');
+              setFilterTier('');
+              setFilterStatus('');
+            }}
+            className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+          >
+            Clear Filters
+          </button>
+        )}
       </div>
 
       <Card className="flex-1 overflow-hidden flex flex-col">

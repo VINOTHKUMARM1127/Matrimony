@@ -325,10 +325,12 @@ export const uploadProfilePhoto = async (userId, fileUri, options = { replacePri
 
     // 4. Upload to Cloudflare R2
     const bucketName = process.env.EXPO_PUBLIC_R2_BUCKET_NAME || 'profile-photos';
+    const buffer = new Uint8Array(arrayBuffer);
+    
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: fileName,
-      Body: arrayBuffer,
+      Body: buffer,
       ContentType: 'image/jpeg',
     });
 

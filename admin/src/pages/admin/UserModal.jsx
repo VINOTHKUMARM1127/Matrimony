@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { X, Save, Trash2, Key, Shield } from 'lucide-react';
+import { X, Save, Trash2, Key, Shield, ImagePlus, Loader2 } from 'lucide-react';
 import Button from '../../components/common/Button';
 import * as adminApi from '../../api/adminApi';
+import * as imageApi from '../../api/imageApi';
 
 const UserModal = ({ user, onClose, onRefresh }) => {
   const [formData, setFormData] = useState({
@@ -16,6 +17,8 @@ const UserModal = ({ user, onClose, onRefresh }) => {
     occupation: ''
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [photos, setPhotos] = useState(user?.photos || []);
 
   useEffect(() => {
     if (user) {
@@ -30,6 +33,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
         education: user.education || '',
         occupation: user.occupation || ''
       });
+      setPhotos(user.photos || []);
     }
   }, [user]);
 
@@ -116,6 +120,55 @@ const UserModal = ({ user, onClose, onRefresh }) => {
     }
   };
 
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!window.confirm('Upload this photo as the new profile picture?')) return;
+
+    setPhotoLoading(true);
+    try {
+      // 1. Upload to Cloudflare R2
+      const r2Result = await imageApi.uploadPhotoToR2(user.id, file);
+
+      // 2. Add to Supabase
+      const newPhoto = await adminApi.addPhoto(user.id, r2Result.publicUrl);
+      
+      setPhotos(prev => [...prev, newPhoto]);
+      alert('Photo uploaded successfully!');
+      onRefresh();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to upload photo: ' + err.message);
+    } finally {
+      setPhotoLoading(false);
+      // reset file input
+      e.target.value = '';
+    }
+  };
+
+  const handlePhotoDelete = async (photo) => {
+    if (!window.confirm('Are you sure you want to delete this photo? It will be removed from cloud storage.')) return;
+
+    setPhotoLoading(true);
+    try {
+      // 1. Delete from Supabase
+      await adminApi.deletePhoto(photo.id);
+
+      // 2. Delete from Cloudflare R2
+      await imageApi.deletePhotoFromR2(photo.storage_path);
+
+      setPhotos(prev => prev.filter(p => p.id !== photo.id));
+      alert('Photo deleted successfully!');
+      onRefresh();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to delete photo: ' + err.message);
+    } finally {
+      setPhotoLoading(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -135,6 +188,59 @@ const UserModal = ({ user, onClose, onRefresh }) => {
             <div>
               <p className="text-sm text-neutral-500 mb-1">User ID</p>
               <p className="font-mono text-xs text-neutral-400">{user.id}</p>
+            </div>
+          </div>
+
+          <div className="bg-white border border-neutral-200 rounded-xl p-6">
+            <h3 className="font-semibold text-neutral-900 mb-4 flex items-center gap-2">
+              <ImagePlus size={18} className="text-brand-500" />
+              Profile Photos
+            </h3>
+            <div className="flex gap-4 overflow-x-auto pb-2">
+              {photos && photos.length > 0 ? (
+                photos.map(photo => (
+                  <div key={photo.id} className="relative group shrink-0 w-32 h-32 rounded-xl overflow-hidden border border-neutral-200 shadow-sm">
+                    <img 
+                      src={photo.storage_path} 
+                      alt="Profile" 
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <button 
+                        onClick={() => handlePhotoDelete(photo)}
+                        disabled={photoLoading}
+                        className="bg-error-500 text-white p-2 rounded-full hover:bg-error-600 transition-colors disabled:opacity-50"
+                        title="Delete Photo"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="w-32 h-32 rounded-xl border-2 border-dashed border-neutral-200 flex flex-col items-center justify-center text-neutral-400 bg-neutral-50">
+                  <ImagePlus size={24} className="mb-2 text-neutral-300" />
+                  <span className="text-xs">No Photos</span>
+                </div>
+              )}
+              
+              <label className="shrink-0 w-32 h-32 rounded-xl border-2 border-dashed border-brand-200 flex flex-col items-center justify-center text-brand-600 bg-brand-50 cursor-pointer hover:bg-brand-100 transition-colors">
+                {photoLoading ? (
+                  <Loader2 size={24} className="animate-spin mb-2" />
+                ) : (
+                  <>
+                    <ImagePlus size={24} className="mb-2" />
+                    <span className="text-xs font-medium">Upload New</span>
+                  </>
+                )}
+                <input 
+                  type="file" 
+                  accept="image/jpeg, image/png, image/webp" 
+                  className="hidden" 
+                  onChange={handlePhotoUpload}
+                  disabled={photoLoading}
+                />
+              </label>
             </div>
           </div>
 
