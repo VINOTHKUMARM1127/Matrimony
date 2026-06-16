@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Partner Preference Registration (Step 8 - Final)
+ * Wedring Matrimony — Partner Preference Registration (Step 8 - Final)
  */
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';

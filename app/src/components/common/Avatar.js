@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Avatar Component
+ * Wedring Matrimony — Avatar Component
  * Profile photo display with fallback initials
  */
 import React from 'react';

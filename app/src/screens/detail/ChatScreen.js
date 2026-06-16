@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — ChatScreen Component
+ * Wedring Matrimony — ChatScreen Component
  * Real-time chat screen featuring database-driven messaging, pagination, and clean design.
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';

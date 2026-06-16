@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Card Component
+ * Wedring Matrimony — Card Component
  * Elegant rounded card with variants
  */
 import React from 'react';

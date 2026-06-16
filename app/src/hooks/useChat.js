@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — useChat Hook
+ * Wedring Matrimony — useChat Hook
  * Subscribes to realtime chat updates, manages active chats, and tracks messages
  */
 import { useEffect, useState, useCallback } from 'react';

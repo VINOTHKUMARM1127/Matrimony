@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Education & Career Registration (Step 3)
+ * Wedring Matrimony — Education & Career Registration (Step 3)
  */
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';

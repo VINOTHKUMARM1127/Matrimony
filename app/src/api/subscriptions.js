@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Subscriptions API
+ * Wedring Matrimony — Subscriptions API
  * Premium membership management
  */
 import supabase from './supabaseClient';

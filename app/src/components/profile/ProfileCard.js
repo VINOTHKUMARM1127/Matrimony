@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — ProfileCard Component (Premium Redesign)
+ * Wedring Matrimony — ProfileCard Component (Premium Redesign)
  * Information-rich feed card with photo, details, tags, and action bar.
  */
 import React, { useMemo } from 'react';

@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Button Component
+ * Wedring Matrimony — Button Component
  * Premium reusable button with variants
  */
 import React from 'react';

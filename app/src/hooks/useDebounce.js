@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — useDebounce Hook
+ * Wedring Matrimony — useDebounce Hook
  * Debounces a value changes by a specified delay time
  */
 import { useState, useEffect } from 'react';

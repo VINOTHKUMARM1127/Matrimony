@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Chat List Screen
+ * Wedring Matrimony — Chat List Screen
  */
 import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';

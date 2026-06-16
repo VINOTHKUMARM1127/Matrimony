@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — useProfile Hook
+ * Wedring Matrimony — useProfile Hook
  * React hook interface for profile operations, editing and detail loading
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';

@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Religion & Caste Registration (Step 2)
+ * Wedring Matrimony — Religion & Caste Registration (Step 2)
  */
 import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';

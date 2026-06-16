@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — useImageUpload Hook
+ * Wedring Matrimony — useImageUpload Hook
  * Coordinates image picking, camera shoots, compression, storage uploads, and database sync
  */
 import { useState } from 'react';

@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Profile Store (Zustand)
+ * Wedring Matrimony — Profile Store (Zustand)
  * User profile state management
  */
 import { create } from 'zustand';

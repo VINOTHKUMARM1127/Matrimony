@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Lifestyle Registration (Step 6)
+ * Wedring Matrimony — Lifestyle Registration (Step 6)
  */
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';

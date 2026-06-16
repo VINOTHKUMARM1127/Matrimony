@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — ProfileHeader Component
+ * Wedring Matrimony — ProfileHeader Component
  * Premium profile header displaying user identification details and core metadata
  */
 import React from 'react';

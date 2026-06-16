@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Horoscope Registration (Step 5)
+ * Wedring Matrimony — Horoscope Registration (Step 5)
  */
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';

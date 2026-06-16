@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — SuccessOverlay
+ * Wedring Matrimony — SuccessOverlay
  * A reusable, premium confirmation animation for key moments:
  * Interest Sent, Contact Unlocked, Premium Activated, Profile Saved, etc.
  *

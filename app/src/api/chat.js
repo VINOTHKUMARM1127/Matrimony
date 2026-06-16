@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Chat API
+ * Wedring Matrimony — Chat API
  * Messaging and realtime chat functions
  */
 import supabase from './supabaseClient';

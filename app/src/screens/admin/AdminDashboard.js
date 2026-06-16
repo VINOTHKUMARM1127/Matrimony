@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — AdminDashboard Screen
+ * Wedring Matrimony — AdminDashboard Screen
  * Overview analytics and quick actions for application administrators
  */
 import React from 'react';

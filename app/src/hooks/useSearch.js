@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — useSearch Hook
+ * Wedring Matrimony — useSearch Hook
  * Manages search state, filters, and coordinates API calling
  */
 import { useState, useCallback } from 'react';

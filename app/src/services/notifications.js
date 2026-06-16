@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Push Notification Service
+ * Wedring Matrimony — Push Notification Service
  * Using Expo Notifications (FCM backend for Android)
  */
 import * as Notifications from 'expo-notifications';

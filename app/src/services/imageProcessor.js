@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Image Processor Service
+ * Wedring Matrimony — Image Processor Service
  * Compression, thumbnails, and upload management
  */
 import * as ImageManipulator from 'expo-image-manipulator';

@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — CompatibilityBadge Component
+ * Wedring Matrimony — CompatibilityBadge Component
  * Displays match compatibility score based on Tamil star matching and preference rules
  */
 import React from 'react';

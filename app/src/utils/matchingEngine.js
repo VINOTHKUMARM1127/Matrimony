@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Matching Engine
+ * Wedring Matrimony — Matching Engine
  * Multi-factor compatibility scoring
  */
 import { calculateStarCompatibility } from './starCompatibility';

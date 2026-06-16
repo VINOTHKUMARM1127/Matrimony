@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Input Component
+ * Wedring Matrimony — Input Component
  * Styled text input with label, error, and icon support
  */
 import React, { useState, useRef } from 'react';

@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Matches Dashboard (Premium Redesign)
+ * Wedring Matrimony — Matches Dashboard (Premium Redesign)
  * Full-screen photo cards with professional text-based action buttons,
  * progress indicator, and premium visual treatment.
  */

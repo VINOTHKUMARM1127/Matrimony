@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — FeatureList Component
+ * Wedring Matrimony — FeatureList Component
  * Detailed side-by-side comparison of Free and Premium benefits
  */
 import React from 'react';

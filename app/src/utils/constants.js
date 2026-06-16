@@ -1,11 +1,11 @@
 /**
- * Tamil Matrimony — Application Constants
+ * Wedring Matrimony — Application Constants
  */
 
 // App info
-export const APP_NAME = 'Tamil Matrimony';
+export const APP_NAME = 'Wedring Matrimony';
 export const APP_VERSION = '1.0.0';
-export const APP_BUNDLE_ID = 'com.tamilmatrimony.app';
+export const APP_BUNDLE_ID = 'com.wedringmatrimony.app';
 
 // Supabase
 export const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';

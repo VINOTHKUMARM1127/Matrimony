@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Notifications Screen
+ * Wedring Matrimony — Notifications Screen
  */
 import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';

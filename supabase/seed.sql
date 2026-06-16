@@ -1,5 +1,5 @@
 -- ============================================================
--- Tamil Matrimony — Realistic Seeding Ecosystem (500 Profiles)
+-- Wedring Matrimony — Realistic Seeding Ecosystem (500 Profiles)
 -- Generated deterministic mock dataset
 -- ============================================================
 

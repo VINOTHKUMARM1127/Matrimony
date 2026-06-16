@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Outlet, Navigate, NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, UploadCloud, Settings, LogOut, Heart, ChevronLeft, Menu } from 'lucide-react';
+import { LayoutDashboard, Users, UploadCloud, Settings, LogOut, Heart, ChevronLeft, Menu, SlidersHorizontal, CreditCard } from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
 import * as adminApi from '../../api/adminApi';
 
@@ -53,11 +53,15 @@ const AdminLayout = () => {
       items: [
         { to: '/users', icon: Users, label: 'Manage Users' },
         { to: '/bulk-upload', icon: UploadCloud, label: 'Bulk Upload' },
+        { to: '/payments', icon: CreditCard, label: 'Payments' },
       ],
     },
     {
       label: 'Configuration',
-      items: [{ to: '/settings', icon: Settings, label: 'Premium Plans' }],
+      items: [
+        { to: '/settings', icon: Settings, label: 'Premium Plans' },
+        { to: '/distribution', icon: SlidersHorizontal, label: 'Distribution' },
+      ],
     },
   ];
 
@@ -72,7 +76,7 @@ const AdminLayout = () => {
         </div>
         {!collapsed && (
           <div className="leading-tight">
-            <p className="font-bold text-white tracking-tight">Matrimony</p>
+            <p className="font-bold text-white tracking-tight">Wedring</p>
             <p className="text-[11px] text-neutral-500 font-medium">Admin Portal</p>
           </div>
         )}
@@ -188,7 +192,7 @@ const AdminLayout = () => {
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center">
               <Heart size={14} className="text-white" fill="white" />
             </div>
-            <span className="font-bold text-neutral-900">Admin Portal</span>
+            <span className="font-bold text-xl text-neutral-900">Wedring Admin</span>
           </div>
         </div>
 

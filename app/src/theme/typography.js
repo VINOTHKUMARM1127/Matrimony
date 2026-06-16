@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Typography System
+ * Wedring Matrimony — Typography System
  * Premium sans-serif with elegant hierarchy for matrimonial context
  */
 import { Platform } from 'react-native';

@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Star Compatibility Engine
+ * Wedring Matrimony — Star Compatibility Engine
  * Traditional Tamil 10-Porutham matching algorithm
  */
 

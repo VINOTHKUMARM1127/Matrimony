@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Shadow / Elevation System
+ * Wedring Matrimony — Shadow / Elevation System
  * Ultra-refined shadows for white-on-white layering
  */
 import { Platform } from 'react-native';

@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — useSubscription Hook
+ * Wedring Matrimony — useSubscription Hook
  * React hook interface for subscriptions, history and feature check queries
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';

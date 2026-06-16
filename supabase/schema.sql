@@ -1,5 +1,5 @@
 -- ============================================================
--- Tamil Matrimony — Complete PostgreSQL Schema
+-- Wedring Matrimony — Complete PostgreSQL Schema
 -- Supabase Database Migration
 -- ============================================================
 

@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Interests API
+ * Wedring Matrimony — Interests API
  * Send, receive, accept/decline interest requests
  */
 import supabase from './supabaseClient';

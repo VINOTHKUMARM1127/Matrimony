@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — EditProfileScreen Component (Premium Redesign)
+ * Wedring Matrimony — EditProfileScreen Component (Premium Redesign)
  * Tabbed editor for Personal, Family, and Lifestyle details.
  */
 import React, { useState, useEffect } from 'react';

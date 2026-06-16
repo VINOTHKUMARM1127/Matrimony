@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — EditPreferencesScreen Component
+ * Wedring Matrimony — EditPreferencesScreen Component
  * Interface to edit partner matching preferences (ages, heights, religions, castes, etc.)
  */
 import React, { useState } from 'react';

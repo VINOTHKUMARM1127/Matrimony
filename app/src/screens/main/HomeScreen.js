@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Premium Home Screen
+ * Wedring Matrimony — Premium Home Screen
  * Dynamic feed with multiple content sections: Daily Picks, Recommended,
  * Recently Active, Premium Members, Nearby, Trending, and Upgrade CTA.
  */

@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — UserManagement Screen
+ * Wedring Matrimony — UserManagement Screen
  * Search and manage user profiles, including verification and suspension controls
  */
 import React, { useState } from 'react';

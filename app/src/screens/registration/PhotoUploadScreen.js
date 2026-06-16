@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Photo Upload Registration (Step 7)
+ * Wedring Matrimony — Photo Upload Registration (Step 7)
  */
 import React, { useState, useCallback } from 'react';
 import {

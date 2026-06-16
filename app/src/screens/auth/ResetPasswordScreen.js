@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Reset Password Screen
+ * Wedring Matrimony — Reset Password Screen
  * Allows user to set a new password after OTP verification.
  */
 import React, { useState } from 'react';

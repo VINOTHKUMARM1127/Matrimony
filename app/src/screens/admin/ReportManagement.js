@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — ReportManagement Screen
+ * Wedring Matrimony — ReportManagement Screen
  * Displays pending reports and facilitates profile reviews and warning dispatches
  */
 import React from 'react';

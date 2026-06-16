@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Premium Login Screen
+ * Wedring Matrimony — Premium Login Screen
  * Vanakkam! Clean, modern login supporting both credentials & OTP flows.
  */
 import React, { useState, useEffect } from 'react';
@@ -160,7 +160,7 @@ const LoginScreen = ({ navigation }) => {
               <Text style={styles.logoBadgeText}>💍</Text>
             </View>
             <Text style={styles.greeting}>Vanakkam</Text>
-            <Text style={styles.title}>Tamil Matrimony</Text>
+            <Text style={styles.title}>Wedring Matrimony</Text>
             <Text style={styles.subtitle}>Find your perfect life partner</Text>
           </View>
 

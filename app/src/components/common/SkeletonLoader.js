@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Skeleton Loader Component
+ * Wedring Matrimony — Skeleton Loader Component
  * High-performance animated placeholder for loading states using Reanimated
  */
 import React, { useEffect } from 'react';

@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — OTP Verification Screen
+ * Wedring Matrimony — OTP Verification Screen
  * 6-digit OTP input with auto-focus, countdown, and resend
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react';

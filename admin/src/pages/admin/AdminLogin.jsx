@@ -53,7 +53,7 @@ const AdminLogin = () => {
             <Heart size={22} className="text-white" fill="white" />
           </div>
           <div>
-            <p className="font-bold text-lg tracking-tight">Matrimony</p>
+            <p className="font-bold text-lg tracking-tight">Wedring Matrimony</p>
             <p className="text-xs text-neutral-400">Admin Control Center</p>
           </div>
         </div>
@@ -81,7 +81,7 @@ const AdminLogin = () => {
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-lg">
               <Heart size={22} className="text-white" fill="white" />
             </div>
-            <span className="font-bold text-xl text-neutral-900">Matrimony Admin</span>
+            <span className="font-bold text-xl text-neutral-900">Wedring Admin</span>
           </div>
 
           <div className="bg-white rounded-3xl shadow-[var(--shadow-card)] border border-neutral-200/70 p-8">

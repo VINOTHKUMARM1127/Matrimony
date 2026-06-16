@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Settings Screen (Redesigned)
+ * Wedring Matrimony — Settings Screen (Redesigned)
  * Grouped sections, lucide icons, icon+title+description+chevron rows.
  */
 import React from 'react';

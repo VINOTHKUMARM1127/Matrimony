@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — EmptyState Component
+ * Wedring Matrimony — EmptyState Component
  * Premium empty states with lucide icons + named presets for every list/screen.
  *
  * Backward compatible: an emoji string `icon` still renders. Prefer the new

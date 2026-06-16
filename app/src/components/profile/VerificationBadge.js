@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — VerificationBadge Component
+ * Wedring Matrimony — VerificationBadge Component
  * Premium badge indicating verified profile status
  */
 import React from 'react';

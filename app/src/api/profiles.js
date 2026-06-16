@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Profiles API
+ * Wedring Matrimony — Profiles API
  * Profile CRUD operations via Supabase
  */
 import supabase from './supabaseClient';

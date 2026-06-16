@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — PhotoGallery Component
+ * Wedring Matrimony — PhotoGallery Component
  * Horizontal slider and full-screen preview interface for profile photos
  */
 import React, { useState, useMemo } from 'react';

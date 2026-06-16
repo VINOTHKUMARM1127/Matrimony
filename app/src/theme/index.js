@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Theme Export
+ * Wedring Matrimony — Theme Export
  * Unified design system export
  */
 import colors, { palette } from './colors';

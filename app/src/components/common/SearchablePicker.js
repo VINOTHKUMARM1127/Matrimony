@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — SearchablePicker Component
+ * Wedring Matrimony — SearchablePicker Component
  * Reusable high-performance searchable option picker with modal & FlatList
  */
 import React, { useState, useMemo, useCallback } from 'react';

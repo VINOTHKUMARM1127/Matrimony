@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Forgot Password Screen
+ * Wedring Matrimony — Forgot Password Screen
  * Collects email or mobile to send a password-reset OTP.
  */
 import React, { useState } from 'react';

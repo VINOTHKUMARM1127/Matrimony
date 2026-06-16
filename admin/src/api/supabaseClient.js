@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony Web — Supabase Client
+ * Wedring Matrimony Web — Supabase Client
  * Singleton client with localStorage session persistence
  */
 import { createClient } from '@supabase/supabase-js';

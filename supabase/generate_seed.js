@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Test Data Generator (Node.js Chunked UPSERT Compiler)
+ * Wedring Matrimony — Test Data Generator (Node.js Chunked UPSERT Compiler)
  * Generates 500 demographically accurate Tamil Nadu mock profiles, horoscope data,
  * partner expectations, mock auth profiles, premium subscriptions, and mutual interactions,
  * using ON CONFLICT (id) DO UPDATE statements to overwrite any empty profiles auto-created
@@ -174,7 +174,7 @@ const escapeSQL = (str) => {
 
 const buildChunkSQL = (usersSubset, isFirstChunk = false, isLastChunk = false, chunkIndex = 1) => {
   let sql = `-- ============================================================
--- Tamil Matrimony — Seeding Ecosystem (Part ${chunkIndex})
+-- Wedring Matrimony — Seeding Ecosystem (Part ${chunkIndex})
 -- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

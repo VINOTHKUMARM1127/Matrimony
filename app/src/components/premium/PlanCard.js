@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — PlanCard Component
+ * Wedring Matrimony — PlanCard Component
  * Displays a premium plan subscription card with features list and purchase trigger
  */
 import React from 'react';

@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Auth Store (Zustand)
+ * Wedring Matrimony — Auth Store (Zustand)
  * Global authentication state management
  */
 import { create } from 'zustand';

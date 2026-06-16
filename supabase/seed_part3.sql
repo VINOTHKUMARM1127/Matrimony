@@ -1,5 +1,5 @@
 -- ============================================================
--- Tamil Matrimony — Seeding Ecosystem (Part 3)
+-- Wedring Matrimony — Seeding Ecosystem (Part 3)
 -- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

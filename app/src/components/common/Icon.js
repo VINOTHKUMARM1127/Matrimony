@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Unified Icon System
+ * Wedring Matrimony — Unified Icon System
  *
  * Single entry point for all app icons, standardized on lucide-react-native.
  * Screens import { Icon } from '../components/common/Icon' and reference icons by

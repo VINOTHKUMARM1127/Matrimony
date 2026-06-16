@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — PhotoViewerScreen Component
+ * Wedring Matrimony — PhotoViewerScreen Component
  * Full-screen zoomable photo gallery previewer
  */
 import React, { useState } from 'react';

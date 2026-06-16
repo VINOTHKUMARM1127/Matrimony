@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Supabase Client
+ * Wedring Matrimony — Supabase Client
  * Singleton client with AsyncStorage session persistence
  */
 import { createClient } from '@supabase/supabase-js';

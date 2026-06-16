@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Modal Component
+ * Wedring Matrimony — Modal Component
  * Reusable modal with backdrop animation
  */
 import React from 'react';

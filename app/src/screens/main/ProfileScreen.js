@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — My Profile Screen (Premium Redesign)
+ * Wedring Matrimony — My Profile Screen (Premium Redesign)
  * Hero header with avatar, circular completion ring, quick stats,
  * and grouped menu cards. No emojis in chrome.
  */
@@ -303,7 +303,7 @@ const ProfileScreen = ({ navigation }) => {
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
 
-        <Text style={styles.version}>Tamil Matrimony v1.0.0</Text>
+        <Text style={styles.version}>Wedring Matrimony v1.0.0</Text>
       </ScrollView>
     </SafeAreaView>
   );

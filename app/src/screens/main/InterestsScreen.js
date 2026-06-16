@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Interests Dashboard (Premium Redesign)
+ * Wedring Matrimony — Interests Dashboard (Premium Redesign)
  * Pill-shaped toggle tabs, real profile photos, professional action buttons.
  * Prime gating: Free users see blurred preview cards on Received tab.
  */

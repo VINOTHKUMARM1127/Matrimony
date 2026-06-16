@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — useMatches Hook
+ * Wedring Matrimony — useMatches Hook
  * Fetch recommended profiles, daily matches, and calculate compatibility scores
  */
 import React from 'react';

@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Brand Color Palette
+ * Wedring Matrimony — Brand Color Palette
  * Pure White Aesthetic + Premium Orange Accent
  */
 

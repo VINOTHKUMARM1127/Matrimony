@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Spacing & Layout System
+ * Wedring Matrimony — Spacing & Layout System
  * 4px base unit grid with premium screen-level constants
  */
 

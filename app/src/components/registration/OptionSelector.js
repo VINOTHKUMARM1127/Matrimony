@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — OptionSelector Component
+ * Wedring Matrimony — OptionSelector Component
  * Reusable option picker for registration forms (single/multi select)
  */
 import React, { useCallback } from 'react';

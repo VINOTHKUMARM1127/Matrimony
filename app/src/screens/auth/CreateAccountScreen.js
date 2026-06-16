@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Create Account Screen
+ * Wedring Matrimony — Create Account Screen
  * New user registration with OTP verification.
  */
 import React, { useState } from 'react';
@@ -167,7 +167,7 @@ const CreateAccountScreen = ({ navigation }) => {
               <Text style={styles.logoBadgeText}>✦</Text>
             </View>
             <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Join Tamil Matrimony and find your perfect match</Text>
+            <Text style={styles.subtitle}>Join Wedring Matrimony and find your perfect match</Text>
           </View>
 
           <View style={styles.form}>

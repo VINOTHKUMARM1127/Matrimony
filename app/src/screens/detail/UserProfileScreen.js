@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — UserProfileScreen Component (Premium Redesign)
+ * Wedring Matrimony — UserProfileScreen Component (Premium Redesign)
  * Detailed profile view with collapsible sections, premium gated content,
  * compatibility progress bars, and professional footer actions.
  */

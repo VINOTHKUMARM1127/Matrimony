@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — PrivacyScreen Component
+ * Wedring Matrimony — PrivacyScreen Component
  * Toggle account status and display privacy disclosures
  */
 import React, { useState } from 'react';

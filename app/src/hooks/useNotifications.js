@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — useNotifications Hook
+ * Wedring Matrimony — useNotifications Hook
  * Registers for push notifications, handles incoming payloads, and queries DB list
  */
 import { useEffect } from 'react';

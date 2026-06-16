@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Upgrades Screen
+ * Wedring Matrimony — Upgrades Screen
  * Subscription plans (Bronze, Silver, Gold) with Razorpay integration and Mock Gateway fallback.
  */
 import React, { useState, useCallback } from 'react';
@@ -137,12 +137,12 @@ const PremiumScreen = () => {
       }
 
       const options = {
-        description: `${plan.name} - Tamil Matrimony`,
+        description: `${plan.name} - Wedring Matrimony`,
         image: 'https://cdn-icons-png.flaticon.com/512/10008/10008272.png',
         currency: plan.currency,
         key: RAZORPAY_KEY_ID,
         amount: plan.price * 100,
-        name: 'Tamil Matrimony',
+        name: 'Wedring Matrimony',
         order_id: orderId,
         prefill: {
           email: user?.email || '',
@@ -198,7 +198,7 @@ const PremiumScreen = () => {
       {/* Premium Header */}
       <View style={styles.header}>
         <Text style={styles.crown}>👑</Text>
-        <Text style={styles.title}>Tamil Matrimony Prime</Text>
+        <Text style={styles.title}>Wedring Matrimony Prime</Text>
         <Text style={styles.subtitle}>
           Accelerate your search with direct contacts and full horoscopes views
         </Text>

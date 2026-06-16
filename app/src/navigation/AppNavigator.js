@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — App Navigator
+ * Wedring Matrimony — App Navigator
  * Premium 5-tab navigation with elegant styling
  */
 import React, { useEffect } from 'react';

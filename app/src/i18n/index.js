@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — i18n Setup
+ * Wedring Matrimony — i18n Setup
  * Tamil + English internationalization
  */
 import i18n from 'i18next';

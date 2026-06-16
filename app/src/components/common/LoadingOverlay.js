@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Loading Overlay Component
+ * Wedring Matrimony — Loading Overlay Component
  * Full-screen loading indicator
  */
 import React from 'react';

@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Fast2SMS OTP API
+ * Wedring Matrimony — Fast2SMS OTP API
  * Client-side OTP generation + Fast2SMS delivery for Indian mobile numbers.
  *
  * IMPORTANT: Fast2SMS only provides a SEND endpoint. There is no server-side

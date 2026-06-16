@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Badge Component
+ * Wedring Matrimony — Badge Component
  * Status badges, tags, and labels
  */
 import React from 'react';

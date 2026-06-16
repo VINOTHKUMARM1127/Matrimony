@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Registration StepIndicator Component
+ * Wedring Matrimony — Registration StepIndicator Component
  * Animated progress stepper for registration flow
  */
 import React from 'react';

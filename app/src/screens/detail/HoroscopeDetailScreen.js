@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — HoroscopeDetailScreen Component
+ * Wedring Matrimony — HoroscopeDetailScreen Component
  * Displays traditional 10-Porutham horoscope matching details
  */
 import React, { useMemo } from 'react';

@@ -564,3 +564,127 @@ export const deleteIncompleteUsers = async () => {
 
   return deletedCount;
 };
+
+// ============================================================
+// DISTRIBUTION MANAGEMENT
+// ============================================================
+
+/**
+ * Fetch distribution settings change history
+ */
+export const fetchDistributionHistory = async (limit = 50) => {
+  const { data, error } = await supabase
+    .from('distribution_settings_history')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return data || [];
+};
+
+/**
+ * Save distribution change with push mode
+ */
+export const saveDistributionChange = async (tier, limits, pushMode, adminEmail) => {
+  const { error } = await supabase.rpc('save_distribution_settings', {
+    p_tier: tier,
+    p_recommended: limits.recommended,
+    p_nearby: limits.nearby,
+    p_daily: limits.daily,
+    p_push_mode: pushMode,
+    p_admin_email: adminEmail
+  });
+
+  if (error) throw error;
+  return true;
+};
+
+/**
+ * Force push distribution for a specific tier
+ */
+export const forcePushDistribution = async (tier, adminEmail) => {
+  const { data, error } = await supabase.rpc('force_push_distribution', {
+    p_tier: tier,
+    p_admin_email: adminEmail
+  });
+
+  if (error) throw error;
+  return data;
+};
+
+/**
+ * Force push distribution for all tiers
+ */
+export const forcePushAllDistribution = async (adminEmail) => {
+  const { data, error } = await supabase.rpc('force_push_all_distribution', {
+    p_admin_email: adminEmail
+  });
+
+  if (error) throw error;
+  return data;
+};
+
+// ============================================================
+// PAYMENT HISTORY & REVENUE
+// ============================================================
+
+/**
+ * Fetch revenue statistics
+ */
+export const fetchRevenueStats = async () => {
+  const { data, error } = await supabase.rpc('get_revenue_stats');
+  if (error) throw error;
+  return data;
+};
+
+/**
+ * Fetch paginated payment history with filters
+ */
+export const fetchPayments = async ({ page = 1, perPage = 25, status, planType, search, dateFrom, dateTo } = {}) => {
+  let query = supabase
+    .from('payments')
+    .select(`
+      *,
+      profile:profiles!payments_user_id_fkey (
+        id, display_name, phone, tier
+      )
+    `, { count: 'exact' })
+    .order('created_at', { ascending: false });
+
+  if (status && status !== 'all') {
+    query = query.eq('status', status);
+  }
+  if (planType && planType !== 'all') {
+    query = query.eq('plan_type', planType);
+  }
+  if (dateFrom) {
+    query = query.gte('created_at', dateFrom);
+  }
+  if (dateTo) {
+    query = query.lte('created_at', dateTo + 'T23:59:59.999Z');
+  }
+
+  const from = (page - 1) * perPage;
+  const to = from + perPage - 1;
+  query = query.range(from, to);
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+
+  return { payments: data || [], total: count || 0 };
+};
+
+/**
+ * Fetch subscription history for a specific user
+ */
+export const fetchUserSubscriptionHistory = async (userId) => {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+};

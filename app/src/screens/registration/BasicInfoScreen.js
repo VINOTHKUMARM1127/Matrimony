@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Basic Info Registration Screen (Step 1)
+ * Wedring Matrimony — Basic Info Registration Screen (Step 1)
  */
 import React, { useState, useCallback, useEffect } from 'react';
 import {

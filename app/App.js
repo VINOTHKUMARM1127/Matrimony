@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Main App Entry Point
+ * Wedring Matrimony — Main App Entry Point
  */
 import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';

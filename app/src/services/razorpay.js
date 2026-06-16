@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Razorpay Payment Service
+ * Wedring Matrimony — Razorpay Payment Service
  */
 import { RAZORPAY_KEY_ID, APP_NAME } from '../utils/constants';
 import supabase from '../api/supabaseClient';

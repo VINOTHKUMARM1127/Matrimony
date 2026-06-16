@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Matches API
+ * Wedring Matrimony — Matches API
  * Profile matching and recommendation queries
  * 
  * STRICT BACKEND SECURITY ENFORCEMENT:

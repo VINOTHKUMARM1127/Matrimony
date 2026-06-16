@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Error Boundary Component
+ * Wedring Matrimony — Error Boundary Component
  * Catches JavaScript errors in child component tree
  */
 import React from 'react';

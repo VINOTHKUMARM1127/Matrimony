@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — AnalyticsScreen Component
+ * Wedring Matrimony — AnalyticsScreen Component
  * Mock stats and system reporting visualizations for administrators
  */
 import React from 'react';

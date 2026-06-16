@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Auth API
+ * Wedring Matrimony — Auth API
  * Authentication functions using Supabase Auth
  */
 import supabase from './supabaseClient';

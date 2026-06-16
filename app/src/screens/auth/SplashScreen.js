@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — Splash Screen
+ * Wedring Matrimony — Splash Screen
  * Animated brand splash with auto-login check
  */
 import React, { useEffect, useRef, useState } from 'react';
@@ -87,7 +87,7 @@ const SplashScreen = ({ navigation }) => {
         <View style={styles.logoCircle}>
           <Text style={styles.logoIcon}>🪷</Text>
         </View>
-        <Text style={styles.appName}>Tamil Matrimony</Text>
+        <Text style={styles.appName}>Wedring Matrimony</Text>
       </Animated.View>
 
       <Animated.View style={[styles.taglineContainer, { opacity: taglineOpacity }]}>

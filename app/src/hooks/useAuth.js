@@ -1,5 +1,5 @@
 /**
- * Tamil Matrimony — useAuth Hook
+ * Wedring Matrimony — useAuth Hook
  * React hook interface for useAuthStore global state
  */
 import { useCallback } from 'react';
