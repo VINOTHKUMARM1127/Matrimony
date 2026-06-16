@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import useAuthStore from '../../store/useAuthStore';
 import * as adminApi from '../../api/adminApi';
-import { Shield, Eye, EyeOff } from 'lucide-react';
+import { Shield, Eye, EyeOff, Heart, Mail, Lock, AlertCircle } from 'lucide-react';
 import Button from '../../components/common/Button';
 
 const AdminLogin = () => {
@@ -20,12 +20,10 @@ const AdminLogin = () => {
     setIsLoading(true);
 
     try {
-      // Check if email is admin before even attempting auth to fail fast if not
       const isAdmin = await adminApi.checkIsAdmin(email);
       if (!isAdmin) {
         throw new Error('Access denied. Admin privileges required.');
       }
-
       await signIn(email, password);
       navigate('/dashboard');
     } catch (err) {
@@ -35,71 +33,118 @@ const AdminLogin = () => {
     }
   };
 
-  // Redirect if already logged in and is admin
   if (isAuthenticated && user) {
     return <Navigate to="/dashboard" replace />;
   }
 
   return (
-    <div className="min-h-screen bg-neutral-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-neutral-800 rounded-2xl shadow-2xl p-8 border border-neutral-700">
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 bg-primary-900/50 rounded-2xl flex items-center justify-center border border-primary-500 mb-4">
-            <Shield className="text-primary-400" size={32} />
+    <div className="min-h-screen flex">
+      {/* Left brand panel (desktop) */}
+      <div className="hidden lg:flex flex-col justify-between w-1/2 relative overflow-hidden bg-neutral-900 p-12 text-white">
+        <div
+          className="absolute inset-0 opacity-90"
+          style={{
+            background:
+              'radial-gradient(circle at 20% 20%, rgba(239,68,99,0.35), transparent 45%), radial-gradient(circle at 80% 80%, rgba(212,175,55,0.25), transparent 45%)',
+          }}
+        />
+        <div className="relative flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-xl shadow-primary-900/50">
+            <Heart size={22} className="text-white" fill="white" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Admin Portal</h1>
-          <p className="text-neutral-400 mt-2">Sign in to manage the platform</p>
+          <div>
+            <p className="font-bold text-lg tracking-tight">Matrimony</p>
+            <p className="text-xs text-neutral-400">Admin Control Center</p>
+          </div>
         </div>
 
-        {error && (
-          <div className="bg-error-900/50 border border-error-500 text-error-100 p-3 rounded-lg mb-6 text-sm">
-            {error}
-          </div>
-        )}
+        <div className="relative max-w-md">
+          <h2 className="text-4xl font-extrabold leading-tight tracking-tight">
+            Manage your platform with confidence.
+          </h2>
+          <p className="mt-4 text-neutral-400 leading-relaxed">
+            Members, premium plans, profile distribution, and quotas — all from one elegant dashboard.
+          </p>
+        </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-neutral-300 text-sm font-medium mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full bg-neutral-900 border border-neutral-700 text-white rounded-lg p-3 focus:outline-none focus:border-primary-500 transition-colors"
-              placeholder="admin@matrimony.com"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-neutral-300 text-sm font-medium mb-1">Password</label>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full bg-neutral-900 border border-neutral-700 text-white rounded-lg p-3 pr-10 focus:outline-none focus:border-primary-500 transition-colors"
-                placeholder="••••••••"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white transition-colors"
-              >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-              </button>
+        <div className="relative flex items-center gap-2 text-xs text-neutral-500">
+          <Shield size={14} />
+          <span>Secured admin access · End-to-end encrypted session</span>
+        </div>
+      </div>
+
+      {/* Right form panel */}
+      <div className="flex-1 flex items-center justify-center p-6 sm:p-12 bg-[#f4f6fb]">
+        <div className="w-full max-w-md animate-rise">
+          {/* Mobile brand */}
+          <div className="lg:hidden flex items-center justify-center gap-3 mb-8">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-lg">
+              <Heart size={22} className="text-white" fill="white" />
             </div>
+            <span className="font-bold text-xl text-neutral-900">Matrimony Admin</span>
           </div>
 
-          <Button 
-            type="submit" 
-            fullWidth 
-            isLoading={isLoading}
-            className="mt-6 bg-primary-600 hover:bg-primary-500 text-white border-none"
-          >
-            Sign In as Admin
-          </Button>
-        </form>
+          <div className="bg-white rounded-3xl shadow-[var(--shadow-card)] border border-neutral-200/70 p-8">
+            <div className="mb-7">
+              <h1 className="text-2xl font-bold text-neutral-900">Welcome back</h1>
+              <p className="text-neutral-500 mt-1 text-sm">Sign in to access the admin portal.</p>
+            </div>
+
+            {error && (
+              <div className="flex items-start gap-2.5 bg-error-50 border border-error-200 text-error-700 p-3.5 rounded-xl mb-5 text-sm animate-fade-in">
+                <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-neutral-700 text-sm font-semibold mb-1.5">Email Address</label>
+                <div className="relative">
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="w-full bg-neutral-50 border border-neutral-200 text-neutral-900 rounded-xl py-3 pl-11 pr-4 focus:outline-none focus:bg-white focus:border-primary-400 focus:ring-4 focus:ring-primary-100 transition-all"
+                    placeholder="admin@matrimony.com"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-neutral-700 text-sm font-semibold mb-1.5">Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="w-full bg-neutral-50 border border-neutral-200 text-neutral-900 rounded-xl py-3 pl-11 pr-11 focus:outline-none focus:bg-white focus:border-primary-400 focus:ring-4 focus:ring-primary-100 transition-all"
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              <Button type="submit" fullWidth isLoading={isLoading} size="lg" className="mt-2">
+                {isLoading ? 'Signing in…' : 'Sign In as Admin'}
+              </Button>
+            </form>
+          </div>
+
+          <p className="text-center text-xs text-neutral-400 mt-6">
+            Protected area · Authorized personnel only
+          </p>
+        </div>
       </div>
     </div>
   );

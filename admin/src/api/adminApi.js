@@ -1,5 +1,12 @@
 import supabase from './supabaseClient';
 import supabaseAdmin from './supabaseAdminClient';
+import {
+  buildProfilePayload,
+  buildHoroscopePayload,
+  buildPreferencePayload,
+  PREFERENCE_ARRAY_FIELDS,
+  PREFERENCE_SCALAR_FIELDS,
+} from './profileFields';
 
 /**
  * Check if an email belongs to an admin
@@ -104,25 +111,13 @@ export const updateUserPlan = async (userId, planType) => {
   }
 
   // Map plans to specification rules
-  let duration = 28;
-  let contacts = 0;
-  let interests = 0;
-
-  if (planType === 'silver') {
-    contacts = 25; interests = 50; duration = 28;
-  } else if (planType === 'gold') {
-    contacts = 50; interests = 100; duration = 28;
-  } else if (planType === 'platinum') {
-    contacts = 100; interests = 300; duration = 168; // 6 months
-  }
-
-  // Call the secure backend RPC which handles stacking, dates, and quotas
+  // Premium activation. Duration, contacts, and interests are NOT hardcoded here —
+  // purchase_subscription derives them live from tier_settings (single source of truth).
   const { error } = await supabaseAdmin.rpc('purchase_subscription', {
     p_user_id: userId,
     p_plan_type: planType,
-    p_duration_days: duration,
-    p_contacts: contacts,
-    p_interests: interests
+    p_payment_id: null,
+    p_amount: null
   });
 
   if (error) throw new Error(error.message || 'Failed to update user plan');
@@ -254,9 +249,63 @@ export const updateUser = async (userId, profileData) => {
 };
 
 /**
- * Bulk upload users from JSON
+ * Fetch a user's horoscope + partner preferences (for the full editor).
  */
-export const bulkUploadUsers = async (usersList) => {
+export const fetchUserRelations = async (userId) => {
+  const [horo, prefs] = await Promise.all([
+    supabaseAdmin.from('horoscope_details').select('*').eq('user_id', userId).maybeSingle(),
+    supabaseAdmin.from('partner_preferences').select('*').eq('user_id', userId).maybeSingle(),
+  ]);
+  return {
+    horoscope: horo.data || null,
+    preferences: prefs.data || null,
+  };
+};
+
+/**
+ * Upsert a user's horoscope details (admin editor).
+ */
+export const updateUserHoroscope = async (userId, horoscopeData) => {
+  if (!supabaseAdmin) throw new Error('Service Role Key required for Admin updates');
+  const payload = buildHoroscopePayload(horoscopeData) || {};
+  const { data, error } = await supabaseAdmin
+    .from('horoscope_details')
+    .upsert({ user_id: userId, ...payload }, { onConflict: 'user_id' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+/**
+ * Upsert a user's partner preferences (admin editor).
+ */
+export const updateUserPreferences = async (userId, preferenceData) => {
+  if (!supabaseAdmin) throw new Error('Service Role Key required for Admin updates');
+  const payload = buildPreferencePayload(preferenceData) || {};
+  const { data, error } = await supabaseAdmin
+    .from('partner_preferences')
+    .upsert({ user_id: userId, ...payload }, { onConflict: 'user_id' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+/**
+ * Update subscription quota balances directly (admin override).
+ */
+export const updateUserQuotas = async (userId, { contacts_remaining, interests_remaining, premium_expires_at }) => {
+  if (!supabaseAdmin) throw new Error('Service Role Key required for Admin updates');
+  const patch = {};
+  if (contacts_remaining !== undefined) patch.contacts_remaining = parseInt(contacts_remaining, 10) || 0;
+  if (interests_remaining !== undefined) patch.interests_remaining = parseInt(interests_remaining, 10) || 0;
+  if (premium_expires_at !== undefined) patch.premium_expires_at = premium_expires_at || null;
+  const { data, error } = await supabaseAdmin.from('profiles').update(patch).eq('id', userId).select().single();
+  if (error) throw error;
+  return data;
+};
+export const bulkUploadUsers = async (usersList, stopRef, onProgress) => {
   if (!supabaseAdmin) throw new Error('Service Role Key required for Auth updates');
   
   const results = {
@@ -265,7 +314,15 @@ export const bulkUploadUsers = async (usersList) => {
     errors: []
   };
 
+  let currentCount = 0;
+
   for (const user of usersList) {
+    if (onProgress) onProgress(currentCount, usersList.length);
+
+    if (stopRef && stopRef.current) {
+      results.errors.push('Process stopped by admin.');
+      break;
+    }
     try {
       // 1. Create Auth User
       const serviceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
@@ -291,34 +348,72 @@ export const bulkUploadUsers = async (usersList) => {
       const authData = await response.json();
       const newUserId = authData.id;
 
-      // 2. Insert Profile
+      // 2. Update Profile (auto-created by the auth trigger) — ALL profile columns.
+      const profilePayload = buildProfilePayload(user);
       const { error: profileError } = await supabaseAdmin
         .from('profiles')
-        .insert({
-          id: newUserId,
-          display_name: user.display_name || 'No Name',
-          gender: user.gender || null,
-          date_of_birth: user.date_of_birth || null,
-          phone: user.phone || null,
-          religion: user.religion || null,
-          caste: user.caste || null,
-          city: user.city || null,
-          education: user.education || null,
-          occupation: user.occupation || null,
+        .update({
+          ...profilePayload,
           is_profile_complete: true,
-          profile_completion_percent: 100
-        });
+          profile_completion_percent: 100,
+        })
+        .eq('id', newUserId);
 
       if (profileError) {
-        // Cleanup auth user if profile insertion fails
+        // Cleanup auth user if profile update fails
         await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/admin/users/${newUserId}`, {
           method: 'DELETE',
-          headers: {
-            'apikey': serviceKey,
-            'Authorization': `Bearer ${serviceKey}`
-          }
+          headers: { 'apikey': serviceKey, 'Authorization': `Bearer ${serviceKey}` }
         });
         throw profileError;
+      }
+
+      // 3. Horoscope (optional) — accepts flat keys (star, raasi, …).
+      const horoscope = buildHoroscopePayload(user.horoscope || user);
+      if (horoscope) {
+        const { error: hErr } = await supabaseAdmin
+          .from('horoscope_details')
+          .upsert({ user_id: newUserId, ...horoscope }, { onConflict: 'user_id' });
+        if (hErr) results.errors.push(`Horoscope warning for ${user.email}: ${hErr.message}`);
+      }
+
+      // 4. Partner preferences (optional) — accepts a `preferences` object OR
+      //    top-level `preferred_*` keys, normalised to the real column names.
+      const prefSource = user.preferences || (() => {
+        const p = {};
+        for (const k of [...PREFERENCE_ARRAY_FIELDS, ...PREFERENCE_SCALAR_FIELDS]) {
+          if (`preferred_${k}` in user) p[k] = user[`preferred_${k}`];
+          else if (k in user && user.preferences === undefined && k !== 'religion' && k !== 'caste') p[k] = user[k];
+        }
+        return p;
+      })();
+      const preferences = buildPreferencePayload(prefSource);
+      if (preferences) {
+        const { error: pErr } = await supabaseAdmin
+          .from('partner_preferences')
+          .upsert({ user_id: newUserId, ...preferences }, { onConflict: 'user_id' });
+        if (pErr) results.errors.push(`Preferences warning for ${user.email}: ${pErr.message}`);
+      }
+
+      // 5. Subscription (optional) — derives quotas/dates from tier_settings.
+      if (user.plan_type && user.plan_type !== 'free') {
+        const { error: sErr } = await supabaseAdmin.rpc('purchase_subscription', {
+          p_user_id: newUserId, p_plan_type: user.plan_type, p_payment_id: 'bulk_import', p_amount: null
+        });
+        if (sErr) results.errors.push(`Plan warning for ${user.email}: ${sErr.message}`);
+      }
+
+      // 6. Photos (optional) — array of URLs; first is primary.
+      if (Array.isArray(user.photos) && user.photos.length > 0) {
+        const rows = user.photos.map((url, i) => ({
+          user_id: newUserId,
+          storage_path: typeof url === 'string' ? url : url.storage_path,
+          thumbnail_path: typeof url === 'string' ? url : (url.thumbnail_path || url.storage_path),
+          is_primary: i === 0,
+          display_order: i,
+        }));
+        const { error: phErr } = await supabaseAdmin.from('photos').insert(rows);
+        if (phErr) results.errors.push(`Photos warning for ${user.email}: ${phErr.message}`);
       }
 
       results.success++;
@@ -326,7 +421,11 @@ export const bulkUploadUsers = async (usersList) => {
       results.failed++;
       results.errors.push(`Failed for ${user.email}: ${err.message}`);
     }
+    
+    currentCount++;
   }
+
+  if (onProgress) onProgress(currentCount, usersList.length);
 
   return results;
 };
@@ -344,13 +443,20 @@ export const fetchAdminSettings = async () => {
   // Format as key-value map for backwards compatibility
   const matches_limits = {};
   data.forEach(item => {
-    // Note: React Admin uses 'non_premium' internally, but the DB uses 'free'
     const tierKey = item.tier === 'free' ? 'non_premium' : item.tier;
     matches_limits[tierKey] = {
       recommended: item.recommended_limit,
       nearby: item.nearby_limit,
       daily: item.daily_limit,
-      dynamic_daily_updates: item.dynamic_daily_enabled
+      dynamic_daily_updates: item.dynamic_daily_enabled,
+      plan_name: item.plan_name,
+      price_inr: item.price_inr,
+      duration_months: item.duration_months,
+      contacts_limit: item.contacts_limit,
+      interests_limit: item.interests_limit,
+      features: item.features || [],
+      color_code: item.color_code,
+      is_popular: item.is_popular
     };
   });
   
@@ -371,7 +477,15 @@ export const updateAdminSetting = async (key, value) => {
         p_rec: limits.recommended,
         p_near: limits.nearby,
         p_daily: limits.daily,
-        p_dyn: limits.dynamic_daily_updates
+        p_dyn: limits.dynamic_daily_updates,
+        p_plan_name: limits.plan_name,
+        p_price_inr: limits.price_inr,
+        p_duration_months: limits.duration_months,
+        p_contacts_limit: limits.contacts_limit,
+        p_interests_limit: limits.interests_limit,
+        p_features: limits.features,
+        p_color_code: limits.color_code,
+        p_is_popular: limits.is_popular
       });
 
       // If the RPC isn't installed (400 Bad Request) or fails, fallback to Service Role Key
@@ -386,7 +500,15 @@ export const updateAdminSetting = async (key, value) => {
             recommended_limit: limits.recommended,
             nearby_limit: limits.nearby,
             daily_limit: limits.daily,
-            dynamic_daily_enabled: limits.dynamic_daily_updates
+            dynamic_daily_enabled: limits.dynamic_daily_updates,
+            plan_name: limits.plan_name,
+            price_inr: limits.price_inr,
+            duration_months: limits.duration_months,
+            contacts_limit: limits.contacts_limit,
+            interests_limit: limits.interests_limit,
+            features: limits.features,
+            color_code: limits.color_code,
+            is_popular: limits.is_popular
           })
           .eq('tier', tier);
           

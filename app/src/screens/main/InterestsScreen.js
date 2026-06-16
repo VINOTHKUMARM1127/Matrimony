@@ -123,6 +123,7 @@ const InterestsScreen = ({ navigation }) => {
       console.warn('Failed to send interest from InterestsScreen:', err);
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user_quotas', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['passedInterests'] });
       queryClient.invalidateQueries({ queryKey: ['interestsSent'] });
       queryClient.invalidateQueries({ queryKey: ['userInteractions'] });
@@ -478,7 +479,7 @@ const InterestsScreen = ({ navigation }) => {
           }
           ListEmptyComponent={
             <EmptyState
-              icon="♡"
+              lucideIcon="heart"
               title={activeSubTab === 'received' ? 'No incoming requests' : activeSubTab === 'sent' ? 'No requests sent' : 'No passed profiles'}
               description={
                 activeSubTab === 'received'

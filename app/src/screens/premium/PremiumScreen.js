@@ -20,80 +20,70 @@ import useAuthStore from '../../store/useAuthStore';
 import useProfileStore from '../../store/useProfileStore';
 import { RAZORPAY_KEY_ID } from '../../utils/constants';
 import { createSubscription } from '../../api/subscriptions';
+import { fetchPremiumPlans } from '../../api/settingsApi';
 import { createRazorpayOrder, openCheckout, verifyPayment } from '../../services/razorpay';
+import { useQueryClient } from '@tanstack/react-query';
 
-// Prime Tiers Definition
-const PREMIUM_PLANS = [
-  {
-    id: 'silver',
-    name: 'Silver',
-    duration: '1 Month',
-    price: 499,
-    currency: 'INR',
-    features: [
-      'View 30 contact numbers',
-      'Send up to 50 interests',
-      'Premium verified badge',
-      'Priority customer support',
-    ],
-    color: '#8A8A8A',
-  },
-  {
-    id: 'gold',
-    name: 'Gold',
-    duration: '1 Month',
-    price: 999,
-    currency: 'INR',
-    features: [
-      'View 50 contact numbers',
-      'Send up to 100 interests',
-      'Premium verified badge',
-      'Priority customer support',
-    ],
-    color: '#D4AF37',
-    popular: true,
-  },
-  {
-    id: 'platinum',
-    name: 'Platinum',
-    duration: '3 Months',
-    price: 2499,
-    currency: 'INR',
-    features: [
-      'View 100 contact numbers',
-      'Send up to 300 interests',
-      'Premium verified badge',
-      'Priority customer support',
-    ],
-    color: '#E5E4E2',
-  },
-];
+import supabase from '../../api/supabaseClient';
 
 const PremiumScreen = () => {
   const user = useAuthStore((s) => s.user);
+  const queryClient = useQueryClient();
+  const [plans, setPlans] = useState([]);
+  const [loadingPlans, setLoadingPlans] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState('gold');
   const [processing, setProcessing] = useState(false);
 
-  const calculateExpiry = (planType) => {
-    const now = new Date();
-    switch (planType) {
-      case 'silver':
-        now.setMonth(now.getMonth() + 1); // Silver = 1 Month
-        break;
-      case 'gold':
-        now.setMonth(now.getMonth() + 1); // Gold = 1 Month
-        break;
-      case 'platinum':
-        now.setMonth(now.getMonth() + 3); // Platinum = 3 Months
-        break;
-      default:
-        now.setMonth(now.getMonth() + 1);
-    }
-    return now.toISOString();
+  // Refresh every plan/quota-dependent cache so the new tier reflects instantly
+  // across Home, Profile, UserProfile, and the matches feeds — no logout/restart.
+  const refreshAfterPurchase = async () => {
+    await useProfileStore.getState().loadProfile(user.id);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['user_quotas', user.id] }),
+      queryClient.invalidateQueries({ queryKey: ['userLimits', user.id] }),
+      queryClient.invalidateQueries({ queryKey: ['activeSubscription', user.id] }),
+      queryClient.invalidateQueries({ queryKey: ['recommended'] }),
+      queryClient.invalidateQueries({ queryKey: ['nearbyMatches'] }),
+      queryClient.invalidateQueries({ queryKey: ['dailyMatches'] }),
+      queryClient.invalidateQueries({ queryKey: ['subscriptionHistory', user.id] }),
+    ]);
   };
 
+  React.useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        const { data, error } = await (async () => {
+          try { return { data: await fetchPremiumPlans(), error: null }; }
+          catch (e) { return { data: null, error: e }; }
+        })();
+        
+        if (data && !error) {
+          const mappedPlans = data.map(d => ({
+            id: d.id,
+            name: d.name,
+            duration: d.duration,
+            price: d.price,
+            currency: 'INR',
+            features: d.features || [],
+            color: d.color || '#D4AF37',
+            popular: d.popular
+          }));
+          setPlans(mappedPlans);
+          if (mappedPlans.length > 0) {
+            setSelectedPlan(mappedPlans.find(p => p.popular)?.id || mappedPlans[0].id);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching premium plans:', err);
+      } finally {
+        setLoadingPlans(false);
+      }
+    };
+    fetchPlans();
+  }, []);
+
   const handlePurchase = useCallback(async () => {
-    const plan = PREMIUM_PLANS.find((p) => p.id === selectedPlan);
+    const plan = plans.find((p) => p.id === selectedPlan);
     if (!plan) return;
 
     setProcessing(true);
@@ -115,13 +105,11 @@ const PremiumScreen = () => {
                   user_id: user.id,
                   plan_type: plan.id,
                   razorpay_payment_id: mockPaymentId,
-                  amount: plan.price,
-                  starts_at: new Date().toISOString(),
-                  expires_at: calculateExpiry(plan.id),
+                  amount: plan.price
                 });
 
-                // Reload user profile and refresh local state
-                await useProfileStore.getState().loadProfile(user.id);
+                // Reload profile and invalidate all plan/quota caches
+                await refreshAfterPurchase();
 
                 Alert.alert('🎉 Subscription Successful!', `Welcome to ${plan.name}!`);
                 setProcessing(false);
@@ -183,12 +171,10 @@ const PremiumScreen = () => {
           user_id: user.id,
           plan_type: plan.id,
           razorpay_payment_id: paymentData.razorpay_payment_id,
-          amount: plan.price,
-          starts_at: new Date().toISOString(),
-          expires_at: calculateExpiry(plan.id),
+          amount: plan.price
         });
 
-        await useProfileStore.getState().loadProfile(user.id);
+        await refreshAfterPurchase();
 
         Alert.alert('🎉 Success!', `Welcome to ${plan.name}! Enjoy premium access.`);
       } else {
@@ -205,7 +191,7 @@ const PremiumScreen = () => {
     } finally {
       setProcessing(false);
     }
-  }, [selectedPlan, user]);
+  }, [selectedPlan, user, plans]);
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -219,8 +205,13 @@ const PremiumScreen = () => {
       </View>
 
       {/* Plans list */}
-      <View style={styles.plansList}>
-        {PREMIUM_PLANS.map((plan) => {
+      {loadingPlans ? (
+        <View style={{ padding: 40, alignItems: 'center' }}>
+          <Text style={{ color: colors.textSecondary }}>Loading premium plans...</Text>
+        </View>
+      ) : (
+        <View style={styles.plansList}>
+          {plans.map((plan) => {
           const isSelected = selectedPlan === plan.id;
           return (
             <TouchableOpacity
@@ -266,11 +257,12 @@ const PremiumScreen = () => {
           );
         })}
       </View>
+      )}
 
       {/* Subscription trigger button */}
       <View style={styles.purchaseContainer}>
         <Button
-          title={`Subscribe to ${PREMIUM_PLANS.find((p) => p.id === selectedPlan)?.name} now`}
+          title={`Subscribe to ${plans.find((p) => p.id === selectedPlan)?.name || 'Plan'} now`}
           onPress={handlePurchase}
           loading={processing}
           style={styles.purchaseButton}

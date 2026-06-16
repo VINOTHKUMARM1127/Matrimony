@@ -47,41 +47,16 @@ const useProfileStore = create((set, get) => ({
       return data;
     } catch (error) {
       console.warn('Profile load error:', error);
-      
-      // If we are in development mode, load a graceful mock profile to prevent blocking the UI
-      if (__DEV__ || process.env.EXPO_PUBLIC_APP_ENV === 'development') {
-        console.log('Generating graceful development mock profile for user:', userId);
-        const mockProfile = {
-          id: userId,
-          display_name: 'New Matrimony User',
-          gender: 'male',
-          date_of_birth: '2000-01-01',
-          religion: 'Hindu',
-          caste: 'Gounder',
-          is_profile_complete: false,
-          profile_completion_percent: 10,
-        };
-        set({
-          profile: mockProfile,
-          partnerPreferences: { caste: ['Caste No Bar'] },
-          horoscope: {},
-          photos: [],
-          subscriptions: [],
-          isProfileComplete: false,
-          isProfileLoaded: true,
-          isLoading: false,
-          error: null,
-        });
-        return mockProfile;
-      }
 
-      // Ensure we don't get stuck on the splash screen
-      set({ 
+      // No mock-profile fallback: faking a profile here hid real auth/RLS
+      // failures. Surface the error and let the UI route to login/retry while
+      // ensuring we never get stuck on the splash screen.
+      set({
         profile: null,
         isProfileComplete: false,
         isProfileLoaded: true,
         isLoading: false,
-        error: error.message 
+        error: error.message,
       });
       return null;
     }
@@ -105,20 +80,13 @@ const useProfileStore = create((set, get) => ({
         partner_preferences,
         photos,
         profile_created_for,
+        subscriptions, // Strip this out to prevent Postgres error
         ...profileDbFields
       } = mergedData;
 
-      let data;
-      try {
-        data = await profilesApi.upsertProfile(profileDbFields);
-      } catch (dbError) {
-        if (__DEV__ || process.env.EXPO_PUBLIC_APP_ENV === 'development') {
-          console.warn('DB upsert failed, using development local state fallback:', dbError.message);
-          data = profileDbFields;
-        } else {
-          throw dbError;
-        }
-      }
+      // No silent fallback: a DB failure must surface so the user/UI knows the
+      // save did not persist (previously this swallowed errors in dev).
+      const data = await profilesApi.upsertProfile(profileDbFields);
 
       set((state) => ({
         profile: { ...state.profile, ...mergedData, ...data },
@@ -138,18 +106,8 @@ const useProfileStore = create((set, get) => ({
   updateProfile: async (userId, updates) => {
     try {
       set({ isLoading: true, error: null });
-      let data;
-      try {
-        data = await profilesApi.updateProfile(userId, updates);
-      } catch (dbError) {
-        if (__DEV__ || process.env.EXPO_PUBLIC_APP_ENV === 'development') {
-          console.warn('DB update failed, using development local state fallback:', dbError.message);
-          const currentProfile = get().profile || {};
-          data = { ...currentProfile, ...updates };
-        } else {
-          throw dbError;
-        }
-      }
+      // No silent fallback — surface DB errors instead of faking success.
+      const data = await profilesApi.updateProfile(userId, updates);
       set((state) => ({
         profile: { ...state.profile, ...data },
         isProfileComplete: data?.is_profile_complete || false,
@@ -168,17 +126,8 @@ const useProfileStore = create((set, get) => ({
   saveHoroscope: async (horoscopeData) => {
     try {
       set({ isLoading: true, error: null });
-      let data;
-      try {
-        data = await profilesApi.upsertHoroscope(horoscopeData);
-      } catch (dbError) {
-        if (__DEV__ || process.env.EXPO_PUBLIC_APP_ENV === 'development') {
-          console.warn('DB horoscope upsert failed, using development local state fallback:', dbError.message);
-          data = horoscopeData;
-        } else {
-          throw dbError;
-        }
-      }
+      // No silent fallback — a failed horoscope save must surface.
+      const data = await profilesApi.upsertHoroscope(horoscopeData);
       set({ horoscope: data, isLoading: false });
       return data;
     } catch (error) {
@@ -193,17 +142,8 @@ const useProfileStore = create((set, get) => ({
   savePartnerPreferences: async (prefData) => {
     try {
       set({ isLoading: true, error: null });
-      let data;
-      try {
-        data = await profilesApi.upsertPartnerPreferences(prefData);
-      } catch (dbError) {
-        if (__DEV__ || process.env.EXPO_PUBLIC_APP_ENV === 'development') {
-          console.warn('DB preferences upsert failed, using development local state fallback:', dbError.message);
-          data = prefData;
-        } else {
-          throw dbError;
-        }
-      }
+      // No silent fallback — a failed preferences save must surface.
+      const data = await profilesApi.upsertPartnerPreferences(prefData);
       set({ partnerPreferences: data, isLoading: false });
       return data;
     } catch (error) {

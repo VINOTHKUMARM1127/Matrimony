@@ -8,7 +8,7 @@ import AdminLogin from './pages/admin/AdminLogin';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import UsersManager from './pages/admin/UsersManager';
 import BulkUploader from './pages/admin/BulkUploader';
-import RecommendationSettings from './pages/admin/RecommendationSettings';
+import PremiumSettings from './pages/admin/PremiumSettings';
 
 const App = () => {
   const { initialize, isInitializing } = useAuthStore();
@@ -31,7 +31,7 @@ const App = () => {
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="users" element={<UsersManager />} />
           <Route path="bulk-upload" element={<BulkUploader />} />
-          <Route path="settings" element={<RecommendationSettings />} />
+          <Route path="settings" element={<PremiumSettings />} />
         </Route>
         
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -3,7 +3,7 @@
  * Full-screen photo cards with professional text-based action buttons,
  * progress indicator, and premium visual treatment.
  */
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,8 +13,10 @@ import {
   FlatList,
   Alert,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../../theme';
@@ -28,12 +30,15 @@ import useProfileStore from '../../store/useProfileStore';
 import useAuthStore from '../../store/useAuthStore';
 import Button from '../../components/common/Button';
 import { sendInterest, passProfile } from '../../api/interests';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { fetchPremiumPlans } from '../../api/settingsApi';
+import SuccessOverlay from '../../components/common/SuccessOverlay';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const MatchesScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('recommended');
+  const [interestSent, setInterestSent] = useState(false);
   const queryClient = useQueryClient();
 
   const profile = useProfileStore((s) => s.profile);
@@ -67,6 +72,13 @@ const MatchesScreen = ({ navigation }) => {
 
   const user = useAuthStore((s) => s.user);
 
+  // Live plan pricing for the lock card (no hardcoded prices/names).
+  const { data: lockPlans = [] } = useQuery({
+    queryKey: ['premiumPlans'],
+    queryFn: fetchPremiumPlans,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const rawData = activeTab === 'daily' ? (dailyMatches || []) 
                 : activeTab === 'nearby' ? nearbyMatches 
                 : (recommendedProfiles || []);
@@ -80,7 +92,7 @@ const MatchesScreen = ({ navigation }) => {
     setActiveTab(tab);
   };
 
-  const showPremiumAlert = () => {
+  const showPremiumAlert = useCallback(() => {
     Alert.alert(
       'Premium Feature',
       'Upgrade to Premium to express interest or pass on profiles.',
@@ -89,9 +101,9 @@ const MatchesScreen = ({ navigation }) => {
         { text: 'Upgrade Now', onPress: () => navigation.navigate('UpgradesTab') }
       ]
     );
-  };
+  }, [navigation]);
 
-  const handleDecline = async (targetProfile) => {
+  const handleDecline = useCallback(async (targetProfile) => {
     if (!isPremium) return showPremiumAlert();
     if (targetProfile && profile?.id) {
       try {
@@ -106,20 +118,21 @@ const MatchesScreen = ({ navigation }) => {
         Alert.alert('Error', 'Failed to pass profile. Please try again.');
       }
     }
-  };
+  }, [isPremium, profile?.id, queryClient, showPremiumAlert]);
 
-  const handleInterested = async (targetProfile) => {
+  const handleInterested = useCallback(async (targetProfile) => {
     if (!isPremium) return showPremiumAlert();
     if (targetProfile && profile?.id) {
       try {
         await sendInterest(profile.id, targetProfile.id);
         // Refetch all feeds so backend returns fresh profiles (excluding the interested one)
+        queryClient.invalidateQueries({ queryKey: ['user_quotas', user?.id] });
         queryClient.invalidateQueries({ queryKey: ['recommended'] });
         queryClient.invalidateQueries({ queryKey: ['nearbyMatches'] });
         queryClient.invalidateQueries({ queryKey: ['dailyMatches'] });
         queryClient.invalidateQueries({ queryKey: ['interestsSent'] });
         queryClient.invalidateQueries({ queryKey: ['interestsReceived'] });
-        Alert.alert('Success', 'Interest sent successfully!');
+        setInterestSent(true);
       } catch (err) {
         console.warn('Failed to send interest:', err);
         if (err.message?.includes('QUOTA_EXCEEDED')) {
@@ -136,11 +149,14 @@ const MatchesScreen = ({ navigation }) => {
         }
       }
     }
-  };
+  }, [isPremium, profile?.id, queryClient, navigation, showPremiumAlert]);
 
-  const handleProfilePress = (prof) => {
+  const handleProfilePress = useCallback((prof) => {
+    if (prof.isLocked) {
+      return showPremiumAlert();
+    }
     navigation.navigate('UserProfile', { profileId: prof.id });
-  };
+  }, [navigation, showPremiumAlert]);
 
   const getPrimaryPhoto = (prof) => {
     if (!prof?.photos?.length) {
@@ -161,10 +177,13 @@ const MatchesScreen = ({ navigation }) => {
     return age;
   };
 
-  const renderItem = ({ item }) => {
+  const renderItem = useCallback(({ item }) => {
     const age = calculateAge(item.date_of_birth);
     const photoUri = getPrimaryPhoto(item);
-    const score = item.compatibility_score || Math.floor(Math.random() * 25) + 65;
+    // Stable score: prefer the backend compatibility_score; deterministic
+    // fallback derived from the id so it never changes between renders.
+    const score = item.compatibility_score
+      || (65 + (parseInt(String(item.id).replace(/\D/g, '').slice(-2) || '0', 10) % 25));
     const photoCount = item.photos?.length || 0;
 
     return (
@@ -182,13 +201,18 @@ const MatchesScreen = ({ navigation }) => {
               contentFit="cover"
               transition={200}
               cachePolicy="memory-disk"
+              blurRadius={item.isLocked ? 15 : 0}
             />
           ) : (
             <View style={styles.noPhotoBackground}>
-              <Text style={styles.noPhotoInitial}>
-                {item.display_name?.charAt(0) || '?'}
-              </Text>
-              <Text style={styles.noPhotoText}>No Photo</Text>
+              {item.isLocked ? (
+                <Ionicons name="lock-closed" size={32} color={colors.textMuted} style={styles.noPhotoInitial} />
+              ) : (
+                <Text style={styles.noPhotoInitial}>
+                  {item.display_name?.charAt(0) || '?'}
+                </Text>
+              )}
+              <Text style={styles.noPhotoText}>{item.isLocked ? 'Premium Match' : 'No Photo'}</Text>
             </View>
           )}
 
@@ -202,7 +226,8 @@ const MatchesScreen = ({ navigation }) => {
               )}
               {item.is_verified && (
                 <View style={styles.verifiedBadge}>
-                  <Text style={styles.verifiedBadgeText}>✓ Verified</Text>
+                  <Ionicons name="checkmark-circle" size={12} color="#FFF" />
+                  <Text style={[styles.verifiedBadgeText, { marginLeft: 4 }]}>Verified</Text>
                 </View>
               )}
             </View>
@@ -214,7 +239,7 @@ const MatchesScreen = ({ navigation }) => {
                 </>
               ) : (
                 <>
-                  <Text style={styles.compatRingPercent}>🔒</Text>
+                  <Ionicons name="lock-closed" size={16} color={colors.textMuted} style={styles.compatRingPercent} />
                   <Text style={styles.compatRingLabel}>Hidden</Text>
                 </>
               )}
@@ -235,61 +260,72 @@ const MatchesScreen = ({ navigation }) => {
             style={styles.detailsGradient}
           >
             <Text style={styles.nameText} numberOfLines={1}>
-              {item.display_name}, {age}
+              {item.isLocked ? `${item.display_name?.charAt(0)}*****` : item.display_name}, {age}
             </Text>
             <Text style={styles.infoLine} numberOfLines={1}>
-              {item.city}{item.district ? `, ${item.district}` : ''} · {item.occupation || 'Professional'}
+              {item.isLocked ? 'Location Hidden' : `${item.city}${item.district ? `, ${item.district}` : ''}`} · {item.isLocked ? 'Profession Hidden' : (item.occupation || 'Professional')}
             </Text>
             <Text style={styles.infoLine} numberOfLines={1}>
-              {item.education || 'Graduate'} · {item.religion || 'Hindu'} {item.caste || ''}
+              {item.isLocked ? 'Education Hidden' : (item.education || 'Graduate')} · {item.religion || 'Hindu'} {!item.isLocked && item.caste ? item.caste : ''}
             </Text>
 
             {/* Action Buttons Inside Card */}
             <View style={styles.actionsToolbar}>
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.declineActionBtn]}
-                onPress={() => handleDecline(item)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.declineActionText}>✕  Skip</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.interestedActionBtn]}
-                onPress={() => handleInterested(item)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.interestedActionText}>♥  Interested</Text>
-              </TouchableOpacity>
+              {item.isLocked ? (
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: colors.goldDark, borderWidth: 1, borderColor: colors.goldDark }]}
+                  onPress={showPremiumAlert}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="lock-closed" size={14} color="#FFF" style={{ marginRight: 6 }} />
+                  <Text style={[styles.interestedActionText, { color: '#FFF' }]}>Upgrade to View</Text>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.declineActionBtn]}
+                    onPress={() => handleDecline(item)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.declineActionText}>✕  Skip</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.interestedActionBtn]}
+                    onPress={() => handleInterested(item)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.interestedActionText}>♥  Interested</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </LinearGradient>
         </TouchableOpacity>
       </View>
     );
-  };
+  }, [handleProfilePress, handleInterested, handleDecline, showPremiumAlert]);
 
   const renderFooter = () => {
     if (isPremium || displayData.length === 0) return null;
     
-    const currentLimit = activeTab === 'daily' ? limits?.daily 
-                       : activeTab === 'nearby' ? limits?.nearby 
-                       : limits?.recommended || 5;
+    const currentLimit = activeTab === 'daily' ? limits?.daily_limit 
+                       : activeTab === 'nearby' ? limits?.nearby_limit 
+                       : limits?.recommended_limit;
 
     return (
       <View style={styles.lockCard}>
         <Text style={styles.lockIcon}>⊘</Text>
         <Text style={styles.lockTitle}>Premium Matches Locked</Text>
         <Text style={styles.lockDescription}>
-          You've viewed your limit of {currentLimit} profiles! Upgrade to instantly unlock all premium matches and daily updates.
+          {currentLimit
+            ? `You've viewed your limit of ${currentLimit} profiles! Upgrade to instantly unlock all premium matches and daily updates.`
+            : `Upgrade to instantly unlock all premium matches and daily updates.`}
         </Text>
         <View style={styles.lockTiers}>
-          {[
-            { name: 'Silver', price: '₹499/mo', color: '#8A8A8A' },
-            { name: 'Gold', price: '₹999/3mo', color: '#D4AF37' },
-            { name: 'Platinum', price: '₹2499/6mo', color: '#E5E4E2' },
-          ].map((tier) => (
-            <View key={tier.name} style={[styles.lockTierItem, { borderColor: tier.color }]}>
+          {lockPlans.map((tier) => (
+            <View key={tier.id} style={[styles.lockTierItem, { borderColor: tier.color }]}>
               <Text style={[styles.lockTierName, { color: tier.color }]}>{tier.name}</Text>
-              <Text style={styles.lockTierPrice}>{tier.price}</Text>
+              <Text style={styles.lockTierPrice}>₹{tier.price}/{tier.durationMonths}mo</Text>
             </View>
           ))}
         </View>
@@ -356,6 +392,11 @@ const MatchesScreen = ({ navigation }) => {
               renderItem={renderItem}
               contentContainerStyle={styles.flatListContent}
               showsVerticalScrollIndicator={false}
+              removeClippedSubviews
+              initialNumToRender={4}
+              maxToRenderPerBatch={6}
+              windowSize={7}
+              updateCellsBatchingPeriod={50}
               onEndReached={() => {
                 if (activeTab === 'recommended' && hasNextRecommended && !fetchingNextRecommended) fetchNextRecommended();
                 else if (activeTab === 'nearby' && hasNextNearby && !fetchingNextNearby) fetchNextNearby();
@@ -387,9 +428,7 @@ const MatchesScreen = ({ navigation }) => {
               ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <EmptyState
-                  icon="✦"
-                  title="No matches found!"
-                  description="Adjust your search filters or check back later for fresh recommendations."
+                  preset={activeTab === 'nearby' ? 'noNearby' : 'noMatches'}
                 />
               </View>
             }
@@ -397,6 +436,15 @@ const MatchesScreen = ({ navigation }) => {
           />
         )}
       </View>
+
+      <SuccessOverlay
+        visible={interestSent}
+        icon="heart"
+        tint={colors.primary}
+        title="Interest Sent!"
+        subtitle="We'll notify you when they respond"
+        onDone={() => setInterestSent(false)}
+      />
     </SafeAreaView>
   );
 };

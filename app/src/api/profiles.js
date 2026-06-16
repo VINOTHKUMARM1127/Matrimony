@@ -4,6 +4,14 @@
  */
 import supabase from './supabaseClient';
 import { PAGE_SIZE } from '../utils/constants';
+import * as ImageManipulator from 'expo-image-manipulator';
+import { File } from 'expo-file-system';
+import { decode } from 'base64-arraybuffer';
+import { getR2Client, PutObjectCommand, DeleteObjectCommand } from './r2Client';
+
+// All R2 access goes through the shared, RN-correct client (forcePathStyle +
+// checksum-safe). See src/api/r2Client.js for why those options matter.
+const getS3Client = getR2Client;
 
 /**
  * Get current user's profile
@@ -14,7 +22,9 @@ export const getMyProfile = async (userId) => {
     .select(`
       *,
       photos (*),
-      subscriptions (*)
+      subscriptions (*),
+      partner_preferences (*),
+      horoscope_details (*)
     `)
     .eq('id', userId)
     .single();
@@ -31,7 +41,7 @@ export const getProfile = async (profileId) => {
     .from('profiles')
     .select(`
       *,
-      photos (id, storage_path, thumbnail_path, is_primary, is_private, display_order, is_approved)
+      photos (id, storage_path, thumbnail_path, is_primary, display_order, is_approved)
     `)
     .eq('id', profileId)
     .eq('is_active', true)
@@ -185,7 +195,26 @@ export const searchProfiles = async (filters = {}, page = 0) => {
   const { data, error, count } = await query;
 
   if (error) throw error;
-  return { profiles: data, total: count, page, hasMore: (page + 1) * PAGE_SIZE < count };
+  
+  // Fetch viewer's tier to lock premium matches
+  let isFreeUser = true;
+  if (filters.excludeUserId) {
+    const { data: viewerProfile } = await supabase
+      .from('profiles')
+      .select('tier, is_premium')
+      .eq('id', filters.excludeUserId)
+      .single();
+    if (viewerProfile && (viewerProfile.is_premium || viewerProfile.tier !== 'free')) {
+      isFreeUser = false;
+    }
+  }
+
+  const processedData = data ? data.map(p => ({
+    ...p,
+    isLocked: isFreeUser && p.is_premium
+  })) : [];
+
+  return { profiles: processedData, total: count, page, hasMore: (page + 1) * PAGE_SIZE < count };
 };
 
 /**
@@ -334,7 +363,7 @@ export const uploadProfilePhoto = async (userId, fileUri, options = { replacePri
       ContentType: 'image/jpeg',
     });
 
-    await s3Client.send(command);
+    await getS3Client().send(command);
 
     // 5. Construct public URL using configured R2 domain
     const r2PublicDomain = process.env.EXPO_PUBLIC_R2_PUBLIC_URL || '';
@@ -452,7 +481,7 @@ export const deleteProfilePhoto = async (photoId, storagePath) => {
             Bucket: bucketName,
             Key: fileName,
           });
-          await s3Client.send(command);
+          await getS3Client().send(command);
         } catch (r2Error) {
           console.warn('Failed to delete from R2:', r2Error);
         }

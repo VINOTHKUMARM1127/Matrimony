@@ -3,7 +3,7 @@
  * Dynamic feed with multiple content sections: Daily Picks, Recommended,
  * Recently Active, Premium Members, Nearby, Trending, and Upgrade CTA.
  */
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -64,9 +64,18 @@ const HomeScreen = ({ navigation }) => {
   const isFreeUser = !profile?.is_premium;
 
   const getTierDisplay = () => {
-    if (!quotas || quotas.tier === 'NON_PREMIUM') return 'Free Tier';
+    // get_user_quotas returns tier as 'FREE' | 'SILVER' | 'GOLD' | 'PLATINUM'.
+    if (!quotas || quotas.tier === 'FREE') return 'Free Tier';
     return `${quotas.tier} Premium`;
   };
+
+  // Days remaining until plan expiry (null for free / no expiry).
+  const daysRemaining = useMemo(() => {
+    if (!quotas?.expires_at) return null;
+    const ms = new Date(quotas.expires_at).getTime() - Date.now();
+    return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
+  }, [quotas?.expires_at]);
+
   const firstName = profile?.display_name?.split(' ')[0] || 'User';
 
   // Derive "Recently Active" from recommended (sorted by last_active_at)
@@ -91,10 +100,15 @@ const HomeScreen = ({ navigation }) => {
     [navigation]
   );
 
+  const [refreshing, setRefreshing] = useState(false);
+
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refetchRecommended(), refetchDaily()]);
-    setRefreshing(false);
+    try {
+      await Promise.all([refetchRecommended(), refetchDaily()]);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const calculateAge = (dob) => {
@@ -169,7 +183,8 @@ const HomeScreen = ({ navigation }) => {
             </Text>
             {quotas?.expires_at && !isFreeUser && (
               <Text style={styles.dashboardExpiry}>
-                Expires {new Date(quotas.expires_at).toLocaleDateString()}
+                Expires {new Date(quotas.expires_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {daysRemaining != null ? `  ·  ${daysRemaining} days left` : ''}
               </Text>
             )}
           </View>
@@ -204,6 +219,19 @@ const HomeScreen = ({ navigation }) => {
             >
               <Text style={styles.dashboardActionText}>{isFreeUser ? 'Upgrade Plan' : 'Recharge Plan'}</Text>
             </TouchableOpacity>
+
+            {/* Other active plans (priority system: current = highest tier) */}
+            {Array.isArray(quotas.other_plans) && quotas.other_plans.length > 0 && (
+              <View style={styles.otherPlansContainer}>
+                <Text style={styles.otherPlansTitle}>Other Active Plans</Text>
+                {quotas.other_plans.map((op) => (
+                  <View key={`${op.plan}-${op.expires_at}`} style={styles.otherPlanRow}>
+                    <Text style={styles.otherPlanName}>{op.label || op.plan}</Text>
+                    <Text style={styles.otherPlanDays}>{op.days_left} days left</Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -251,7 +279,7 @@ const HomeScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={false}
+            refreshing={refreshing}
             onRefresh={handleRefresh}
             tintColor={colors.primary}
             colors={[colors.primary]}
@@ -439,6 +467,36 @@ const styles = StyleSheet.create({
     color: colors.textInverse,
     fontWeight: '700',
     fontSize: 14,
+  },
+  otherPlansContainer: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  otherPlansTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  otherPlanRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 5,
+  },
+  otherPlanName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  otherPlanDays: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '500',
   },
 
   // ── Section Shared ──

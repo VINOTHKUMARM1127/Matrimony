@@ -2,6 +2,7 @@
  * Tamil Matrimony — useMatches Hook
  * Fetch recommended profiles, daily matches, and calculate compatibility scores
  */
+import React from 'react';
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import * as matchesApi from '../api/matches';
 import useAuthStore from '../store/useAuthStore';
@@ -33,10 +34,14 @@ export const useMatches = () => {
     gcTime: 5 * 60 * 1000,
   });
 
+  const isDynamic = limits?.dynamic_daily_enabled || false;
+
+  // Limits come straight from tier_settings (single source of truth).
+  // The backend RPCs clamp each feed to these caps and handle day-by-day
+  // rotation internally, so the client must NOT multiply by active days.
   const recLimit = limits?.recommended_limit || 0;
   const nearbyLimit = limits?.nearby_limit || 0;
   const dailyLimit = limits?.daily_limit || 0;
-  const isDynamic = limits?.dynamic_daily_enabled || false;
 
   // Recommendations query (Infinite)
   const {

@@ -7,6 +7,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, View, StyleSheet, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
 import { layout } from '../theme/spacing';
 import shadows from '../theme/shadows';
@@ -68,27 +69,25 @@ const RegStack = createStackNavigator();
 
 /**
  * Tab Icon Component
- * Clean, monochrome text-based icons that feel professional and premium.
+ * Modern, clean icons using vector-icons that feel professional and premium.
  */
 const TabIcon = ({ label, focused }) => {
   const iconMap = {
-    Home: '⌂',
-    Search: '⊕',
-    Matches: '♡',
-    Interest: '⇋',
-    Premium: '💎',
+    Home: focused ? 'home' : 'home-outline',
+    Search: focused ? 'search' : 'search-outline',
+    Matches: focused ? 'heart' : 'heart-outline',
+    Interest: focused ? 'mail' : 'mail-outline',
+    Premium: focused ? 'star' : 'star-outline',
   };
 
   return (
     <View style={tabIconStyles.container}>
-      <Text
-        style={[
-          tabIconStyles.icon,
-          { color: focused ? colors.tabActive : colors.tabInactive },
-        ]}
-      >
-        {iconMap[label] || '•'}
-      </Text>
+      <Ionicons
+        name={iconMap[label] || 'ellipse-outline'}
+        size={24}
+        color={focused ? colors.tabActive : colors.tabInactive}
+        style={tabIconStyles.icon}
+      />
       {focused && <View style={tabIconStyles.activeDot} />}
     </View>
   );
@@ -101,8 +100,7 @@ const tabIconStyles = StyleSheet.create({
     height: 28,
   },
   icon: {
-    fontSize: 22,
-    lineHeight: 26,
+    marginBottom: -2,
   },
   activeDot: {
     width: 5,

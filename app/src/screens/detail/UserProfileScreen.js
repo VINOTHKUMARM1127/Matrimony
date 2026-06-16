@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Animated, { useAnimatedStyle, withTiming, useSharedValue } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme';
 import { borderRadius, layout } from '../../theme/spacing';
 import shadows from '../../theme/shadows';
@@ -65,6 +66,7 @@ const UserProfileScreen = ({ route, navigation }) => {
 
   const currentUser = useAuthStore((s) => s.user);
   const myProfile = useProfileStore((s) => s.profile);
+  const myPhotos = useProfileStore((s) => s.photos);
   const [revealingPhone, setRevealingPhone] = useState(false);
 
   // 1. Fetch details of target user
@@ -133,14 +135,14 @@ const UserProfileScreen = ({ route, navigation }) => {
   const compatibilityBreakdown = compatibilityResult?.breakdown || {};
 
   // Privacy Locks / Gates
-  const isHoroscopeUnlocked = quotas?.tier !== 'NON_PREMIUM' || (interestStatus && interestStatus.sender_id === profileId);
-  const isMobileUnlocked = quotas?.tier !== 'NON_PREMIUM';
+  // get_user_quotas returns tier as 'FREE' | 'SILVER' | 'GOLD' | 'PLATINUM',
+  // and consumable balances as contacts_remaining / interests_remaining (-1 = unlimited).
+  const isPremiumTier = quotas?.tier && quotas.tier !== 'FREE';
+  const isHoroscopeUnlocked = isPremiumTier || (interestStatus && interestStatus.sender_id === profileId);
+  const isMobileUnlocked = isPremiumTier;
 
-  const limitInfo = {
-    limit: quotas?.contacts_allowed || 0,
-    current: quotas?.contacts_used || 0
-  };
-  const hasRemainingViews = limitInfo.limit === -1 || limitInfo.current < limitInfo.limit;
+  const contactsRemaining = quotas?.contacts_remaining ?? 0;
+  const hasRemainingViews = contactsRemaining === -1 || contactsRemaining > 0;
 
   const getSimulatedPhoneNumber = () => {
     const seed = profileId?.slice(-4) || '1234';
@@ -163,7 +165,7 @@ const UserProfileScreen = ({ route, navigation }) => {
     if (!hasViewedPhone && !hasRemainingViews) {
       Alert.alert(
         'Limit Exceeded',
-        `You have used your ${limitInfo.limit === -1 ? 'unlimited' : limitInfo.limit} allowed contact views. Please recharge to reset your quotas.`,
+        `You have used all your allowed contact views. Please recharge to reset your quotas.`,
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Upgrades', onPress: () => navigation.navigate('Premium') },
@@ -197,7 +199,7 @@ const UserProfileScreen = ({ route, navigation }) => {
     }
   };
 
-  // Send Interest Mutation
+  // Send Interest Mutation with optimistic quota update
   const sendInterestMutation = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.rpc('send_interest_with_quota', {
@@ -206,13 +208,28 @@ const UserProfileScreen = ({ route, navigation }) => {
       });
       if (error) throw error;
     },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['user_quotas', currentUser.id] });
+      const previousQuotas = queryClient.getQueryData(['user_quotas', currentUser.id]);
+      if (previousQuotas && previousQuotas.interests_remaining > 0) {
+        queryClient.setQueryData(['user_quotas', currentUser.id], {
+          ...previousQuotas,
+          interests_remaining: previousQuotas.interests_remaining - 1,
+        });
+      }
+      return { previousQuotas };
+    },
     onSuccess: () => {
       refetchInterest();
+      queryClient.invalidateQueries({ queryKey: ['user_quotas', currentUser.id] });
       queryClient.invalidateQueries({ queryKey: ['interestsSent'] });
       queryClient.invalidateQueries({ queryKey: ['interestsReceived'] });
       Alert.alert('Success', 'Interest request sent successfully!');
     },
-    onError: (err) => {
+    onError: (err, _vars, context) => {
+      if (context?.previousQuotas) {
+        queryClient.setQueryData(['user_quotas', currentUser.id], context.previousQuotas);
+      }
       if (err.message?.includes('QUOTA_EXCEEDED')) {
         Alert.alert(
           'Limit Exceeded',
@@ -228,11 +245,12 @@ const UserProfileScreen = ({ route, navigation }) => {
     },
   });
 
-  const handleSendInterest = () => {
-    if (quotas?.interests_allowed !== -1 && quotas?.interests_used >= quotas?.interests_allowed) {
+  const handleSendInterest = async () => {
+    const interestsRemaining = quotas?.interests_remaining ?? 0;
+    if (interestsRemaining !== -1 && interestsRemaining <= 0) {
       Alert.alert(
         'Limit Exceeded',
-        `You have used your ${quotas.interests_allowed} allowed interests. Please recharge to reset your quotas.`,
+        `You have used all your allowed interests. Please recharge to reset your quotas.`,
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Upgrades', onPress: () => navigation.navigate('Premium') },
@@ -241,7 +259,20 @@ const UserProfileScreen = ({ route, navigation }) => {
       return;
     }
 
-    if (!myProfile?.photos?.length) {
+    // Verify the user has at least one photo. Check the live store slices first
+    // (profile.photos OR the dedicated photos slice that newly-added photos go
+    // into), then fall back to an authoritative COUNT on the photos table so a
+    // stale store never blocks a user who genuinely has photos.
+    let hasPhoto = (myProfile?.photos?.length || 0) > 0 || (myPhotos?.length || 0) > 0;
+    if (!hasPhoto && currentUser?.id) {
+      const { count } = await supabase
+        .from('photos')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', currentUser.id);
+      hasPhoto = (count || 0) > 0;
+    }
+
+    if (!hasPhoto) {
       Alert.alert(
         'Photo Required',
         'Please upload at least one photo to your profile before sending interests.',
@@ -372,10 +403,22 @@ const UserProfileScreen = ({ route, navigation }) => {
                 </View>
               ) : (
                 <View style={styles.lockedMatrixContainer}>
-                  <Text style={styles.lockedRowText}>🔒 Age Alignment Index</Text>
-                  <Text style={styles.lockedRowText}>🔒 Religion & Caste Match</Text>
-                  <Text style={styles.lockedRowText}>🔒 Location Proximity Factors</Text>
-                  <Text style={styles.lockedRowText}>🔒 Star (Porutham) Compatibility</Text>
+                  <View style={styles.lockedRow}>
+                    <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
+                    <Text style={styles.lockedRowText}>Age Alignment Index</Text>
+                  </View>
+                  <View style={styles.lockedRow}>
+                    <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
+                    <Text style={styles.lockedRowText}>Religion & Caste Match</Text>
+                  </View>
+                  <View style={styles.lockedRow}>
+                    <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
+                    <Text style={styles.lockedRowText}>Location Proximity Factors</Text>
+                  </View>
+                  <View style={styles.lockedRow}>
+                    <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
+                    <Text style={styles.lockedRowText}>Star (Porutham) Compatibility</Text>
+                  </View>
                   
                   <View style={styles.lockTeaserBanner}>
                     <Text style={styles.lockTeaserText}>
@@ -418,7 +461,7 @@ const UserProfileScreen = ({ route, navigation }) => {
             )}
             {!hasViewedPhone && isMobileUnlocked && (
               <Text style={styles.limitDisclaimer}>
-                Remaining views: {limitInfo.limit === -1 ? 'Unlimited' : `${limitInfo.limit - limitInfo.current} / ${limitInfo.limit}`}
+                Remaining views: {contactsRemaining === -1 ? 'Unlimited' : contactsRemaining}
               </Text>
             )}
           </View>
@@ -757,11 +800,16 @@ const styles = StyleSheet.create({
   lockedMatrixContainer: {
     gap: 8,
   },
+  lockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    gap: 6,
+  },
   lockedRowText: {
     fontSize: 13,
     color: colors.textMuted,
     fontWeight: '500',
-    paddingVertical: 4,
   },
   lockTeaserBanner: {
     backgroundColor: colors.primarySurface,

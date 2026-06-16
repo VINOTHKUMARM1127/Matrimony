@@ -101,27 +101,11 @@ export const generateThumbnail = async (uri) => {
 };
 
 import { decode } from 'base64-arraybuffer';
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { getR2Client, PutObjectCommand, DeleteObjectCommand } from '../api/r2Client';
 
-// Lazy instantiation of S3Client to prevent crash if endpoint is invalid
-let _s3Client = null;
-const getS3Client = () => {
-  if (_s3Client) return _s3Client;
-
-  const r2AccountId = process.env.EXPO_PUBLIC_R2_ACCOUNT_ID;
-  const r2AccessKeyId = process.env.EXPO_PUBLIC_R2_ACCESS_KEY_ID;
-  const r2SecretAccessKey = process.env.EXPO_PUBLIC_R2_SECRET_ACCESS_KEY;
-
-  _s3Client = new S3Client({
-    region: 'auto',
-    endpoint: `https://${r2AccountId}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: r2AccessKeyId || '',
-      secretAccessKey: r2SecretAccessKey || '',
-    },
-  });
-  return _s3Client;
-};
+// All R2 access routes through the shared, RN-correct client
+// (forcePathStyle + checksum-safe). See src/api/r2Client.js.
+const getS3Client = getR2Client;
 
 /**
  * Upload image to Cloudflare R2

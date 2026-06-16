@@ -185,7 +185,6 @@ BEGIN;
 
   if (isFirstChunk) {
     sql += `-- CLEAN existing seed records to avoid conflicts\n`;
-    sql += `DELETE FROM public.user_activity WHERE activity_type = 'view_phone';\n`;
     sql += `DELETE FROM public.interests WHERE message LIKE '%connect%';\n`;
     sql += `DELETE FROM public.subscriptions WHERE razorpay_payment_id LIKE 'pay_mock_%';\n`;
     sql += `DELETE FROM public.photos WHERE storage_path LIKE '%randomuser.me%';\n`;
@@ -207,50 +206,48 @@ ON CONFLICT (id) DO NOTHING;\n`;
   sql += `\n-- 2. PUBLIC PROFILES INSERTIONS\n`;
   usersSubset.forEach((u) => {
     const profileId = `TM${String(u.index).padStart(6, '0')}`;
-    sql += `INSERT INTO public.profiles (id, profile_id, display_name, gender, date_of_birth, height_cm, marital_status, religion, caste, subcaste, dosham, education, education_detail, occupation, occupation_detail, annual_income, company_name, city, district, about_me, family_type, family_status, father_occupation, mother_occupation, is_verified, is_premium, is_profile_complete, profile_completion_percent, last_active_at)
-VALUES ('${u.id}', '${profileId}', ${escapeSQL(u.display_name)}, '${u.gender}', '${u.dob}', ${u.height_cm}, '${u.marital_status}', '${u.religion}', ${escapeSQL(u.caste)}, ${u.subcaste ? escapeSQL(u.subcaste) : 'NULL'}, '${u.dosham}', ${escapeSQL(u.education)}, ${escapeSQL(u.education_detail)}, ${escapeSQL(u.occupation)}, ${escapeSQL(u.occupation_detail)}, ${escapeSQL(u.annual_income)}, ${escapeSQL(u.company_name)}, ${escapeSQL(u.city)}, ${escapeSQL(u.district)}, ${escapeSQL(u.about_me)}, '${u.family_type}', '${u.family_status}', ${escapeSQL(u.father_occupation)}, ${escapeSQL(u.mother_occupation)}, ${u.is_verified}, ${u.is_premium}, true, 100, NOW() - INTERVAL '${randomRange(0, 10)} days')
-ON CONFLICT (id) DO UPDATE SET
-  profile_id = EXCLUDED.profile_id,
-  display_name = EXCLUDED.display_name,
-  gender = EXCLUDED.gender,
-  date_of_birth = EXCLUDED.date_of_birth,
-  height_cm = EXCLUDED.height_cm,
-  marital_status = EXCLUDED.marital_status,
-  religion = EXCLUDED.religion,
-  caste = EXCLUDED.caste,
-  subcaste = EXCLUDED.subcaste,
-  dosham = EXCLUDED.dosham,
-  education = EXCLUDED.education,
-  education_detail = EXCLUDED.education_detail,
-  occupation = EXCLUDED.occupation,
-  occupation_detail = EXCLUDED.occupation_detail,
-  annual_income = EXCLUDED.annual_income,
-  company_name = EXCLUDED.company_name,
-  city = EXCLUDED.city,
-  district = EXCLUDED.district,
-  about_me = EXCLUDED.about_me,
-  family_type = EXCLUDED.family_type,
-  family_status = EXCLUDED.family_status,
-  father_occupation = EXCLUDED.father_occupation,
-  mother_occupation = EXCLUDED.mother_occupation,
-  is_verified = EXCLUDED.is_verified,
-  is_premium = EXCLUDED.is_premium,
-  is_profile_complete = EXCLUDED.is_profile_complete,
-  profile_completion_percent = EXCLUDED.profile_completion_percent,
-  last_active_at = EXCLUDED.last_active_at;\n`;
-  });
-
-  // 3. public.horoscope_details
-  sql += `\n-- 3. HOROSCOPE DETAILS INSERTIONS\n`;
-  usersSubset.forEach((u) => {
-    sql += `INSERT INTO public.horoscope_details (user_id, star, raasi, lagnam, gothram, manglik)
-VALUES ('${u.id}', '${u.star}', '${u.raasi}', '${u.lagnam}', '${u.gothram}', '${u.manglik}')
-ON CONFLICT (user_id) DO UPDATE SET
-  star = EXCLUDED.star,
-  raasi = EXCLUDED.raasi,
-  lagnam = EXCLUDED.lagnam,
-  gothram = EXCLUDED.gothram,
-  manglik = EXCLUDED.manglik;\n`;
+    const tier = u.is_premium ? 'gold' : 'free';
+    sql += `INSERT INTO public.profiles (
+      id, profile_id, display_name, gender, date_of_birth, height_cm, marital_status, religion, caste, subcaste, dosham, education, education_detail, occupation, occupation_detail, annual_income, company_name, city, district, about_me, family_type, family_status, is_verified, is_premium, is_profile_complete, profile_completion_percent, last_active_at, star, raasi, lagnam, gothram, tier, contacts_remaining, interests_remaining, food_habit, smoking, drinking
+    ) VALUES (
+      '${u.id}', '${profileId}', ${escapeSQL(u.display_name)}, '${u.gender}', '${u.dob}', ${u.height_cm}, '${u.marital_status}', '${u.religion}', ${escapeSQL(u.caste)}, ${u.subcaste ? escapeSQL(u.subcaste) : 'NULL'}, '${u.dosham}', ${escapeSQL(u.education)}, ${escapeSQL(u.education_detail)}, ${escapeSQL(u.occupation)}, ${escapeSQL(u.occupation_detail)}, ${escapeSQL(u.annual_income)}, ${escapeSQL(u.company_name)}, ${escapeSQL(u.city)}, ${escapeSQL(u.district)}, ${escapeSQL(u.about_me)}, '${u.family_type}', '${u.family_status}', ${u.is_verified}, ${u.is_premium}, true, 100, NOW() - INTERVAL '${randomRange(0, 10)} days', '${u.star}', '${u.raasi}', '${u.lagnam}', '${u.gothram}', '${tier}', ${u.is_premium ? 50 : 5}, ${u.is_premium ? 100 : 5}, 'vegetarian', 'no', 'no'
+    ) ON CONFLICT (id) DO UPDATE SET
+      profile_id = EXCLUDED.profile_id,
+      display_name = EXCLUDED.display_name,
+      gender = EXCLUDED.gender,
+      date_of_birth = EXCLUDED.date_of_birth,
+      height_cm = EXCLUDED.height_cm,
+      marital_status = EXCLUDED.marital_status,
+      religion = EXCLUDED.religion,
+      caste = EXCLUDED.caste,
+      subcaste = EXCLUDED.subcaste,
+      dosham = EXCLUDED.dosham,
+      education = EXCLUDED.education,
+      education_detail = EXCLUDED.education_detail,
+      occupation = EXCLUDED.occupation,
+      occupation_detail = EXCLUDED.occupation_detail,
+      annual_income = EXCLUDED.annual_income,
+      company_name = EXCLUDED.company_name,
+      city = EXCLUDED.city,
+      district = EXCLUDED.district,
+      about_me = EXCLUDED.about_me,
+      family_type = EXCLUDED.family_type,
+      family_status = EXCLUDED.family_status,
+      is_verified = EXCLUDED.is_verified,
+      is_premium = EXCLUDED.is_premium,
+      is_profile_complete = EXCLUDED.is_profile_complete,
+      profile_completion_percent = EXCLUDED.profile_completion_percent,
+      last_active_at = EXCLUDED.last_active_at,
+      star = EXCLUDED.star,
+      raasi = EXCLUDED.raasi,
+      lagnam = EXCLUDED.lagnam,
+      gothram = EXCLUDED.gothram,
+      tier = EXCLUDED.tier,
+      contacts_remaining = EXCLUDED.contacts_remaining,
+      interests_remaining = EXCLUDED.interests_remaining,
+      food_habit = EXCLUDED.food_habit,
+      smoking = EXCLUDED.smoking,
+      drinking = EXCLUDED.drinking;\n`;
   });
 
   // 4. public.partner_preferences
@@ -258,22 +255,14 @@ ON CONFLICT (user_id) DO UPDATE SET
   usersSubset.forEach((u) => {
     const ageMin = Math.max(18, randomRange(21, 28));
     const ageMax = randomRange(30, 45);
-    const heightMin = u.height_cm - 15;
-    const heightMax = u.height_cm;
 
-    sql += `INSERT INTO public.partner_preferences (user_id, age_min, age_max, height_min, height_max, marital_status, religion, caste, education, occupation, food_habit)
-VALUES ('${u.id}', ${ageMin}, ${ageMax}, ${heightMin}, ${heightMax}, ARRAY['never_married']::TEXT[], ARRAY['${u.religion}']::TEXT[], ARRAY[${escapeSQL(u.caste)}, 'Caste No Bar']::TEXT[], ARRAY[${escapeSQL(u.education)}, 'No Education Bar']::TEXT[], ARRAY[${escapeSQL(u.occupation)}]::TEXT[], ARRAY['vegetarian','non_vegetarian']::TEXT[])
+    sql += `INSERT INTO public.partner_preferences (user_id, age_min, age_max, religion, caste)
+VALUES ('${u.id}', ${ageMin}, ${ageMax}, ARRAY['${u.religion}']::TEXT[], ARRAY[${escapeSQL(u.caste)}, 'Caste No Bar']::TEXT[])
 ON CONFLICT (user_id) DO UPDATE SET
   age_min = EXCLUDED.age_min,
   age_max = EXCLUDED.age_max,
-  height_min = EXCLUDED.height_min,
-  height_max = EXCLUDED.height_max,
-  marital_status = EXCLUDED.marital_status,
   religion = EXCLUDED.religion,
-  caste = EXCLUDED.caste,
-  education = EXCLUDED.education,
-  occupation = EXCLUDED.occupation,
-  food_habit = EXCLUDED.food_habit;\n`;
+  caste = EXCLUDED.caste;\n`;
   });
 
   // 5. public.photos
@@ -317,16 +306,6 @@ ON CONFLICT (sender_id, receiver_id) DO NOTHING;\n`;
       }
     }
 
-    sql += `\n-- 8. MOCK COMPLETED REPORTS\n`;
-    for (let r = 0; r < 10; r++) {
-      if (males.length && females.length) {
-        const reporter = pickRandom(males);
-        const reported = pickRandom(females);
-        sql += `INSERT INTO public.reports (reporter_id, reported_user_id, reason, status)
-VALUES ('${reporter.id}', '${reported.id}', 'Profile pictures appear to be static placeholders.', 'pending')
-ON CONFLICT DO NOTHING;\n`;
-      }
-    }
   }
 
   sql += `\nCOMMIT;\n`;

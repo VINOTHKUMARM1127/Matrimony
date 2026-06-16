@@ -37,44 +37,22 @@ const ProfileScreen = ({ navigation }) => {
 
   const [isUploading, setIsUploading] = React.useState(false);
 
-  const { data: activeSub } = useQuery({
-    queryKey: ['activeSubscription', user?.id],
+  // Live quota balances from the single source of truth (get_user_quotas).
+  const { data: quotas } = useQuery({
+    queryKey: ['user_quotas', user?.id],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .gte('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: false })
-        .maybeSingle();
-      return data || null;
+      const { data, error } = await supabase.rpc('get_user_quotas', { p_user_id: user.id });
+      if (error) throw error;
+      return data;
     },
     enabled: !!user?.id,
   });
 
-  const { data: phoneViewsCount = 0 } = useQuery({
-    queryKey: ['phoneViewsCount', user?.id],
-    queryFn: async () => {
-      const { count } = await supabase
-        .from('user_activity')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('activity_type', 'view_phone');
-      return count || 0;
-    },
-    enabled: !!user?.id,
-  });
-
-  const getPhoneLimitInfo = () => {
-    if (!activeSub) return { limit: 0, current: 0 };
-    if (activeSub.plan_type === 'gold') return { limit: 25, current: phoneViewsCount };
-    if (activeSub.plan_type === 'prime_gold') return { limit: 75, current: phoneViewsCount };
-    if (activeSub.plan_type === 'till_u_marry') return { limit: 100, current: phoneViewsCount };
-    return { limit: 0, current: phoneViewsCount };
+  const limitInfo = {
+    contactsRemaining: quotas?.contacts_remaining ?? 0,
+    interestsRemaining: quotas?.interests_remaining ?? 0,
+    isPremium: quotas?.tier && quotas.tier !== 'FREE',
   };
-
-  const limitInfo = getPhoneLimitInfo();
 
   const primaryPhoto = photos?.find((p) => p.is_primary)?.storage_path;
   const completionPercent = profile?.profile_completion_percent || 0;
@@ -261,15 +239,20 @@ const ProfileScreen = ({ navigation }) => {
           ))}
         </View>
 
-        {/* Contact Views Limit Banner */}
-        {profile?.is_premium && limitInfo.limit > 0 && (
+        {/* Quota Balances Banner (live from get_user_quotas) */}
+        {limitInfo.isPremium && (
           <View style={styles.limitBanner}>
             <View style={styles.limitHeader}>
-              <Text style={styles.limitTitle}>Available Contact Views</Text>
-              <Text style={styles.limitValue}>{Math.max(0, limitInfo.limit - limitInfo.current)} / {limitInfo.limit}</Text>
+              <Text style={styles.limitTitle}>Contacts Remaining</Text>
+              <Text style={styles.limitValue}>
+                {limitInfo.contactsRemaining === -1 ? 'Unlimited' : limitInfo.contactsRemaining}
+              </Text>
             </View>
-            <View style={styles.limitTrack}>
-              <View style={[styles.limitFill, { width: `${Math.min((limitInfo.current / limitInfo.limit) * 100, 100)}%` }]} />
+            <View style={[styles.limitHeader, { marginTop: 8 }]}>
+              <Text style={styles.limitTitle}>Interests Remaining</Text>
+              <Text style={styles.limitValue}>
+                {limitInfo.interestsRemaining === -1 ? 'Unlimited' : limitInfo.interestsRemaining}
+              </Text>
             </View>
           </View>
         )}

@@ -78,7 +78,7 @@ const NotificationsScreen = ({ navigation }) => {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         ListEmptyComponent={
-          <EmptyState icon="🔔" title="No notifications" description="We'll notify you about interests, messages, and matches" />
+          <EmptyState preset="noNotifications" />
         }
         refreshControl={<RefreshControl refreshing={false} onRefresh={refetch} colors={[colors.primary]} />}
         ItemSeparatorComponent={() => <View style={styles.separator} />}

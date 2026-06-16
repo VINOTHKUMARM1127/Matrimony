@@ -93,9 +93,7 @@ const ChatListScreen = ({ navigation }) => {
             </View>
           ) : (
             <EmptyState
-              icon="💬"
-              title="No messages yet"
-              description="Send interests to profiles you like and start chatting!"
+              preset="noChats"
               actionLabel="Browse Profiles"
               onAction={() => navigation.navigate('HomeTab')}
             />

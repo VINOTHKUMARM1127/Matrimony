@@ -15,11 +15,12 @@ import {
 import SearchablePicker from '../../components/common/SearchablePicker';
 import useProfileStore from '../../store/useProfileStore';
 import useAuthStore from '../../store/useAuthStore';
+import computeCompleteness from '../../utils/profileCompleteness';
 
 const PartnerPreferenceScreen = ({ navigation }) => {
   const user = useAuthStore((s) => s.user);
   const profile = useProfileStore((s) => s.profile);
-  const { savePartnerPreferences, saveProfile, isLoading } = useProfileStore();
+  const { savePartnerPreferences, updateProfile, isLoading } = useProfileStore();
 
   // Intelligent age preferences: defaults based on user's own age (min 18, max user's age)
   const [ageMin, setAgeMin] = useState(() => {
@@ -94,7 +95,7 @@ const PartnerPreferenceScreen = ({ navigation }) => {
 
   const handleComplete = useCallback(async () => {
     try {
-      await savePartnerPreferences({
+      const prefPayload = {
         user_id: user.id,
         age_min: parseInt(ageMin) || 18,
         age_max: parseInt(ageMax) || 60,
@@ -107,26 +108,34 @@ const PartnerPreferenceScreen = ({ navigation }) => {
         occupation: occupation.length > 0 ? occupation : null,
         food_habit: foodHabit.length > 0 ? foodHabit : null,
         star: stars.length > 0 ? stars : null,
+      };
+      await savePartnerPreferences(prefPayload);
+
+      // Compute a real completion % from the full profile + relations
+      // (single source of truth — no hardcoded 100).
+      const { profile, horoscope, photos } = useProfileStore.getState();
+      const { percent } = computeCompleteness(profile || {}, {
+        horoscope,
+        preferences: prefPayload,
+        photos,
       });
 
-      // Mark profile as complete
-      await saveProfile({
-        id: user.id,
-        is_profile_complete: true,
-        profile_completion_percent: 100,
+      await updateProfile(user.id, {
+        is_profile_complete: percent >= 60, // basic+religion+education thresholds met
+        profile_completion_percent: percent,
       });
 
       Alert.alert(
         '🎉 Profile Complete!',
-        'Your profile has been created successfully. Start exploring matches!',
+        `Your profile is ${percent}% complete. Start exploring matches!`,
         [{ text: 'Let\'s Go!', onPress: () => {} }]
       );
       // Navigation will be handled by AppNavigator based on profile completion
     } catch (error) {
       console.error('Save error:', error);
-      Alert.alert('Error', 'Failed to save preferences. Please try again.');
+      Alert.alert('Error', error.message || 'Failed to save preferences. Please try again.');
     }
-  }, [ageMin, ageMax, heightMin, heightMax, maritalStatus, religion, caste, education, occupation, foodHabit, stars, user, savePartnerPreferences, saveProfile]);
+  }, [ageMin, ageMax, heightMin, heightMax, maritalStatus, religion, caste, education, occupation, foodHabit, stars, user, savePartnerPreferences, updateProfile]);
 
   return (
     <View style={styles.container}>

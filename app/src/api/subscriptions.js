@@ -52,16 +52,17 @@ export const createSubscription = async (subscriptionData) => {
 };
 
 /**
- * Check if user has premium feature access
+ * Check if user has premium feature access.
+ * Tiers map to the real plan types defined in tier_settings: silver < gold < platinum.
  */
 export const checkPremiumAccess = async (userId, feature) => {
   const sub = await getActiveSubscription(userId);
   if (!sub) return false;
 
   const featureMap = {
-    gold: ['view_contacts', 'limited_messages', 'profile_visitors'],
-    prime_gold: ['view_contacts', 'unlimited_messages', 'horoscope_unlock', 'priority_visibility', 'advanced_search', 'profile_visitors'],
-    till_u_marry: ['view_contacts', 'unlimited_messages', 'horoscope_unlock', 'priority_visibility', 'advanced_search', 'profile_visitors', 'boosted_profile', 'verified_access', 'relationship_manager'],
+    silver: ['view_contacts', 'limited_messages', 'profile_visitors'],
+    gold: ['view_contacts', 'unlimited_messages', 'horoscope_unlock', 'priority_visibility', 'advanced_search', 'profile_visitors'],
+    platinum: ['view_contacts', 'unlimited_messages', 'horoscope_unlock', 'priority_visibility', 'advanced_search', 'profile_visitors', 'boosted_profile', 'verified_access', 'relationship_manager'],
   };
 
   const planFeatures = featureMap[sub.plan_type] || [];

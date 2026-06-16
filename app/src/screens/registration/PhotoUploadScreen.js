@@ -102,35 +102,24 @@ const PhotoUploadScreen = ({ navigation }) => {
             const randomId = Math.floor(Math.random() * 1000);
             publicUrl = `https://picsum.photos/id/${randomId % 100}/400/400`;
           } else {
-            // Upload to Cloudflare R2
+            // Upload to Cloudflare R2 via the shared, RN-correct client
+            // (forcePathStyle + checksum-safe). See src/api/r2Client.js.
             const { decode } = require('base64-arraybuffer');
-            const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+            const { getR2Client, PutObjectCommand, R2_BUCKET, R2_PUBLIC_URL } = require('../../api/r2Client');
             const fileInstance = new (require('expo-file-system').File)(compressed.uri);
             const base64 = await fileInstance.base64();
             const arrayBuffer = decode(base64);
 
-            const s3Client = new S3Client({
-              region: 'auto',
-              endpoint: `https://${r2AccountId}.r2.cloudflarestorage.com`,
-              credentials: {
-                accessKeyId: r2AccessKeyId || '',
-                secretAccessKey: r2SecretAccessKey || '',
-              },
-            });
-
-            const bucketName = process.env.EXPO_PUBLIC_R2_BUCKET_NAME || STORAGE_BUCKETS.PROFILE_PHOTOS;
             const command = new PutObjectCommand({
-              Bucket: bucketName,
+              Bucket: R2_BUCKET(),
               Key: fileName,
-              Body: arrayBuffer,
+              Body: new Uint8Array(arrayBuffer),
               ContentType: 'image/webp',
             });
 
-            await s3Client.send(command);
+            await getR2Client().send(command);
 
-            // Get public URL
-            const r2PublicDomain = process.env.EXPO_PUBLIC_R2_PUBLIC_URL || '';
-            publicUrl = `${r2PublicDomain}/${fileName}`;
+            publicUrl = `${R2_PUBLIC_URL()}/${fileName}`;
           }
 
           // Save to DB

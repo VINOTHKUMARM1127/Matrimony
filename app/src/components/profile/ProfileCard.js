@@ -5,6 +5,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme';
 import { borderRadius, layout } from '../../theme/spacing';
 import shadows from '../../theme/shadows';
@@ -57,6 +58,7 @@ const ProfileCard = ({ profile, onPress, onInterest, onShortlist, showCompatibil
               placeholderContentFit="cover"
               transition={{ effect: 'cross-dissolve', duration: 300 }}
               cachePolicy="memory-disk"
+              blurRadius={profile.isLocked ? 15 : 0}
             />
           ) : (
             <View style={styles.noPhoto}>
@@ -65,30 +67,39 @@ const ProfileCard = ({ profile, onPress, onInterest, onShortlist, showCompatibil
               </Text>
             </View>
           )}
+          
+          {profile.isLocked && (
+            <View style={styles.lockedPhotoOverlay}>
+              <Ionicons name="lock-closed" size={24} color="#FFF" style={styles.lockIcon} />
+              <Text style={styles.lockedText}>Premium Match</Text>
+            </View>
+          )}
         </View>
 
         {/* Details */}
         <View style={styles.details}>
           <View style={styles.nameRow}>
             <Text style={styles.name} numberOfLines={1}>
-              {profile.display_name}, {age}
+              {profile.isLocked 
+                ? `${profile.display_name?.charAt(0)}*****` 
+                : profile.display_name}, {age}
             </Text>
-            {profile.is_verified && (
+            {!profile.isLocked && profile.is_verified && (
               <View style={styles.verifiedDot}>
-                <Text style={styles.verifiedIcon}>✓</Text>
+                <Ionicons name="checkmark" size={10} color="#FFF" style={styles.verifiedIcon} />
               </View>
             )}
           </View>
 
           <Text style={styles.detailLine} numberOfLines={1}>
-            {profile.occupation || 'Professional'} · {profile.city || 'Tamil Nadu'}
+            {profile.isLocked ? 'Profession Hidden' : (profile.occupation || 'Professional')} · {profile.isLocked ? 'Location Hidden' : (profile.city || 'Tamil Nadu')}
           </Text>
           <Text style={styles.detailLine} numberOfLines={1}>
-            {profile.education || 'Graduate'} · {profile.religion || 'Hindu'}
-            {profile.caste ? ` · ${profile.caste}` : ''}
+            {profile.isLocked ? 'Education Hidden' : (profile.education || 'Graduate')} · {profile.religion || 'Hindu'}
+            {!profile.isLocked && profile.caste ? ` · ${profile.caste}` : ''}
           </Text>
 
-          {profile.about_me ? (
+          {!profile.isLocked && profile.about_me ? (
             <Text style={styles.aboutSnippet} numberOfLines={2}>
               {profile.about_me}
             </Text>
@@ -158,20 +169,29 @@ const ProfileCard = ({ profile, onPress, onInterest, onShortlist, showCompatibil
 
       {/* Action Bar */}
       <View style={styles.actionBar}>
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => onInterest?.(profile)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.actionBtnText}>Interested</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionBtn, styles.actionBtnOutline]}
-          onPress={() => onShortlist?.(profile)}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.actionBtnText, styles.actionBtnOutlineText]}>Shortlist</Text>
-        </TouchableOpacity>
+        {profile.isLocked ? (
+          <TouchableOpacity style={styles.upgradeBtn} activeOpacity={0.8} onPress={() => {}}>
+            <Ionicons name="lock-closed" size={14} color="#FFF" style={styles.btnIcon} />
+            <Text style={styles.upgradeBtnText}>Upgrade to View</Text>
+          </TouchableOpacity>
+        ) : (
+          <>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => onInterest?.(profile)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.actionBtnText}>Interested</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionBtnOutline]}
+              onPress={() => onShortlist?.(profile)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.actionBtnText, styles.actionBtnOutlineText]}>Shortlist</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -235,6 +255,26 @@ const styles = StyleSheet.create({
     color: colors.primary,
     opacity: 0.25,
   },
+  lockedPhotoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  lockIcon: {
+    marginBottom: 4,
+  },
+  lockedText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
 
   details: {
     flex: 1,
@@ -253,17 +293,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   verifiedDot: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.verified,
-    alignItems: 'center',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#34C759',
     justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 6,
+    borderWidth: 1,
+    borderColor: '#FFF',
   },
   verifiedIcon: {
-    fontSize: 10,
-    color: colors.textInverse,
-    fontWeight: '700',
+    marginTop: 0,
   },
   detailLine: {
     fontSize: 13,
@@ -383,6 +424,23 @@ const styles = StyleSheet.create({
   },
   actionBtnOutlineText: {
     color: colors.shortlistGold,
+  },
+  upgradeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: colors.goldDark,
+    paddingVertical: 10,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  upgradeBtnText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  btnIcon: {
+    marginRight: 6,
   },
 });
 
