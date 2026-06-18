@@ -3,7 +3,8 @@
  * Full-screen photo cards with professional text-based action buttons,
  * progress indicator, and premium visual treatment.
  */
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -16,6 +17,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -35,6 +37,178 @@ import { fetchPremiumPlans } from '../../api/settingsApi';
 import SuccessOverlay from '../../components/common/SuccessOverlay';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// ── Pure helpers (module scope — no per-render allocation) ──
+const getPrimaryPhotoFor = (prof) => {
+  if (!prof?.photos?.length) return null;
+  const primary = prof.photos.find((p) => p.is_primary);
+  return (primary || prof.photos[0])?.storage_path;
+};
+
+const calculateAge = (dob) => {
+  if (!dob) return '';
+  const birth = new Date(dob);
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+};
+
+// "New Profiles Added Today" divider — static, memoized.
+const NewTodayDivider = React.memo(() => (
+  <View style={styles.newTodayDivider}>
+    <View style={styles.newTodayLine} />
+    <Text style={styles.newTodayText}>✨ New Profiles Added Today</Text>
+    <View style={styles.newTodayLine} />
+  </View>
+));
+
+// Single profile card. Memoized so it only re-renders when its own item/flags
+// change — list-level updates (pagination, footer, focus refetch) no longer
+// re-render every mounted card, which is what triggered the VirtualizedList
+// "slow to update" warning.
+const ProfileMatchCard = React.memo(({
+  item, index, isPremium, onPress, onInterested, onDecline, onPremiumAlert,
+}) => {
+  const age = calculateAge(item.date_of_birth);
+  const photoUri = getPrimaryPhotoFor(item);
+  // Stable score: prefer the backend compatibility_score; deterministic fallback
+  // derived from the id so it never changes between renders.
+  const score = item.compatibility_score
+    || (65 + (parseInt(String(item.id).replace(/\D/g, '').slice(-2) || '0', 10) % 25));
+  const photoCount = item.photos?.length || 0;
+
+  // Staggered entrance: cards rise+fade in as they mount, keyed to position
+  // within a 10-card window so paginated batches cascade without long offsets.
+  const enterDelay = (index % 10) * 60;
+
+  return (
+    <Animated.View
+      entering={FadeInDown.springify().damping(18).mass(0.9).delay(enterDelay)}
+      style={styles.cardWrapper}
+    >
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.95}
+        onPress={() => onPress(item)}
+      >
+        {/* Full Image Background */}
+        {photoUri ? (
+          <Image
+            source={{ uri: photoUri }}
+            style={styles.cardImage}
+            contentFit="cover"
+            transition={200}
+            cachePolicy="memory-disk"
+            blurRadius={item.isLocked ? 15 : 0}
+          />
+        ) : (
+          <View style={styles.noPhotoBackground}>
+            {item.isLocked ? (
+              <Ionicons name="lock-closed" size={32} color={colors.textMuted} style={styles.noPhotoInitial} />
+            ) : (
+              <Text style={styles.noPhotoInitial}>
+                {item.display_name?.charAt(0) || '?'}
+              </Text>
+            )}
+            <Text style={styles.noPhotoText}>{item.isLocked ? 'Premium Match' : 'No Photo'}</Text>
+          </View>
+        )}
+
+        {/* Top Floating Badges */}
+        <View style={styles.floatingTopContainer}>
+          <View style={styles.badgeRow}>
+            {item.is_premium && (
+              <View style={styles.premiumBadge}>
+                <Text style={styles.premiumBadgeText}>★ Premium</Text>
+              </View>
+            )}
+            {item.is_verified && (
+              <View style={styles.verifiedBadge}>
+                <Ionicons name="checkmark-circle" size={12} color="#FFF" />
+                <Text style={[styles.verifiedBadgeText, { marginLeft: 4 }]}>Verified</Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.compatRing}>
+            {isPremium ? (
+              <>
+                <Text style={styles.compatRingPercent}>{score}%</Text>
+                <Text style={styles.compatRingLabel}>Match</Text>
+              </>
+            ) : (
+              <>
+                <Ionicons name="lock-closed" size={16} color={colors.textMuted} style={styles.compatRingPercent} />
+                <Text style={styles.compatRingLabel}>Hidden</Text>
+              </>
+            )}
+          </View>
+        </View>
+
+        {/* Photo Count */}
+        {photoCount > 1 && (
+          <View style={styles.photoCountBadge}>
+            <Text style={styles.photoCountText}>1/{photoCount}</Text>
+          </View>
+        )}
+
+        {/* Bottom Details + Actions — Integrated Inside Card */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.65)', 'rgba(0,0,0,0.85)']}
+          locations={[0, 0.45, 1]}
+          style={styles.detailsGradient}
+        >
+          <Text style={styles.nameText} numberOfLines={1}>
+            {item.isLocked ? `${item.display_name?.charAt(0)}*****` : item.display_name}, {age}
+          </Text>
+          <Text style={styles.infoLine} numberOfLines={1}>
+            {item.isLocked ? 'Location Hidden' : `${item.city}${item.district ? `, ${item.district}` : ''}`} · {item.isLocked ? 'Profession Hidden' : (item.occupation || 'Professional')}
+          </Text>
+          <Text style={styles.infoLine} numberOfLines={1}>
+            {item.isLocked ? 'Education Hidden' : (item.education || 'Graduate')} · {item.religion || 'Hindu'} {!item.isLocked && item.caste ? item.caste : ''}
+          </Text>
+
+          {/* Action Buttons Inside Card */}
+          <View style={styles.actionsToolbar}>
+            {item.isLocked ? (
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: colors.goldDark, borderWidth: 1, borderColor: colors.goldDark }]}
+                onPress={onPremiumAlert}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="lock-closed" size={14} color="#FFF" style={{ marginRight: 6 }} />
+                <Text style={[styles.interestedActionText, { color: '#FFF' }]}>Upgrade to View</Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.declineActionBtn]}
+                  onPress={() => onDecline(item)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.declineActionText}>✕  Skip</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.interestedActionBtn]}
+                  onPress={() => onInterested(item)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.interestedActionText}>♥  Interested</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}, (prev, next) => (
+  prev.item.id === next.item.id &&
+  prev.item.isLocked === next.item.isLocked &&
+  prev.isPremium === next.isPremium &&
+  prev.index === next.index
+));
 
 const MatchesScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('recommended');
@@ -67,10 +241,44 @@ const MatchesScreen = ({ navigation }) => {
     refetchDaily,
 
     refetchAdminSettings,
-    limits
+    limits,
+    loadingLimits,
+    fetchingLimits
   } = useMatches();
 
   const user = useAuthStore((s) => s.user);
+
+  // Whenever this screen gains focus (e.g. returning from a successful upgrade),
+  // re-pull the per-user limits. When they grow (free -> premium), the feed query
+  // keys re-key to the new caps and the additional profiles load automatically.
+  useFocusEffect(
+    useCallback(() => {
+      refetchAdminSettings?.();
+    }, [refetchAdminSettings])
+  );
+
+  // Auto-load the FULL per-user allocation for the active tab. The admin-configured
+  // count (e.g. Gold = 30 Recommended) is the per-user pool; the feed RPCs return it
+  // page-by-page (PAGE_SIZE), and React Query gates further pages via hasNext*. Rather
+  // than make the user scroll to reveal the rest, we proactively fetch the next page
+  // as soon as the previous one settles. The "Loading more profiles..." footer shows
+  // during each fetch; it stops automatically when hasNext* becomes false (full pool
+  // loaded). This makes "admin sets 30 -> user receives 30" true on first view for
+  // Recommended, Nearby and Daily alike.
+  useEffect(() => {
+    if (activeTab === 'recommended' && hasNextRecommended && !fetchingNextRecommended) {
+      fetchNextRecommended();
+    } else if (activeTab === 'nearby' && hasNextNearby && !fetchingNextNearby) {
+      fetchNextNearby();
+    } else if (activeTab === 'daily' && hasNextDaily && !fetchingNextDaily) {
+      fetchNextDaily();
+    }
+  }, [
+    activeTab,
+    hasNextRecommended, fetchingNextRecommended, fetchNextRecommended,
+    hasNextNearby, fetchingNextNearby, fetchNextNearby,
+    hasNextDaily, fetchingNextDaily, fetchNextDaily,
+  ]);
 
   // Live plan pricing for the lock card (no hardcoded prices/names).
   const { data: lockPlans = [] } = useQuery({
@@ -79,14 +287,32 @@ const MatchesScreen = ({ navigation }) => {
     staleTime: 5 * 60 * 1000,
   });
 
-  const rawData = activeTab === 'daily' ? (dailyMatches || []) 
-                : activeTab === 'nearby' ? nearbyMatches 
+  const rawData = activeTab === 'daily' ? (dailyMatches || [])
+                : activeTab === 'nearby' ? nearbyMatches
                 : (recommendedProfiles || []);
-  const isLoading = activeTab === 'daily' ? loadingDaily 
-                  : activeTab === 'nearby' ? loadingNearby
-                  : loadingRecommended;
+  // Show the skeleton while the feed is loading OR while the per-user limits are
+  // still resolving (e.g. right after an upgrade, before the new caps land) — so
+  // the user never sees an empty section during that brief refetch window.
+  const feedLoading = activeTab === 'daily' ? loadingDaily
+                    : activeTab === 'nearby' ? loadingNearby
+                    : loadingRecommended;
+  const isLoading = feedLoading || loadingLimits || (fetchingLimits && rawData.length === 0);
 
-  const displayData = rawData;
+  // Inject a "New Profiles Added Today" divider before the first profile flagged
+  // is_new_today (set by the backend feed_allocation). Profiles are returned in
+  // stable allocation order (older first, newly-distributed appended), so the
+  // divider cleanly separates the two. If the backend doesn't send the flag yet
+  // (hotfix not applied), no divider is shown — graceful degradation.
+  const displayData = useMemo(() => {
+    const list = rawData || [];
+    const firstNewIdx = list.findIndex((p) => p?.is_new_today);
+    if (firstNewIdx <= 0) return list; // none new, or all new (nothing to separate)
+    return [
+      ...list.slice(0, firstNewIdx),
+      { __divider: true, id: '__new_today_divider__' },
+      ...list.slice(firstNewIdx),
+    ];
+  }, [rawData]);
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
@@ -158,158 +384,65 @@ const MatchesScreen = ({ navigation }) => {
     navigation.navigate('UserProfile', { profileId: prof.id });
   }, [navigation, showPremiumAlert]);
 
-  const getPrimaryPhoto = (prof) => {
-    if (!prof?.photos?.length) {
-      return null;
+  const renderItem = useCallback(({ item, index }) => {
+    if (item.__divider) {
+      return <NewTodayDivider />;
     }
-    const primary = prof.photos.find((p) => p.is_primary);
-    const url = (primary || prof.photos[0])?.storage_path;
-    return url;
-  };
-
-  const calculateAge = (dob) => {
-    if (!dob) return '';
-    const birth = new Date(dob);
-    const today = new Date();
-    let age = today.getFullYear() - birth.getFullYear();
-    const m = today.getMonth() - birth.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
-    return age;
-  };
-
-  const renderItem = useCallback(({ item }) => {
-    const age = calculateAge(item.date_of_birth);
-    const photoUri = getPrimaryPhoto(item);
-    // Stable score: prefer the backend compatibility_score; deterministic
-    // fallback derived from the id so it never changes between renders.
-    const score = item.compatibility_score
-      || (65 + (parseInt(String(item.id).replace(/\D/g, '').slice(-2) || '0', 10) % 25));
-    const photoCount = item.photos?.length || 0;
-
     return (
-      <View style={styles.cardWrapper}>
-        <TouchableOpacity
-          style={styles.card}
-          activeOpacity={0.95}
-          onPress={() => handleProfilePress(item)}
-        >
-          {/* Full Image Background */}
-          {photoUri ? (
-            <Image
-              source={{ uri: photoUri }}
-              style={styles.cardImage}
-              contentFit="cover"
-              transition={200}
-              cachePolicy="memory-disk"
-              blurRadius={item.isLocked ? 15 : 0}
-            />
-          ) : (
-            <View style={styles.noPhotoBackground}>
-              {item.isLocked ? (
-                <Ionicons name="lock-closed" size={32} color={colors.textMuted} style={styles.noPhotoInitial} />
-              ) : (
-                <Text style={styles.noPhotoInitial}>
-                  {item.display_name?.charAt(0) || '?'}
-                </Text>
-              )}
-              <Text style={styles.noPhotoText}>{item.isLocked ? 'Premium Match' : 'No Photo'}</Text>
-            </View>
-          )}
-
-          {/* Top Floating Badges */}
-          <View style={styles.floatingTopContainer}>
-            <View style={styles.badgeRow}>
-              {item.is_premium && (
-                <View style={styles.premiumBadge}>
-                  <Text style={styles.premiumBadgeText}>★ Premium</Text>
-                </View>
-              )}
-              {item.is_verified && (
-                <View style={styles.verifiedBadge}>
-                  <Ionicons name="checkmark-circle" size={12} color="#FFF" />
-                  <Text style={[styles.verifiedBadgeText, { marginLeft: 4 }]}>Verified</Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.compatRing}>
-              {isPremium ? (
-                <>
-                  <Text style={styles.compatRingPercent}>{score}%</Text>
-                  <Text style={styles.compatRingLabel}>Match</Text>
-                </>
-              ) : (
-                <>
-                  <Ionicons name="lock-closed" size={16} color={colors.textMuted} style={styles.compatRingPercent} />
-                  <Text style={styles.compatRingLabel}>Hidden</Text>
-                </>
-              )}
-            </View>
-          </View>
-
-          {/* Photo Count */}
-          {photoCount > 1 && (
-            <View style={styles.photoCountBadge}>
-              <Text style={styles.photoCountText}>1/{photoCount}</Text>
-            </View>
-          )}
-
-          {/* Bottom Details + Actions — Integrated Inside Card */}
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.65)', 'rgba(0,0,0,0.85)']}
-            locations={[0, 0.45, 1]}
-            style={styles.detailsGradient}
-          >
-            <Text style={styles.nameText} numberOfLines={1}>
-              {item.isLocked ? `${item.display_name?.charAt(0)}*****` : item.display_name}, {age}
-            </Text>
-            <Text style={styles.infoLine} numberOfLines={1}>
-              {item.isLocked ? 'Location Hidden' : `${item.city}${item.district ? `, ${item.district}` : ''}`} · {item.isLocked ? 'Profession Hidden' : (item.occupation || 'Professional')}
-            </Text>
-            <Text style={styles.infoLine} numberOfLines={1}>
-              {item.isLocked ? 'Education Hidden' : (item.education || 'Graduate')} · {item.religion || 'Hindu'} {!item.isLocked && item.caste ? item.caste : ''}
-            </Text>
-
-            {/* Action Buttons Inside Card */}
-            <View style={styles.actionsToolbar}>
-              {item.isLocked ? (
-                <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: colors.goldDark, borderWidth: 1, borderColor: colors.goldDark }]}
-                  onPress={showPremiumAlert}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="lock-closed" size={14} color="#FFF" style={{ marginRight: 6 }} />
-                  <Text style={[styles.interestedActionText, { color: '#FFF' }]}>Upgrade to View</Text>
-                </TouchableOpacity>
-              ) : (
-                <>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, styles.declineActionBtn]}
-                    onPress={() => handleDecline(item)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.declineActionText}>✕  Skip</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, styles.interestedActionBtn]}
-                    onPress={() => handleInterested(item)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.interestedActionText}>♥  Interested</Text>
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
+      <ProfileMatchCard
+        item={item}
+        index={index}
+        isPremium={isPremium}
+        onPress={handleProfilePress}
+        onInterested={handleInterested}
+        onDecline={handleDecline}
+        onPremiumAlert={showPremiumAlert}
+      />
     );
-  }, [handleProfilePress, handleInterested, handleDecline, showPremiumAlert]);
+  }, [handleProfilePress, handleInterested, handleDecline, showPremiumAlert, isPremium]);
 
-  const renderFooter = () => {
+  const renderListFooter = () => {
+    const fetchingNext = activeTab === 'daily' ? fetchingNextDaily
+                       : activeTab === 'nearby' ? fetchingNextNearby
+                       : fetchingNextRecommended;
+    const hasNext = activeTab === 'daily' ? hasNextDaily
+                  : activeTab === 'nearby' ? hasNextNearby
+                  : hasNextRecommended;
+
+    // 1) Loading more — spinner + message while the next page is being fetched.
+    if (fetchingNext) {
+      return (
+        <View style={styles.loadingMore}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={styles.loadingMoreText}>Loading more profiles...</Text>
+        </View>
+      );
+    }
+
+    // 2) Premium lock card (free users) — already explains the limit, acts as the
+    //    end-of-list state for them.
+    const lockCard = renderLockCard();
+    if (lockCard) return lockCard;
+
+    // 3) End of list — no more profiles to fetch and we have some loaded.
+    if (!hasNext && displayData.length > 0) {
+      return (
+        <View style={styles.endOfList}>
+          <View style={styles.endOfListLine} />
+          <Text style={styles.endOfListText}>You've reached the end of the profile list.</Text>
+          <Text style={styles.endOfListSubtext}>No more profiles available right now.</Text>
+        </View>
+      );
+    }
+
+    return null;
+  };
+
+  const renderLockCard = () => {
     if (isPremium || displayData.length === 0) return null;
-    
-    const currentLimit = activeTab === 'daily' ? limits?.daily_limit 
-                       : activeTab === 'nearby' ? limits?.nearby_limit 
+
+    const currentLimit = activeTab === 'daily' ? limits?.daily_limit
+                       : activeTab === 'nearby' ? limits?.nearby_limit
                        : limits?.recommended_limit;
 
     return (
@@ -388,7 +521,7 @@ const MatchesScreen = ({ navigation }) => {
             <FlatList
               key={activeTab} // Force remount on tab change to reset scroll position
               data={displayData}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => String(item.id)}
               renderItem={renderItem}
               contentContainerStyle={styles.flatListContent}
               showsVerticalScrollIndicator={false}
@@ -403,16 +536,8 @@ const MatchesScreen = ({ navigation }) => {
                 else if (activeTab === 'daily' && hasNextDaily && !fetchingNextDaily) fetchNextDaily();
               }}
               onEndReachedThreshold={0.5}
-              ListFooterComponent={() => (
-                <>
-                  {(fetchingNextRecommended || fetchingNextNearby || fetchingNextDaily) && (
-                    <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }} />
-                  )}
-                  {renderFooter()}
-                </>
-              )}
               refreshControl={
-                <RefreshControl 
+                <RefreshControl
                   refreshing={false}
                   onRefresh={() => {
                     refetchAdminSettings().then(() => {
@@ -432,7 +557,7 @@ const MatchesScreen = ({ navigation }) => {
                 />
               </View>
             }
-            ListFooterComponent={renderFooter}
+            ListFooterComponent={renderListFooter}
           />
         )}
       </View>
@@ -691,6 +816,64 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: 0.3,
+  },
+
+  // ── New Profiles Today Divider ──
+  newTodayDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginVertical: 8,
+    paddingHorizontal: 4,
+  },
+  newTodayLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.borderLight,
+  },
+  newTodayText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
+    textAlign: 'center',
+  },
+
+  // ── Load more / end of list ──
+  loadingMore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 24,
+  },
+  loadingMoreText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  endOfList: {
+    alignItems: 'center',
+    paddingVertical: 28,
+    paddingHorizontal: 24,
+    gap: 6,
+  },
+  endOfListLine: {
+    width: 40,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: colors.borderLight,
+    marginBottom: 10,
+  },
+  endOfListText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  endOfListSubtext: {
+    fontSize: 13,
+    color: colors.textMuted,
+    textAlign: 'center',
   },
 
   // ── Lock Card ──

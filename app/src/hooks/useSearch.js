@@ -2,7 +2,7 @@
  * Wedring Matrimony — useSearch Hook
  * Manages search state, filters, and coordinates API calling
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import * as profilesApi from '../api/profiles';
 import useAuthStore from '../store/useAuthStore';
@@ -36,7 +36,16 @@ export const useSearch = (initialFilters = {}) => {
     enabled: !!user?.id,
   });
 
-  const profiles = data?.pages?.flatMap((p) => p.profiles) || [];
+  const profiles = useMemo(() => {
+    const raw = data?.pages?.flatMap((p) => p.profiles) || [];
+    const seen = new Set();
+    return raw.filter((item) => {
+      if (!item?.id) return false;
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
+  }, [data]);
   const totalCount = data?.pages?.[0]?.total || 0;
 
   const updateFilters = useCallback((newFilters) => {

@@ -2,132 +2,105 @@ import { useEffect, useState } from 'react';
 import * as adminApi from '../../api/adminApi';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
-import useAuthStore from '../../store/useAuthStore';
-import { SlidersHorizontal, RotateCcw, Zap, Clock, AlertTriangle, History, ChevronDown } from 'lucide-react';
+import { SlidersHorizontal, Play, Clock, Search, User, TrendingUp, Wallet, History, RefreshCw } from 'lucide-react';
 
 const TIERS = [
-  { id: 'free', label: 'Free', dot: 'bg-neutral-400', ring: 'ring-neutral-200' },
-  { id: 'silver', label: 'Silver', dot: 'bg-slate-400', ring: 'ring-slate-200' },
-  { id: 'gold', label: 'Gold', dot: 'bg-amber-500', ring: 'ring-amber-200' },
-  { id: 'platinum', label: 'Platinum', dot: 'bg-violet-500', ring: 'ring-violet-200' },
+  { id: 'free', label: 'Free', color: 'bg-neutral-100 text-neutral-700' },
+  { id: 'silver', label: 'Silver', color: 'bg-slate-100 text-slate-700' },
+  { id: 'gold', label: 'Gold', color: 'bg-amber-100 text-amber-700' },
+  { id: 'platinum', label: 'Platinum', color: 'bg-violet-100 text-violet-700' },
 ];
 
 const DistributionManager = () => {
-  const { user } = useAuthStore();
-  const [settings, setSettings] = useState({});
-  const [history, setHistory] = useState([]);
+  const [plans, setPlans] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(null);
-  const [isPushing, setIsPushing] = useState(null);
-  const [confirmModal, setConfirmModal] = useState(null);
-  const [showHistory, setShowHistory] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
+  const [lastRunResult, setLastRunResult] = useState(null);
+
+  // User lookup
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [userState, setUserState] = useState(null);
+  const [userWallet, setUserWallet] = useState(null);
 
   useEffect(() => {
-    loadData();
+    loadPlans();
   }, []);
 
-  const loadData = async () => {
+  const loadPlans = async () => {
     try {
-      const [adminSettings, historyData] = await Promise.all([
-        adminApi.fetchAdminSettings(),
-        adminApi.fetchDistributionHistory().catch(() => []),
-      ]);
-
-      if (adminSettings?.matches_limits) {
-        const mapped = {};
-        TIERS.forEach((tier) => {
-          const key = tier.id === 'free' ? 'non_premium' : tier.id;
-          const data = adminSettings.matches_limits[key] || {};
-          mapped[tier.id] = {
-            recommended: data.recommended || 0,
-            nearby: data.nearby || 0,
-            daily: data.daily || 0,
-          };
-        });
-        setSettings(mapped);
-      }
-      setHistory(historyData);
+      const data = await adminApi.fetchSubscriptionPlans();
+      setPlans(data);
     } catch (err) {
-      console.error('Failed to load distribution data:', err);
+      console.error('Failed to load plans:', err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleChange = (tier, field, value) => {
-    setSettings((prev) => ({
-      ...prev,
-      [tier]: { ...prev[tier], [field]: parseInt(value) || 0 },
-    }));
-  };
-
-  const handleSaveTomorrow = async (tierId) => {
-    setIsSaving(tierId);
+  const handleRunDistribution = async () => {
+    if (!confirm('This will run the daily distribution for all active premium users. Continue?')) return;
+    setIsRunning(true);
     try {
-      await adminApi.saveDistributionChange(tierId, settings[tierId], 'tomorrow', user?.email);
-      await loadData();
-      alert(`${tierId.charAt(0).toUpperCase() + tierId.slice(1)} changes scheduled for tomorrow.`);
+      const result = await adminApi.triggerDailyDistribution();
+      setLastRunResult(result);
+      alert(`Distribution complete! ${result?.users_updated || 0} users updated.`);
     } catch (err) {
-      alert('Failed to save: ' + (err.message || 'Unknown error'));
+      alert('Failed: ' + (err.message || 'Unknown error'));
     } finally {
-      setIsSaving(null);
+      setIsRunning(false);
     }
   };
 
-  const handlePushTier = (tierId) => {
-    setConfirmModal({
-      type: 'tier',
-      tier: tierId,
-      message: `This will regenerate profile allocations for all ${tierId.toUpperCase()} users and may replace today's frozen profile pools.`,
-    });
-  };
-
-  const handlePushAll = () => {
-    setConfirmModal({
-      type: 'all',
-      message: 'This will regenerate profile allocations for ALL users across ALL tiers and may replace today\'s frozen profile pools.',
-    });
-  };
-
-  const confirmPush = async () => {
-    const { type, tier } = confirmModal;
-    setConfirmModal(null);
-    setIsPushing(type === 'all' ? 'all' : tier);
-
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setIsSearching(true);
+    setSelectedUser(null);
+    setUserState(null);
+    setUserWallet(null);
     try {
-      if (type === 'all') {
-        // Save all tiers first
-        for (const t of TIERS) {
-          await adminApi.saveDistributionChange(t.id, settings[t.id], 'now_all', user?.email);
-        }
-        await adminApi.forcePushAllDistribution(user?.email);
-        alert('Distribution pushed to all users successfully!');
-      } else {
-        await adminApi.saveDistributionChange(tier, settings[tier], 'now_tier', user?.email);
-        await adminApi.forcePushDistribution(tier, user?.email);
-        alert(`Distribution pushed to ${tier} users successfully!`);
-      }
-      await loadData();
+      const users = await adminApi.fetchAllUsers();
+      const filtered = users.filter(
+        (u) =>
+          u.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          u.phone?.includes(searchQuery) ||
+          u.profile_id?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setSearchResults(filtered.slice(0, 10));
     } catch (err) {
-      alert('Push failed: ' + (err.message || 'Unknown error'));
+      console.error('Search failed:', err);
     } finally {
-      setIsPushing(null);
+      setIsSearching(false);
     }
   };
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleString('en-IN', {
-      day: 'numeric', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    });
+  const handleSelectUser = async (user) => {
+    setSelectedUser(user);
+    setSearchResults([]);
+    try {
+      const [state, wallet] = await Promise.all([
+        adminApi.fetchUserDistributionState(user.id),
+        adminApi.fetchUserWallet(user.id),
+      ]);
+      setUserState(state);
+      setUserWallet(wallet);
+    } catch (err) {
+      console.error('Failed to load user data:', err);
+    }
+  };
+
+  const formatDate = (d) => {
+    if (!d) return 'Never';
+    return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="h-9 w-64 bg-white rounded-xl animate-pulse" />
-        {[0, 1, 2, 3].map((i) => (
+        {[0, 1, 2].map((i) => (
           <div key={i} className="h-48 bg-white rounded-2xl border border-neutral-200/70 animate-pulse" />
         ))}
       </div>
@@ -146,183 +119,235 @@ const DistributionManager = () => {
             Profile Distribution Manager
           </h1>
           <p className="text-neutral-500 mt-1 text-sm max-w-2xl">
-            Configure how many profiles each tier receives. Push changes immediately or schedule for tomorrow.
+            View distribution configuration and manually trigger the daily distribution cron.
+            Per-user limits grow automatically over time.
           </p>
         </div>
-        <Button onClick={handlePushAll} variant="danger" size="lg" icon={Zap} isLoading={isPushing === 'all'}>
-          Push To All Plans Now
+        <Button onClick={handleRunDistribution} isLoading={isRunning} size="lg" icon={Play}>
+          Run Daily Distribution Now
         </Button>
       </div>
 
-      {/* Tier Cards */}
-      <div className="space-y-5">
-        {TIERS.map((tier) => {
-          const s = settings[tier.id] || { recommended: 0, nearby: 0, daily: 0 };
-          return (
-            <Card key={tier.id} className="overflow-hidden">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 bg-gradient-to-r from-neutral-50/80 to-transparent">
-                <div className="flex items-center gap-3">
-                  <span className={`w-3 h-3 rounded-full ${tier.dot} ring-4 ${tier.ring}`} />
-                  <h2 className="text-lg font-bold text-neutral-900">{tier.label} Tier</h2>
-                </div>
-              </div>
-
-              <div className="p-6">
-                <div className="grid grid-cols-3 gap-4 mb-6">
-                  {[
-                    { f: 'recommended', l: 'Recommended Pool' },
-                    { f: 'nearby', l: 'Nearby Pool' },
-                    { f: 'daily', l: 'Daily Pool' },
-                  ].map((m) => (
-                    <div key={m.f} className="bg-neutral-50 rounded-xl border border-neutral-100 p-4 text-center">
-                      <label className="block text-xs font-semibold text-neutral-500 mb-2">{m.l}</label>
-                      <input
-                        type="number"
-                        value={s[m.f]}
-                        onChange={(e) => handleChange(tier.id, m.f, e.target.value)}
-                        className="w-full text-center text-2xl font-bold text-neutral-900 bg-white border border-neutral-200 rounded-lg px-2 py-2 focus:outline-none focus:border-primary-400 focus:ring-4 focus:ring-primary-100 transition-all"
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    onClick={() => handleSaveTomorrow(tier.id)}
-                    variant="outline"
-                    icon={Clock}
-                    isLoading={isSaving === tier.id}
-                  >
-                    Apply Tomorrow
-                  </Button>
-                  <Button
-                    onClick={() => handlePushTier(tier.id)}
-                    variant="primary"
-                    icon={Zap}
-                    isLoading={isPushing === tier.id}
-                  >
-                    Push To {tier.label} Now
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          );
-        })}
+      {/* Single source of truth notice */}
+      <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl px-5 py-3 flex items-start gap-3">
+        <SlidersHorizontal size={16} className="text-blue-600 mt-0.5 shrink-0" />
+        <div>
+          <p className="text-sm text-blue-900 font-semibold">Single source of truth: Subscription Plans</p>
+          <p className="text-xs text-blue-700 mt-0.5">
+            All tier limits and credits are configured in <strong>Premium Plans</strong>. This page is read-only —
+            it shows the live configuration and lets you trigger / inspect distribution. The mobile feeds
+            (Recommended, Nearby, Daily) all read these same values, so changes apply everywhere instantly.
+          </p>
+        </div>
       </div>
 
-      {/* Change History */}
-      <div className="mt-10">
-        <button
-          onClick={() => setShowHistory(!showHistory)}
-          className="flex items-center gap-2 text-lg font-bold text-neutral-900 mb-4 hover:text-primary-600 transition-colors"
-        >
-          <History size={20} />
-          Change History
-          <ChevronDown size={16} className={`transition-transform ${showHistory ? 'rotate-180' : ''}`} />
-        </button>
-
-        {showHistory && (
-          <Card className="overflow-hidden">
-            {history.length === 0 ? (
-              <div className="p-8 text-center text-neutral-400">
-                <History size={32} className="mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No distribution changes recorded yet.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-neutral-100 bg-neutral-50/50">
-                      <th className="px-4 py-3 text-left font-semibold text-neutral-600">Date</th>
-                      <th className="px-4 py-3 text-left font-semibold text-neutral-600">Tier</th>
-                      <th className="px-4 py-3 text-center font-semibold text-neutral-600">Recommended</th>
-                      <th className="px-4 py-3 text-center font-semibold text-neutral-600">Nearby</th>
-                      <th className="px-4 py-3 text-center font-semibold text-neutral-600">Daily</th>
-                      <th className="px-4 py-3 text-left font-semibold text-neutral-600">Push Mode</th>
-                      <th className="px-4 py-3 text-left font-semibold text-neutral-600">Admin</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {history.map((h) => (
-                      <tr key={h.id} className="border-b border-neutral-50 hover:bg-neutral-50/50 transition-colors">
-                        <td className="px-4 py-3 text-neutral-700">{formatDate(h.created_at)}</td>
-                        <td className="px-4 py-3">
-                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-neutral-100 text-xs font-semibold text-neutral-700 capitalize">
-                            {h.tier}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center font-mono">
-                          {h.previous_recommended != null ? (
-                            <span className="text-neutral-400">{h.previous_recommended} → </span>
-                          ) : null}
-                          <span className="font-bold text-neutral-900">{h.recommended_limit}</span>
-                        </td>
-                        <td className="px-4 py-3 text-center font-mono">
-                          {h.previous_nearby != null ? (
-                            <span className="text-neutral-400">{h.previous_nearby} → </span>
-                          ) : null}
-                          <span className="font-bold text-neutral-900">{h.nearby_limit}</span>
-                        </td>
-                        <td className="px-4 py-3 text-center font-mono">
-                          {h.previous_daily != null ? (
-                            <span className="text-neutral-400">{h.previous_daily} → </span>
-                          ) : null}
-                          <span className="font-bold text-neutral-900">{h.daily_limit}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                            h.push_mode === 'tomorrow'
-                              ? 'bg-blue-50 text-blue-700'
-                              : h.push_mode === 'now_all'
-                              ? 'bg-error-50 text-error-700'
-                              : 'bg-success-50 text-success-700'
-                          }`}>
-                            {h.push_mode === 'tomorrow' ? '⏰ Tomorrow' : h.push_mode === 'now_all' ? '⚡ All Now' : '⚡ Tier Now'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-neutral-500 text-xs truncate max-w-[150px]">{h.created_by}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
-        )}
-      </div>
-
-      {/* Confirmation Modal */}
-      {confirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-neutral-950/50 backdrop-blur-sm" onClick={() => setConfirmModal(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-rise">
-            <div className="flex items-start gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-error-100 flex items-center justify-center shrink-0">
-                <AlertTriangle size={20} className="text-error-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-neutral-900">Confirm Force Push</h3>
-                <p className="text-sm text-neutral-500 mt-1">{confirmModal.message}</p>
-              </div>
-            </div>
-
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-5">
-              <p className="text-xs text-amber-800 font-medium">
-                ⚠️ This action cannot be undone. Users will receive new profile allocations immediately.
-              </p>
-            </div>
-
-            <div className="flex gap-3 justify-end">
-              <Button variant="outline" onClick={() => setConfirmModal(null)}>
-                Cancel
-              </Button>
-              <Button variant="danger" onClick={confirmPush} icon={Zap}>
-                Confirm Push
-              </Button>
-            </div>
-          </div>
+      {/* Last Run Result */}
+      {lastRunResult && (
+        <div className="mb-6 bg-success-50 border border-success-200 rounded-xl px-5 py-3 flex items-center gap-3">
+          <RefreshCw size={16} className="text-success-600" />
+          <span className="text-sm text-success-800 font-medium">
+            Last run: {lastRunResult.users_updated} users updated on {lastRunResult.run_date}
+          </span>
         </div>
       )}
+
+      {/* Distribution Config Summary */}
+      <Card className="mb-6 overflow-hidden">
+        <div className="px-6 py-4 border-b border-neutral-100 bg-neutral-50/50">
+          <h2 className="text-base font-bold text-neutral-900 flex items-center gap-2">
+            <TrendingUp size={16} className="text-primary-500" />
+            Current Distribution Configuration
+          </h2>
+          <p className="text-xs text-neutral-500 mt-1">
+            Edit these values in Settings → Subscription Plans
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left bg-neutral-50/50">
+                <th className="px-6 py-3 font-semibold text-neutral-600">Tier</th>
+                <th className="px-4 py-3 font-semibold text-neutral-600 text-center" colSpan="3">Initial (One-time)</th>
+                <th className="px-4 py-3 font-semibold text-neutral-600 text-center" colSpan="3">Daily Increment</th>
+                <th className="px-4 py-3 font-semibold text-neutral-600 text-center" colSpan="2">Credits / Purchase</th>
+              </tr>
+              <tr className="text-left border-b border-neutral-100">
+                <th className="px-6 py-2"></th>
+                <th className="px-4 py-2 text-xs font-medium text-neutral-500">Rec</th>
+                <th className="px-4 py-2 text-xs font-medium text-neutral-500">Near</th>
+                <th className="px-4 py-2 text-xs font-medium text-neutral-500">Daily</th>
+                <th className="px-4 py-2 text-xs font-medium text-neutral-500">+Rec</th>
+                <th className="px-4 py-2 text-xs font-medium text-neutral-500">+Near</th>
+                <th className="px-4 py-2 text-xs font-medium text-neutral-500">+Daily</th>
+                <th className="px-4 py-2 text-xs font-medium text-neutral-500">Contacts</th>
+                <th className="px-4 py-2 text-xs font-medium text-neutral-500">Interests</th>
+              </tr>
+            </thead>
+            <tbody>
+              {plans.map((plan) => {
+                const tierMeta = TIERS.find((t) => t.id === plan.tier);
+                return (
+                  <tr key={plan.tier} className="border-b border-neutral-50 hover:bg-neutral-50/50">
+                    <td className="px-6 py-3">
+                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold ${tierMeta?.color || ''}`}>
+                        {plan.plan_name || plan.tier}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center font-mono text-neutral-800">{plan.initial_recommended_profiles}</td>
+                    <td className="px-4 py-3 text-center font-mono text-neutral-800">{plan.initial_nearby_profiles}</td>
+                    <td className="px-4 py-3 text-center font-mono text-neutral-800">{plan.initial_daily_profiles}</td>
+                    <td className="px-4 py-3 text-center font-mono text-violet-700">{plan.daily_recommended_increment > 0 ? `+${plan.daily_recommended_increment}` : '-'}</td>
+                    <td className="px-4 py-3 text-center font-mono text-violet-700">{plan.daily_nearby_increment > 0 ? `+${plan.daily_nearby_increment}` : '-'}</td>
+                    <td className="px-4 py-3 text-center font-mono text-violet-700">{plan.daily_profiles_increment > 0 ? `+${plan.daily_profiles_increment}` : '-'}</td>
+                    <td className="px-4 py-3 text-center font-mono text-emerald-700">{plan.contacts_limit ?? plan.contact_credits ?? 0}</td>
+                    <td className="px-4 py-3 text-center font-mono text-emerald-700">{plan.interests_limit ?? plan.interest_credits ?? 0}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* User Distribution Lookup */}
+      <Card className="overflow-hidden">
+        <div className="px-6 py-4 border-b border-neutral-100 bg-neutral-50/50">
+          <h2 className="text-base font-bold text-neutral-900 flex items-center gap-2">
+            <User size={16} className="text-primary-500" />
+            User Distribution State
+          </h2>
+          <p className="text-xs text-neutral-500 mt-1">
+            Search for a user to view their profile distribution limits and wallet
+          </p>
+        </div>
+
+        <div className="p-6">
+          {/* Search */}
+          <div className="flex gap-3 mb-5">
+            <div className="relative flex-1">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+              <input
+                type="text"
+                placeholder="Search by name, phone, or profile ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                className="w-full pl-9 pr-4 py-2.5 border border-neutral-200 rounded-xl bg-neutral-50 text-sm focus:bg-white focus:outline-none focus:border-primary-400 focus:ring-4 focus:ring-primary-100"
+              />
+            </div>
+            <Button onClick={handleSearch} isLoading={isSearching} icon={Search}>
+              Search
+            </Button>
+          </div>
+
+          {/* Search Results */}
+          {searchResults.length > 0 && (
+            <div className="mb-5 border border-neutral-200 rounded-xl overflow-hidden">
+              {searchResults.map((user) => (
+                <button
+                  key={user.id}
+                  onClick={() => handleSelectUser(user)}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-neutral-50 border-b border-neutral-100 last:border-0 text-left transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-xs">
+                    {(user.display_name || 'U').charAt(0)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-neutral-900 truncate">{user.display_name}</p>
+                    <p className="text-xs text-neutral-500">{user.profile_id} • {user.phone}</p>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${TIERS.find(t => t.id === (user.tier || 'free'))?.color || ''}`}>
+                    {(user.tier || 'free').toUpperCase()}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Selected User Detail */}
+          {selectedUser && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 py-3 px-4 bg-primary-50 rounded-xl border border-primary-100">
+                <div className="w-10 h-10 rounded-full bg-primary-200 flex items-center justify-center text-primary-800 font-bold">
+                  {(selectedUser.display_name || 'U').charAt(0)}
+                </div>
+                <div>
+                  <p className="font-semibold text-neutral-900">{selectedUser.display_name}</p>
+                  <p className="text-xs text-neutral-600">{selectedUser.profile_id} • {selectedUser.tier?.toUpperCase() || 'FREE'}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Distribution State */}
+                <div className="bg-blue-50/50 rounded-xl border border-blue-100 p-4">
+                  <h4 className="font-semibold text-sm text-neutral-800 flex items-center gap-2 mb-3">
+                    <TrendingUp size={14} className="text-blue-600" /> Profile Limits
+                  </h4>
+                  {userState ? (
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-neutral-600">Recommended Limit:</span>
+                        <span className="font-bold text-neutral-900">{userState.recommended_profiles_shown}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-neutral-600">Nearby Limit:</span>
+                        <span className="font-bold text-neutral-900">{userState.nearby_profiles_shown}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-neutral-600">Daily Limit:</span>
+                        <span className="font-bold text-neutral-900">{userState.daily_profiles_shown}</span>
+                      </div>
+                      <div className="border-t border-blue-100 my-2 pt-2">
+                        <div className="flex justify-between">
+                          <span className="text-neutral-600">Highest Tier:</span>
+                          <span className="font-bold">{userState.highest_tier_ever_reached?.toUpperCase()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-neutral-600">Tiers Granted:</span>
+                          <span className="font-mono text-xs">{(userState.initial_distribution_granted_tiers || []).join(', ')}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-neutral-600">Last Distribution:</span>
+                          <span>{formatDate(userState.last_distribution_date)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-neutral-400 italic">No distribution state found</p>
+                  )}
+                </div>
+
+                {/* Wallet */}
+                <div className="bg-emerald-50/50 rounded-xl border border-emerald-100 p-4">
+                  <h4 className="font-semibold text-sm text-neutral-800 flex items-center gap-2 mb-3">
+                    <Wallet size={14} className="text-emerald-600" /> Credit Wallet
+                  </h4>
+                  {userWallet ? (
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-neutral-600">Contact Credits:</span>
+                        <span className="font-bold text-emerald-700 text-lg">{userWallet.contact_credits}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-neutral-600">Interest Credits:</span>
+                        <span className="font-bold text-emerald-700 text-lg">{userWallet.interest_credits}</span>
+                      </div>
+                      <div className="border-t border-emerald-100 my-2 pt-2">
+                        <div className="flex justify-between">
+                          <span className="text-neutral-600">Last Updated:</span>
+                          <span className="text-xs">{formatDate(userWallet.updated_at)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-neutral-400 italic">No wallet found</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
     </div>
   );
 };

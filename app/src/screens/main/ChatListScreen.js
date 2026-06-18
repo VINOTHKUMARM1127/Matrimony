@@ -3,10 +3,12 @@
  */
 import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { colors } from '../../theme';
-import { borderRadius } from '../../theme/spacing';
+import { borderRadius, layout } from '../../theme/spacing';
 import Avatar from '../../components/common/Avatar';
+import ScreenHeader from '../../components/common/ScreenHeader';
 import EmptyState from '../../components/common/EmptyState';
 import { ChatItemSkeleton } from '../../components/common/SkeletonLoader';
 import useAuthStore from '../../store/useAuthStore';
@@ -77,15 +79,17 @@ const ChatListScreen = ({ navigation }) => {
   }, [handleChatPress, formatTime]);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Messages</Text>
-      </View>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <ScreenHeader
+        title="Messages"
+        subtitle={chats?.length ? `${chats.length} conversation${chats.length > 1 ? 's' : ''}` : 'Your matches will appear here'}
+      />
 
       <FlatList
         data={chats || []}
         keyExtractor={(item) => item.id}
         renderItem={renderChatItem}
+        contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           isLoading ? (
             <View>
@@ -100,33 +104,29 @@ const ChatListScreen = ({ navigation }) => {
           )
         }
         refreshControl={
-          <RefreshControl refreshing={false} onRefresh={refetch} colors={[colors.primary]} />
+          <RefreshControl refreshing={false} onRefresh={refetch} tintColor={colors.primary} colors={[colors.primary]} />
         }
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         showsVerticalScrollIndicator={false}
       />
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12,
-    borderBottomWidth: 1, borderBottomColor: colors.borderLight,
-  },
-  title: { fontSize: 24, fontWeight: '700', color: colors.textPrimary },
+  listContent: { paddingTop: 4, flexGrow: 1 },
   chatItem: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 14,
+    paddingHorizontal: layout.screenPaddingHorizontal, paddingVertical: 14,
   },
   chatInfo: { flex: 1, marginLeft: 14 },
   chatHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
-  chatName: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, flex: 1 },
-  chatTime: { fontSize: 12, color: colors.textMuted, marginLeft: 8 },
-  chatMessage: { fontSize: 13, color: colors.textSecondary, marginTop: 3 },
+  chatName: { fontSize: 15.5, fontWeight: '700', color: colors.textPrimary, flex: 1 },
+  chatTime: { fontSize: 12, color: colors.textMuted, marginLeft: 8, fontWeight: '500' },
+  chatMessage: { fontSize: 13.5, color: colors.textSecondary, marginTop: 3 },
   separator: { height: 1, backgroundColor: colors.borderLight, marginLeft: 78 },
 });
 

@@ -4,7 +4,7 @@ import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import {
   CreditCard, TrendingUp, IndianRupee, Calendar, Download, Filter,
-  ChevronLeft, ChevronRight, Search, X, Clock, CheckCircle, XCircle, RotateCcw,
+  ChevronLeft, ChevronRight, Search, X, Clock, CheckCircle, XCircle, RotateCcw, Trash2,
 } from 'lucide-react';
 
 const STATUS_COLORS = {
@@ -30,6 +30,8 @@ const PaymentHistory = () => {
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isTableLoading, setIsTableLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   const [filters, setFilters] = useState({
     status: 'all',
@@ -104,36 +106,86 @@ const PaymentHistory = () => {
     setPage(1);
   };
 
-  const exportCSV = () => {
-    if (!payments.length) return;
+  const hasActiveFilters =
+    filters.status !== 'all' || filters.planType !== 'all' || !!filters.dateFrom || !!filters.dateTo;
 
-    const headers = [
-      'Transaction ID', 'Date', 'User', 'Phone', 'Plan', 'Amount', 'Tax',
-      'Final Amount', 'Gateway', 'Gateway Txn ID', 'Status',
-    ];
+  const exportCSV = async () => {
+    setIsExporting(true);
+    try {
+      // Export ALL rows matching the current filters, not just the current page.
+      const rows = await adminApi.fetchAllPaymentsForExport({
+        status: filters.status,
+        planType: filters.planType,
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+      });
+      if (!rows.length) {
+        alert('No payments match the current filters.');
+        return;
+      }
 
-    const rows = payments.map((p) => [
-      p.id,
-      formatDate(p.created_at),
-      p.profile?.display_name || '-',
-      p.profile?.phone || '-',
-      p.plan_type,
-      p.amount,
-      p.tax,
-      p.final_amount,
-      p.payment_gateway,
-      p.gateway_transaction_id || '-',
-      p.status,
-    ]);
+      const headers = [
+        'Transaction ID', 'Date', 'User', 'Phone', 'Plan', 'Amount', 'Tax',
+        'Final Amount', 'Gateway', 'Gateway Txn ID', 'Status',
+      ];
 
-    const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `payments_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+      const esc = (c) => `"${String(c ?? '').replace(/"/g, '""')}"`;
+      const dataRows = rows.map((p) => [
+        p.id,
+        formatDate(p.created_at),
+        p.profile?.display_name || '-',
+        p.profile?.phone || '-',
+        p.plan_type,
+        p.amount,
+        p.tax,
+        p.final_amount,
+        p.payment_gateway,
+        p.gateway_transaction_id || '-',
+        p.status,
+      ]);
+
+      const csv = [headers, ...dataRows].map((r) => r.map(esc).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const tag = hasActiveFilters ? 'filtered' : 'all';
+      a.download = `payments_${tag}_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Failed to export payments: ' + (err.message || err));
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    const scope = hasActiveFilters
+      ? 'all payments MATCHING THE CURRENT FILTERS'
+      : 'ALL payment history';
+    if (!window.confirm(
+      `This will permanently delete ${scope}.\n\nThis cannot be undone. Consider exporting a CSV backup first.\n\nContinue?`
+    )) return;
+    // Second confirm for an unfiltered wipe.
+    if (!hasActiveFilters && !window.confirm('FINAL CONFIRMATION: delete the ENTIRE payment history?')) return;
+
+    setIsClearing(true);
+    try {
+      const deleted = await adminApi.deletePayments({
+        status: filters.status,
+        planType: filters.planType,
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+      });
+      alert(`Deleted ${deleted} payment record${deleted === 1 ? '' : 's'}.`);
+      setPage(1);
+      await Promise.all([loadStats(), loadPayments()]);
+    } catch (err) {
+      alert('Failed to clear payment history: ' + (err.message || err));
+    } finally {
+      setIsClearing(false);
+    }
   };
 
   const statCards = useMemo(() => {
@@ -177,9 +229,14 @@ const PaymentHistory = () => {
             Track all transactions, revenue metrics, and subscription payments.
           </p>
         </div>
-        <Button onClick={exportCSV} variant="outline" icon={Download} disabled={!payments.length}>
-          Export CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={exportCSV} variant="outline" icon={Download} isLoading={isExporting} disabled={isClearing}>
+            {hasActiveFilters ? 'Export Filtered' : 'Export All'}
+          </Button>
+          <Button onClick={handleClearHistory} variant="danger" icon={Trash2} isLoading={isClearing} disabled={isExporting || total === 0}>
+            {hasActiveFilters ? 'Clear Filtered' : 'Clear History'}
+          </Button>
+        </div>
       </div>
 
       {/* Revenue Stats */}

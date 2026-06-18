@@ -16,9 +16,11 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView as SafeAreaContextView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, borderRadius, layout, shadows } from '../../theme';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
+import Icon from '../../components/common/Icon';
 import useAuthStore from '../../store/useAuthStore';
 
 const LoginScreen = ({ navigation }) => {
@@ -156,9 +158,14 @@ const LoginScreen = ({ navigation }) => {
         >
           {/* Header section with brand accent */}
           <View style={styles.header}>
-            <View style={styles.logoBadge}>
-              <Text style={styles.logoBadgeText}>💍</Text>
-            </View>
+            <LinearGradient
+              colors={[colors.gradientPrimaryStart, colors.gradientPrimaryEnd]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.logoBadge}
+            >
+              <Icon name="heart" size={30} color="#FFFFFF" fill="#FFFFFF" />
+            </LinearGradient>
             <Text style={styles.greeting}>Vanakkam</Text>
             <Text style={styles.title}>Wedring Matrimony</Text>
             <Text style={styles.subtitle}>Find your perfect life partner</Text>
@@ -204,7 +211,8 @@ const LoginScreen = ({ navigation }) => {
             {/* Error display */}
             {localError ? (
               <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>⚠️ {localError}</Text>
+                <Icon name="alert" size={16} color={colors.error} />
+                <Text style={styles.errorText}>{localError}</Text>
               </View>
             ) : null}
 
@@ -257,25 +265,21 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   logoBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.primarySurface,
+    width: 76,
+    height: 76,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
-    ...shadows.button,
-  },
-  logoBadgeText: {
-    fontSize: 32,
+    marginBottom: 18,
+    ...shadows.buttonFloat,
   },
   greeting: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
     color: colors.goldDark,
     textTransform: 'uppercase',
-    letterSpacing: 1.5,
-    marginBottom: 4,
+    letterSpacing: 2,
+    marginBottom: 6,
   },
   title: {
     fontSize: 32,
@@ -335,18 +339,22 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     backgroundColor: colors.errorLight,
-    padding: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderRadius: borderRadius.md,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: colors.error,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
   },
   errorText: {
+    flex: 1,
     color: colors.error,
     fontSize: 13,
-    fontWeight: '500',
-    textAlign: 'center',
+    fontWeight: '600',
   },
 
   footer: {

@@ -26,7 +26,7 @@ export const useMatches = () => {
   const isPremium = profile?.is_premium || !!activeSub;
 
   // Fetch precise user limits directly from the backend RPC to account for Free clamping and Premium cumulative logic
-  const { data: limits, refetch: refetchAdminSettings } = useQuery({
+  const { data: limits, isLoading: loadingLimits, isFetching: fetchingLimits, refetch: refetchAdminSettings } = useQuery({
     queryKey: ['userLimits', user?.id],
     queryFn: () => fetchUserLimits(user?.id),
     enabled: !!user?.id,
@@ -36,7 +36,7 @@ export const useMatches = () => {
 
   const isDynamic = limits?.dynamic_daily_enabled || false;
 
-  // Limits come straight from tier_settings (single source of truth).
+  // Limits come from user_distribution_state (per-user, grows over time).
   // The backend RPCs clamp each feed to these caps and handle day-by-day
   // rotation internally, so the client must NOT multiply by active days.
   const recLimit = limits?.recommended_limit || 0;
@@ -106,22 +106,36 @@ export const useMatches = () => {
     staleTime: 5 * 60 * 1000,
   });
 
+  const deduplicate = (arr) => {
+    const seen = new Set();
+    return arr.filter(item => {
+      if (!item?.id) return false;
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
+  };
+
+  const recommended = React.useMemo(() => deduplicate(recommendedData?.pages?.flat() || []), [recommendedData]);
+  const nearbyMatches = React.useMemo(() => deduplicate(nearbyData?.pages?.flat() || []), [nearbyData]);
+  const dailyMatches = React.useMemo(() => deduplicate(dailyData?.pages?.flat() || []), [dailyData]);
+
   return {
-    recommended: recommendedData?.pages?.flat() || [],
+    recommended,
     loadingRecommended,
     fetchNextRecommended,
     hasNextRecommended,
     fetchingNextRecommended,
     refetchRecommended,
 
-    nearbyMatches: nearbyData?.pages?.flat() || [],
+    nearbyMatches,
     loadingNearby,
     fetchNextNearby,
     hasNextNearby,
     fetchingNextNearby,
     refetchNearby,
 
-    dailyMatches: dailyData?.pages?.flat() || [],
+    dailyMatches,
     loadingDaily,
     fetchNextDaily,
     hasNextDaily,
@@ -129,6 +143,8 @@ export const useMatches = () => {
     refetchDaily,
 
     limits,
+    loadingLimits,
+    fetchingLimits,
     refetchAdminSettings
   };
 };

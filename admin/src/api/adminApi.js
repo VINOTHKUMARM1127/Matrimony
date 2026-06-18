@@ -90,23 +90,14 @@ export const updateUserPlan = async (userId, planType) => {
   if (!supabaseAdmin) throw new Error('Service Role Key required for Admin updates');
 
   if (planType === 'free' || planType === 'non_premium') {
-    // First mark all existing subscriptions as expired
-    await supabaseAdmin
-      .from('subscriptions')
-      .update({ status: 'expired' })
-      .eq('user_id', userId);
-
-    // Reset premium flags and quotas on profile
-    await supabaseAdmin
-      .from('profiles')
-      .update({ 
-        tier: 'free',
-        is_premium: false,
-        contacts_remaining: 0,
-        interests_remaining: 0,
-        premium_expires_at: null
-      })
-      .eq('id', userId);
+    // Use the atomic RPC so premium flags, queued/active subscriptions, and the
+    // subscription_queue are all cleared together. (Distribution/wallet are left
+    // intact here — use makeUserFree(userId, true) for a full re-test reset.)
+    const { error } = await supabaseAdmin.rpc('admin_make_user_free', {
+      p_user_id: userId,
+      p_reset_distribution: false,
+    });
+    if (error) throw new Error(error.message || 'Failed to downgrade user to free');
     return;
   }
 
@@ -435,7 +426,7 @@ export const bulkUploadUsers = async (usersList, stopRef, onProgress) => {
  */
 export const fetchAdminSettings = async () => {
   const { data, error } = await supabase
-    .from('tier_settings')
+    .from('subscription_plans')
     .select('*');
     
   if (error) throw error;
@@ -676,6 +667,64 @@ export const fetchPayments = async ({ page = 1, perPage = 25, status, planType, 
 };
 
 /**
+ * Fetch ALL payments matching the given filters (no pagination) for CSV export.
+ * Pages through results in chunks so large exports don't hit row caps.
+ */
+export const fetchAllPaymentsForExport = async ({ status, planType, dateFrom, dateTo } = {}) => {
+  const chunk = 1000;
+  let from = 0;
+  let all = [];
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    let query = supabase
+      .from('payments')
+      .select(`
+        *,
+        profile:profiles!payments_user_id_fkey ( id, display_name, phone, tier )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (status && status !== 'all') query = query.eq('status', status);
+    if (planType && planType !== 'all') query = query.eq('plan_type', planType);
+    if (dateFrom) query = query.gte('created_at', dateFrom);
+    if (dateTo) query = query.lte('created_at', dateTo + 'T23:59:59.999Z');
+
+    const { data, error } = await query.range(from, from + chunk - 1);
+    if (error) throw error;
+    all = all.concat(data || []);
+    if (!data || data.length < chunk) break;
+    from += chunk;
+  }
+  return all;
+};
+
+/**
+ * Delete payment history matching the given filters (admin only).
+ * Requires the service-role client. Returns the number of rows deleted.
+ * Guard: passing no filters deletes ALL payments (caller must confirm).
+ */
+export const deletePayments = async ({ status, planType, dateFrom, dateTo } = {}) => {
+  if (!supabaseAdmin) throw new Error('Service Role Key required to clear payment history');
+
+  let query = supabaseAdmin.from('payments').delete({ count: 'exact' });
+
+  if (status && status !== 'all') query = query.eq('status', status);
+  if (planType && planType !== 'all') query = query.eq('plan_type', planType);
+  if (dateFrom) query = query.gte('created_at', dateFrom);
+  if (dateTo) query = query.lte('created_at', dateTo + 'T23:59:59.999Z');
+
+  // PostgREST requires a WHERE clause for DELETE; when no filters are set, use a
+  // non-null id predicate so an unfiltered "clear all" is still expressed safely.
+  if ((!status || status === 'all') && (!planType || planType === 'all') && !dateFrom && !dateTo) {
+    query = query.not('id', 'is', null);
+  }
+
+  const { error, count } = await query;
+  if (error) throw error;
+  return count || 0;
+};
+
+/**
  * Fetch subscription history for a specific user
  */
 export const fetchUserSubscriptionHistory = async (userId) => {
@@ -687,4 +736,117 @@ export const fetchUserSubscriptionHistory = async (userId) => {
 
   if (error) throw error;
   return data || [];
+};
+
+/**
+ * Fetch a user's queued / paused (previous) plans.
+ */
+export const fetchUserSubscriptionQueue = async (userId) => {
+  const { data, error } = await supabase
+    .from('subscription_queue')
+    .select('*')
+    .eq('user_id', userId)
+    .in('status', ['paused', 'pending'])
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+};
+
+/**
+ * Make a user FREE again (admin testing of the upgrade -> initial-distribution flow).
+ * Strips premium, expires active/queued subscriptions, and clears the queue.
+ * When resetDistribution = true, also resets distribution state + wallet so the
+ * next upgrade re-shows the configured initial profiles from scratch.
+ */
+export const makeUserFree = async (userId, resetDistribution = false) => {
+  if (!supabaseAdmin) throw new Error('Service Role Key required for Admin updates');
+  const { data, error } = await supabaseAdmin.rpc('admin_make_user_free', {
+    p_user_id: userId,
+    p_reset_distribution: resetDistribution,
+  });
+  if (error) throw new Error(error.message || 'Failed to reset user to free');
+  return data;
+};
+
+// ============================================================
+// SUBSCRIPTION PLANS (Dynamic Distribution System)
+// ============================================================
+
+/**
+ * Fetch all subscription plans from the new subscription_plans table
+ */
+export const fetchSubscriptionPlans = async () => {
+  const { data, error } = await supabase
+    .from('subscription_plans')
+    .select('*')
+    .order('price_inr', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+};
+
+/**
+ * Update a subscription plan configuration
+ */
+export const updateSubscriptionPlan = async (tier, planData) => {
+  const { error } = await supabase.rpc('update_subscription_plan', {
+    p_tier: tier,
+    p_plan_name: planData.plan_name ?? null,
+    p_price_inr: planData.price ?? planData.price_inr ?? null,
+    p_duration_months: planData.duration_months ?? null,
+    p_contacts_limit: planData.contact_credits ?? planData.contacts_limit ?? null,
+    p_interests_limit: planData.interest_credits ?? planData.interests_limit ?? null,
+    p_initial_recommended_profiles: planData.initial_recommended_profiles ?? null,
+    p_initial_nearby_profiles: planData.initial_nearby_profiles ?? null,
+    p_initial_daily_profiles: planData.initial_daily_profiles ?? null,
+    p_daily_recommended_increment: planData.daily_recommended_increment ?? null,
+    p_daily_nearby_increment: planData.daily_nearby_increment ?? null,
+    p_daily_profiles_increment: planData.daily_profiles_increment ?? null,
+    p_features: planData.features ?? null,
+    p_color_code: planData.color_code ?? null,
+    p_is_popular: planData.is_popular ?? null,
+  });
+
+  if (error) throw error;
+  return true;
+};
+
+/**
+ * Fetch a user's distribution state — reads user_distribution_state, the table
+ * the mobile feeds actually use (single source of truth). Falls back to the
+ * legacy user_profile_distribution only if no row exists yet.
+ */
+export const fetchUserDistributionState = async (userId) => {
+  const { data, error } = await supabase
+    .from('user_distribution_state')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+};
+
+/**
+ * Fetch a user's wallet (credits)
+ */
+export const fetchUserWallet = async (userId) => {
+  const { data, error } = await supabase
+    .from('user_wallet')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+};
+
+/**
+ * Manually trigger daily distribution (calls the RPC)
+ */
+export const triggerDailyDistribution = async () => {
+  const { data, error } = await supabase.rpc('run_daily_distribution');
+  if (error) throw error;
+  return data;
 };

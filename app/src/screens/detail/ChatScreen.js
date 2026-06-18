@@ -21,6 +21,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { colors } from '../../theme';
 import { borderRadius } from '../../theme/spacing';
 import Avatar from '../../components/common/Avatar';
+import Icon from '../../components/common/Icon';
 import useAuthStore from '../../store/useAuthStore';
 import * as chatApi from '../../api/chat';
 
@@ -169,8 +170,9 @@ const ChatScreen = ({ route, navigation }) => {
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.backIcon}>←</Text>
+          <Icon name="chevronLeft" size={24} color={colors.textPrimary} strokeWidth={2.2} />
         </TouchableOpacity>
         
         <View style={styles.headerInfo}>
@@ -232,7 +234,7 @@ const ChatScreen = ({ route, navigation }) => {
             onPress={handleSend}
             disabled={!messageText.trim()}
           >
-            <Text style={styles.sendButtonText}>Send</Text>
+            <Icon name="arrowRight" size={20} color="#FFFFFF" strokeWidth={2.4} />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

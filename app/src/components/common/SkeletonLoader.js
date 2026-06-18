@@ -157,6 +157,45 @@ export const ProfileDetailSkeleton = () => (
 );
 
 /**
+ * My Profile Skeleton — mirrors the own-profile screen layout
+ * (hero avatar + completion ring, quick stats, grouped menu rows).
+ */
+export const MyProfileSkeleton = () => (
+  <View style={skeletonStyles.myProfile}>
+    {/* Hero */}
+    <View style={skeletonStyles.myProfileHero}>
+      <SkeletonLoader width={96} height={96} borderRadiusValue={48} />
+      <SkeletonLoader width={160} height={24} style={{ marginTop: 16 }} />
+      <SkeletonLoader width={100} height={16} style={{ marginTop: 10 }} />
+      <View style={skeletonStyles.myProfileBadges}>
+        <SkeletonLoader width={84} height={26} borderRadiusValue={borderRadius.full} />
+        <SkeletonLoader width={84} height={26} borderRadiusValue={borderRadius.full} style={{ marginLeft: 8 }} />
+      </View>
+    </View>
+
+    {/* Quick stat cards */}
+    <View style={skeletonStyles.myProfileStats}>
+      {[1, 2, 3].map((key) => (
+        <SkeletonLoader key={key} width="31%" height={76} borderRadiusValue={borderRadius.lg} />
+      ))}
+    </View>
+
+    {/* Grouped menu rows */}
+    <View style={skeletonStyles.myProfileMenu}>
+      {[1, 2, 3, 4, 5].map((key) => (
+        <View key={key} style={skeletonStyles.myProfileMenuRow}>
+          <SkeletonLoader width={40} height={40} borderRadiusValue={borderRadius.md} />
+          <View style={skeletonStyles.myProfileMenuText}>
+            <SkeletonLoader width="55%" height={16} />
+            <SkeletonLoader width="35%" height={12} style={{ marginTop: 8 }} />
+          </View>
+        </View>
+      ))}
+    </View>
+  </View>
+);
+
+/**
  * Premium Plans Skeleton
  */
 export const PremiumPlansSkeleton = () => (
@@ -262,6 +301,46 @@ const skeletonStyles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     marginTop: 16,
+  },
+  // My Profile
+  myProfile: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  myProfileHero: {
+    alignItems: 'center',
+    paddingTop: 32,
+    paddingBottom: 28,
+    paddingHorizontal: 20,
+    backgroundColor: colors.sectionBackground,
+  },
+  myProfileBadges: {
+    flexDirection: 'row',
+    marginTop: 16,
+  },
+  myProfileStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginTop: 20,
+  },
+  myProfileMenu: {
+    paddingHorizontal: 16,
+    marginTop: 24,
+    gap: 14,
+  },
+  myProfileMenuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.cardBackground,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: 14,
+  },
+  myProfileMenuText: {
+    flex: 1,
+    marginLeft: 14,
   },
   // Premium Plans
   premiumPlansContainer: {

@@ -63,7 +63,7 @@ export const getRecommendedProfiles = async (userId, limit = 20, offset = 0, use
 
 /**
  * Get daily match recommendations
- * Fully enforced by the backend RPC — reads daily limit LIVE from tier_settings
+ * Fully enforced by the backend RPC — reads per-user limit from user_distribution_state
  * and handles per-day rotation windowing server-side. No client-side logging needed.
  */
 export const getDailyMatches = async (userId, dailyLimit = 5, offset = 0, userGender = null, isDynamic = false) => {

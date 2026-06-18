@@ -10,9 +10,17 @@ import {
   ActivityIndicator,
   View,
 } from 'react-native';
-import { colors } from '../../theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, palette } from '../../theme';
 import { borderRadius, layout } from '../../theme/spacing';
 import shadows from '../../theme/shadows';
+
+// Filled variants render a subtle two-stop gradient for a premium feel.
+const GRADIENTS = {
+  primary: [colors.gradientPrimaryStart, colors.gradientPrimaryEnd],
+  secondary: [colors.secondary, colors.secondaryDark],
+  danger: [palette.red500, palette.red600],
+};
 
 const Button = ({
   title,
@@ -28,13 +36,15 @@ const Button = ({
   textStyle,
   ...props
 }) => {
+  const gradientColors = !disabled ? GRADIENTS[variant] : null;
+
   const buttonStyles = [
     styles.base,
     styles[variant],
     styles[`size_${size}`],
     fullWidth && styles.fullWidth,
     disabled && styles.disabled,
-    shadows.button,
+    gradientColors ? shadows.buttonFloat : shadows.button,
     style,
   ];
 
@@ -46,26 +56,36 @@ const Button = ({
     textStyle,
   ];
 
+  const inner = loading ? (
+    <ActivityIndicator
+      color={variant === 'outline' || variant === 'ghost' ? colors.primary : colors.textInverse}
+      size="small"
+    />
+  ) : (
+    <View style={styles.content}>
+      {icon && iconPosition === 'left' && <View style={styles.iconLeft}>{icon}</View>}
+      <Text style={textStyles}>{title}</Text>
+      {icon && iconPosition === 'right' && <View style={styles.iconRight}>{icon}</View>}
+    </View>
+  );
+
   return (
     <TouchableOpacity
       onPress={onPress}
       disabled={disabled || loading}
-      activeOpacity={0.7}
+      activeOpacity={0.85}
       style={buttonStyles}
       {...props}
     >
-      {loading ? (
-        <ActivityIndicator
-          color={variant === 'outline' || variant === 'ghost' ? colors.primary : colors.textInverse}
-          size="small"
+      {gradientColors && (
+        <LinearGradient
+          colors={gradientColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
         />
-      ) : (
-        <View style={styles.content}>
-          {icon && iconPosition === 'left' && <View style={styles.iconLeft}>{icon}</View>}
-          <Text style={textStyles}>{title}</Text>
-          {icon && iconPosition === 'right' && <View style={styles.iconRight}>{icon}</View>}
-        </View>
       )}
+      {inner}
     </TouchableOpacity>
   );
 };
@@ -76,6 +96,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
+    overflow: 'hidden',
   },
   fullWidth: {
     width: '100%',

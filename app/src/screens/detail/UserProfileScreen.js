@@ -22,6 +22,7 @@ import shadows from '../../theme/shadows';
 import PhotoGallery from '../../components/profile/PhotoGallery';
 import ProfileHeader from '../../components/profile/ProfileHeader';
 import { ProfileDetailSkeleton } from '../../components/common/SkeletonLoader';
+import SuccessOverlay from '../../components/common/SuccessOverlay';
 import useAuthStore from '../../store/useAuthStore';
 import useProfileStore from '../../store/useProfileStore';
 import * as profilesApi from '../../api/profiles';
@@ -68,6 +69,8 @@ const UserProfileScreen = ({ route, navigation }) => {
   const myProfile = useProfileStore((s) => s.profile);
   const myPhotos = useProfileStore((s) => s.photos);
   const [revealingPhone, setRevealingPhone] = useState(false);
+  const [showInterestSent, setShowInterestSent] = useState(false);
+  const [showContactUnlocked, setShowContactUnlocked] = useState(false);
 
   // 1. Fetch details of target user
   const { data: targetProfile, isLoading, error, refetch: refetchProfile } = useQuery({
@@ -92,11 +95,12 @@ const UserProfileScreen = ({ route, navigation }) => {
     enabled: !!currentUser?.id && !!profileId,
   });
 
-  // Fetch Quotas
+  // Fetch Quotas (get_user_quota — wallet-backed single source of truth,
+  // the same source unlock_contact and send_interest_with_quota deduct from).
   const { data: quotas, refetch: refetchQuotas } = useQuery({
     queryKey: ['user_quotas', currentUser?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_user_quotas', { p_user_id: currentUser.id });
+      const { data, error } = await supabase.rpc('get_user_quota', { p_user_id: currentUser.id });
       if (error) throw error;
       return data;
     },
@@ -135,14 +139,22 @@ const UserProfileScreen = ({ route, navigation }) => {
   const compatibilityBreakdown = compatibilityResult?.breakdown || {};
 
   // Privacy Locks / Gates
-  // get_user_quotas returns tier as 'FREE' | 'SILVER' | 'GOLD' | 'PLATINUM',
-  // and consumable balances as contacts_remaining / interests_remaining (-1 = unlimited).
+  // get_user_quota returns tier as 'FREE' | 'SILVER' | 'GOLD' | 'PLATINUM',
+  // and wallet balances as contact_credits / interest_credits (also mirrored
+  // as contacts_remaining / interests_remaining; -1 = unlimited).
   const isPremiumTier = quotas?.tier && quotas.tier !== 'FREE';
   const isHoroscopeUnlocked = isPremiumTier || (interestStatus && interestStatus.sender_id === profileId);
-  const isMobileUnlocked = isPremiumTier;
 
-  const contactsRemaining = quotas?.contacts_remaining ?? 0;
+  // Contact unlock is gated on WALLET CREDITS, not tier — this matches what the
+  // unlock_contact RPC actually enforces. A user (free or premium) with credits
+  // can unlock; a user with zero credits is prompted to recharge/upgrade.
+  const contactsRemaining = quotas?.contact_credits ?? quotas?.contacts_remaining ?? 0;
   const hasRemainingViews = contactsRemaining === -1 || contactsRemaining > 0;
+  const isMobileUnlocked = hasRemainingViews;
+
+  // Interest sending is likewise gated on wallet credits (-1 = unlimited).
+  const interestsRemaining = quotas?.interest_credits ?? quotas?.interests_remaining ?? 0;
+  const hasInterestsLeft = interestsRemaining === -1 || interestsRemaining > 0;
 
   const getSimulatedPhoneNumber = () => {
     const seed = profileId?.slice(-4) || '1234';
@@ -150,31 +162,20 @@ const UserProfileScreen = ({ route, navigation }) => {
   };
 
   const handleRevealMobileNumber = async () => {
-    if (!isMobileUnlocked) {
-      Alert.alert(
-        'Premium Lock',
-        'Mobile numbers can only be shared with an active premium membership.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => navigation.navigate('Premium') },
-        ]
-      );
-      return;
-    }
-
-    if (!hasViewedPhone && !hasRemainingViews) {
-      Alert.alert(
-        'Limit Exceeded',
-        `You have used all your allowed contact views. Please recharge to reset your quotas.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrades', onPress: () => navigation.navigate('Premium') },
-        ]
-      );
-      return;
-    }
-
     if (hasViewedPhone) return;
+
+    // Gate on wallet credits only (matches the unlock_contact RPC). No tier check.
+    if (!hasRemainingViews) {
+      Alert.alert(
+        'No Contact Credits',
+        'You have no contact credits left. Purchase a plan to get more contact credits.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Get Credits', onPress: () => navigation.navigate('Premium') },
+        ]
+      );
+      return;
+    }
 
     try {
       setRevealingPhone(true);
@@ -188,7 +189,7 @@ const UserProfileScreen = ({ route, navigation }) => {
       refetchHasViewed();
       refetchQuotas();
       setRevealingPhone(false);
-      Alert.alert('Success', 'Contact number unlocked successfully!');
+      setShowContactUnlocked(true);
     } catch (err) {
       setRevealingPhone(false);
       if (err.message?.includes('QUOTA_EXCEEDED')) {
@@ -224,7 +225,7 @@ const UserProfileScreen = ({ route, navigation }) => {
       queryClient.invalidateQueries({ queryKey: ['user_quotas', currentUser.id] });
       queryClient.invalidateQueries({ queryKey: ['interestsSent'] });
       queryClient.invalidateQueries({ queryKey: ['interestsReceived'] });
-      Alert.alert('Success', 'Interest request sent successfully!');
+      setShowInterestSent(true);
     },
     onError: (err, _vars, context) => {
       if (context?.previousQuotas) {
@@ -449,12 +450,12 @@ const UserProfileScreen = ({ route, navigation }) => {
               <View style={styles.maskedRow}>
                 <Text style={styles.maskedText}>+91 9840* *****</Text>
                 <TouchableOpacity
-                  style={[styles.revealButton, !isMobileUnlocked && styles.lockedRevealBtn]}
+                  style={[styles.revealButton, !hasRemainingViews && styles.lockedRevealBtn]}
                   onPress={handleRevealMobileNumber}
                   disabled={revealingPhone}
                 >
                   <Text style={styles.revealBtnText}>
-                    {revealingPhone ? 'Unlocking...' : isMobileUnlocked ? 'Unlock Mobile' : 'Premium Locked'}
+                    {revealingPhone ? 'Unlocking...' : hasRemainingViews ? 'Unlock Mobile' : 'Get Credits'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -572,10 +573,11 @@ const UserProfileScreen = ({ route, navigation }) => {
                 <TouchableOpacity style={styles.declineBtn} onPress={() => {}}>
                   <Text style={styles.declineBtnText}>Decline</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.acceptBtn} 
+                <TouchableOpacity
+                  style={styles.acceptBtn}
                   onPress={() => acceptInterestMutation.mutate(interestStatus.id)}
                 >
+                  <Ionicons name="checkmark-circle" size={17} color={colors.textInverse} />
                   <Text style={styles.acceptBtnText}>Accept Request</Text>
                 </TouchableOpacity>
               </View>
@@ -583,6 +585,7 @@ const UserProfileScreen = ({ route, navigation }) => {
           ) : interestStatus.status === 'accepted' ? (
             <View style={styles.footerRow}>
               <TouchableOpacity style={styles.connectBtn} disabled>
+                <Ionicons name="chatbubble-ellipses" size={17} color={colors.textInverse} />
                 <Text style={styles.connectBtnText}>Connected</Text>
               </TouchableOpacity>
             </View>
@@ -596,20 +599,39 @@ const UserProfileScreen = ({ route, navigation }) => {
         ) : (
           <View style={styles.footerRow}>
             <TouchableOpacity style={styles.shortlistBtn}>
+              <Ionicons name="star" size={16} color={colors.goldDark} />
               <Text style={styles.shortlistBtnText}>Shortlist</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.sendInterestBtn} 
+            <TouchableOpacity
+              style={[styles.sendInterestBtn, !hasInterestsLeft && styles.lockedRevealBtn]}
               onPress={handleSendInterest}
-              disabled={sendInterestMutation.isPending}
+              disabled={sendInterestMutation.isPending || !hasInterestsLeft}
             >
+              <Ionicons name="heart" size={17} color={colors.textInverse} />
               <Text style={styles.sendInterestBtnText}>
-                {sendInterestMutation.isPending ? 'Sending...' : 'Send Interest'}
+                {sendInterestMutation.isPending ? 'Sending...' : hasInterestsLeft ? 'Send Interest' : 'No Interest Credits'}
               </Text>
             </TouchableOpacity>
           </View>
         )}
       </View>
+
+      <SuccessOverlay
+        visible={showInterestSent}
+        icon="heart"
+        tint={colors.primary}
+        title="Interest Sent!"
+        subtitle="We'll notify you when they respond"
+        onDone={() => setShowInterestSent(false)}
+      />
+      <SuccessOverlay
+        visible={showContactUnlocked}
+        icon="phone"
+        tint={colors.success}
+        title="Contact Unlocked!"
+        subtitle="You can now view their mobile number"
+        onDone={() => setShowContactUnlocked(false)}
+      />
     </View>
   );
 };
@@ -947,7 +969,8 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: colors.cardBackground,
     paddingHorizontal: layout.screenPaddingHorizontal,
-    paddingVertical: 12,
+    paddingTop: 12,
+    paddingBottom: 22,
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
     ...shadows.bottomNav,
@@ -958,94 +981,114 @@ const styles = StyleSheet.create({
   },
   shortlistBtn: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: borderRadius.md,
+    flexDirection: 'row',
+    gap: 7,
+    paddingVertical: 15,
+    borderRadius: borderRadius.full,
     borderWidth: 1.5,
     borderColor: colors.shortlistGold,
+    backgroundColor: colors.goldLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   shortlistBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.shortlistGold,
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.goldDark,
   },
   sendInterestBtn: {
-    flex: 1.5,
-    paddingVertical: 14,
-    borderRadius: borderRadius.md,
+    flex: 1.6,
+    flexDirection: 'row',
+    gap: 7,
+    paddingVertical: 15,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.button,
+    ...shadows.buttonFloat,
   },
   sendInterestBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: colors.textInverse,
+    letterSpacing: 0.3,
   },
   pendingBtn: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surface,
+    flexDirection: 'row',
+    gap: 7,
+    paddingVertical: 15,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surfacePressed,
     borderWidth: 1,
     borderColor: colors.borderLight,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   pendingBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: colors.textSecondary,
   },
   declineBtn: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: borderRadius.md,
+    paddingVertical: 15,
+    borderRadius: borderRadius.full,
     borderWidth: 1.5,
     borderColor: colors.interestOutline,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   declineBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: colors.textSecondary,
   },
   acceptBtn: {
-    flex: 1.5,
-    paddingVertical: 14,
-    borderRadius: borderRadius.md,
+    flex: 1.6,
+    flexDirection: 'row',
+    gap: 7,
+    paddingVertical: 15,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.primary,
     alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.buttonFloat,
   },
   acceptBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: colors.textInverse,
+    letterSpacing: 0.3,
   },
   connectBtn: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: borderRadius.md,
+    flexDirection: 'row',
+    gap: 7,
+    paddingVertical: 15,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.connectTeal,
     alignItems: 'center',
-    ...shadows.button,
+    justifyContent: 'center',
+    ...shadows.buttonFloat,
   },
   connectBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: colors.textInverse,
+    letterSpacing: 0.3,
   },
   declinedBtn: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: borderRadius.md,
+    paddingVertical: 15,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.declineSurface,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   declinedBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: colors.declineRed,
   },
 });

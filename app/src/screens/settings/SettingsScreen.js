@@ -5,9 +5,13 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../../theme';
-import { borderRadius } from '../../theme/spacing';
+import { borderRadius, layout } from '../../theme/spacing';
+import shadows from '../../theme/shadows';
 import Icon from '../../components/common/Icon';
+import ScreenHeader from '../../components/common/ScreenHeader';
+import Avatar from '../../components/common/Avatar';
 import useAuthStore from '../../store/useAuthStore';
 import useProfileStore from '../../store/useProfileStore';
 import { deactivateProfile } from '../../api/profiles';
@@ -15,6 +19,8 @@ import { deactivateProfile } from '../../api/profiles';
 const SettingsScreen = ({ navigation }) => {
   const signOut = useAuthStore((s) => s.signOut);
   const profile = useProfileStore((s) => s.profile);
+  const photos = useProfileStore((s) => s.photos);
+  const primaryPhoto = photos?.find((p) => p.is_primary)?.storage_path || photos?.[0]?.storage_path;
 
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to sign out?', [
@@ -97,27 +103,33 @@ const SettingsScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Settings</Text>
-      </View>
+      <ScreenHeader title="Settings" subtitle="Manage your account & preferences" />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Profile summary card */}
+        {/* Profile summary card — premium gradient */}
         {profile && (
-          <TouchableOpacity style={styles.profileCard} activeOpacity={0.8} onPress={() => navigation.navigate('EditProfile')}>
-            <View style={styles.avatar}>
-              <Icon name="profileCircle" size={34} color={colors.primary} />
-            </View>
-            <View style={styles.profileText}>
-              <Text style={styles.name} numberOfLines={1}>{profile.display_name || 'Your Name'}</Text>
-              <View style={styles.statusRow}>
-                {profile.is_premium && <Icon name="crown" size={13} color={colors.gold} fill={colors.gold} />}
-                <Text style={[styles.status, profile.is_premium && { color: colors.goldDark }]}>
-                  {profile.is_premium ? 'Premium Member' : 'Free Account'}
-                </Text>
+          <TouchableOpacity activeOpacity={0.9} onPress={() => navigation.navigate('EditProfile')} style={styles.profileCardWrap}>
+            <LinearGradient
+              colors={[colors.gradientPrimaryStart, colors.gradientPrimaryEnd]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.profileCard}
+            >
+              <View style={styles.profileGlow} />
+              <Avatar source={primaryPhoto} name={profile.display_name || ''} size={56} />
+              <View style={styles.profileText}>
+                <Text style={styles.name} numberOfLines={1}>{profile.display_name || 'Your Name'}</Text>
+                <View style={styles.statusChip}>
+                  {profile.is_premium && <Icon name="crown" size={12} color="#FFFFFF" />}
+                  <Text style={styles.status}>
+                    {profile.is_premium ? 'Premium Member' : 'Free Account'}
+                  </Text>
+                </View>
               </View>
-            </View>
-            <Icon name="chevronRight" size={18} color={colors.textMuted} />
+              <View style={styles.profileChevron}>
+                <Icon name="chevronRight" size={18} color="#FFFFFF" />
+              </View>
+            </LinearGradient>
           </TouchableOpacity>
         )}
 
@@ -153,68 +165,81 @@ const SettingsScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
-    backgroundColor: colors.background,
-  },
-  headerTitle: { fontSize: 28, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
-  scrollContent: { paddingBottom: 32 },
+  scrollContent: { paddingBottom: 32, paddingHorizontal: layout.screenPaddingHorizontal },
 
   // Profile summary
+  profileCardWrap: {
+    marginTop: 4,
+    marginBottom: 4,
+    borderRadius: borderRadius['2xl'],
+    ...shadows.cardFloat,
+  },
   profileCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 8,
-    padding: 14,
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    gap: 12,
+    padding: 16,
+    borderRadius: borderRadius['2xl'],
+    gap: 14,
+    overflow: 'hidden',
   },
-  avatar: {
-    width: 52, height: 52, borderRadius: 26,
-    backgroundColor: colors.primarySurface,
-    justifyContent: 'center', alignItems: 'center',
+  profileGlow: {
+    position: 'absolute',
+    top: -40,
+    right: -30,
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   profileText: { flex: 1 },
-  name: { fontSize: 17, fontWeight: '700', color: colors.text },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
-  status: { fontSize: 12.5, color: colors.textSecondary, fontWeight: '600' },
+  name: { fontSize: 18, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.2 },
+  statusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  status: { fontSize: 12, color: '#FFFFFF', fontWeight: '700' },
+  profileChevron: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center', justifyContent: 'center',
+  },
 
   // Sections
-  section: { marginTop: 18 },
+  section: { marginTop: 20 },
   sectionTitle: {
     fontSize: 12,
     fontWeight: '700',
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginHorizontal: 16,
-    marginBottom: 8,
+    letterSpacing: 0.8,
+    marginBottom: 10,
+    marginLeft: 4,
   },
   card: {
-    backgroundColor: colors.background,
-    marginHorizontal: 16,
+    backgroundColor: colors.cardBackground,
     borderRadius: borderRadius.xl,
     borderWidth: 1,
     borderColor: colors.borderLight,
     overflow: 'hidden',
+    ...shadows.cardSoft,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 13,
+    paddingVertical: 14,
     paddingHorizontal: 14,
     gap: 13,
   },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: colors.borderLight },
   rowIcon: {
-    width: 38, height: 38, borderRadius: 11,
+    width: 40, height: 40, borderRadius: 12,
     justifyContent: 'center', alignItems: 'center',
   },
   rowText: { flex: 1 },
@@ -227,11 +252,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginHorizontal: 16,
     backgroundColor: colors.surfaceElevated,
     borderColor: colors.borderLight,
     borderWidth: 1,
-    paddingVertical: 14,
+    paddingVertical: 15,
     borderRadius: borderRadius.lg,
   },
   deactivateText: { color: colors.textSecondary, fontWeight: '600', fontSize: 14 },
@@ -240,12 +264,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginHorizontal: 16,
     marginTop: 12,
     backgroundColor: colors.errorLight,
     borderColor: 'rgba(239, 68, 68, 0.2)',
     borderWidth: 1,
-    paddingVertical: 14,
+    paddingVertical: 15,
     borderRadius: borderRadius.lg,
   },
   logoutText: { color: colors.error, fontWeight: '700', fontSize: 14 },

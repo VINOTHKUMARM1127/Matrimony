@@ -23,6 +23,7 @@ import { borderRadius, layout } from '../../theme/spacing';
 import shadows from '../../theme/shadows';
 import Avatar from '../../components/common/Avatar';
 import Badge from '../../components/common/Badge';
+import Icon from '../../components/common/Icon';
 import { HomeFeedSkeleton, ProfileCardSkeleton } from '../../components/common/SkeletonLoader';
 import useAuthStore from '../../store/useAuthStore';
 import useProfileStore from '../../store/useProfileStore';
@@ -50,7 +51,10 @@ const HomeScreen = ({ navigation }) => {
     refetchDaily,
   } = useMatches();
 
-  // Fetch active subscription & quotas securely from backend
+  // Fetch active subscription & quotas securely from backend.
+  // get_user_quotas (plural) now WRAPS the wallet-backed singular RPC, so it is
+  // credit-correct and self-healing, AND additionally returns other_plans (the
+  // queued / paused previous packs) for the "Other Active Plans" widget below.
   const { data: quotas, isLoading: loadingQuotas } = useQuery({
     queryKey: ['user_quotas', user?.id],
     queryFn: async () => {
@@ -147,16 +151,21 @@ const HomeScreen = ({ navigation }) => {
       </View>
       <View style={styles.headerRight}>
         <TouchableOpacity
-          style={styles.notifButton}
+          style={styles.iconButton}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           onPress={() => navigation.navigate('Profile')}
         >
-          <Text style={styles.notifIcon}>⚙️</Text>
+          <Icon name="settings" size={20} color={colors.textPrimary} strokeWidth={2} />
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.notifButton}
+          style={styles.iconButton}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           onPress={() => navigation.navigate('Notifications')}
         >
-          <Text style={styles.notifIcon}>🔔</Text>
+          <Icon name="bell" size={20} color={colors.textPrimary} strokeWidth={2} />
+          <View style={styles.notifDot} />
         </TouchableOpacity>
       </View>
     </View>
@@ -191,7 +200,21 @@ const HomeScreen = ({ navigation }) => {
         </View>
 
         {/* Quotas Section */}
-        {quotas && (
+        {loadingQuotas && !quotas ? (
+          <View style={styles.quotasContainer}>
+            <View style={styles.quotaRow}>
+              <View style={styles.quotaItem}>
+                <View style={styles.quotaSkeleton} />
+                <Text style={styles.quotaLabel}>Contacts Left</Text>
+              </View>
+              <View style={styles.quotaDivider} />
+              <View style={styles.quotaItem}>
+                <View style={styles.quotaSkeleton} />
+                <Text style={styles.quotaLabel}>Interests Left</Text>
+              </View>
+            </View>
+          </View>
+        ) : quotas && (
           <View style={styles.quotasContainer}>
             <View style={styles.quotaRow}>
               <View style={styles.quotaItem}>
@@ -255,6 +278,9 @@ const HomeScreen = ({ navigation }) => {
           end={{ x: 1, y: 0 }}
           style={styles.upgradeGradient}
         >
+          <View style={styles.upgradeIconWrap}>
+            <Icon name="crown" size={22} color="#FFFFFF" />
+          </View>
           <View style={styles.upgradeContent}>
             <Text style={styles.upgradeTitle}>Upgrade to Premium</Text>
             <Text style={styles.upgradeSubtext}>
@@ -262,7 +288,7 @@ const HomeScreen = ({ navigation }) => {
             </Text>
           </View>
           <View style={styles.upgradeArrow}>
-            <Text style={styles.upgradeArrowText}>→</Text>
+            <Icon name="chevronRight" size={18} color="#FFFFFF" />
           </View>
         </LinearGradient>
       </TouchableOpacity>
@@ -357,16 +383,27 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.goldDark,
   },
-  notifButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.borderLight,
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: colors.surfacePressed,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadows.cardSoft,
   },
-  notifIcon: {
-    fontSize: 18,
+  notifDot: {
+    position: 'absolute',
+    top: 10,
+    right: 11,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: colors.error,
+    borderWidth: 2,
+    borderColor: colors.surfacePressed,
   },
 
   // ── Profile Dashboard ──
@@ -445,6 +482,13 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
     color: colors.textPrimary,
+  },
+  quotaSkeleton: {
+    width: 36,
+    height: 22,
+    borderRadius: 6,
+    backgroundColor: colors.borderLight,
+    opacity: 0.6,
   },
   quotaLabel: {
     fontSize: 12,
@@ -877,42 +921,47 @@ const styles = StyleSheet.create({
   upgradeBanner: {
     marginTop: 24,
     marginHorizontal: layout.screenPaddingHorizontal,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     overflow: 'hidden',
+    ...shadows.cardFloat,
   },
   upgradeGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 18,
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
+  },
+  upgradeIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
   },
   upgradeContent: {
     flex: 1,
   },
   upgradeTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.textInverse,
   },
   upgradeSubtext: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.85)',
+    color: 'rgba(255,255,255,0.9)',
     marginTop: 4,
     lineHeight: 17,
   },
   upgradeArrow: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 12,
-  },
-  upgradeArrowText: {
-    fontSize: 18,
-    color: colors.textInverse,
-    fontWeight: '700',
+    marginLeft: 10,
   },
 
   bottomSpacer: {

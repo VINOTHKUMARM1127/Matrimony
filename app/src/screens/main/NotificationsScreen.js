@@ -1,14 +1,33 @@
 /**
  * Wedring Matrimony — Notifications Screen
+ * Premium notification list: tinted lucide icon badges per type, unread accent,
+ * grouped card rows, "Mark all read" action.
  */
 import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useQuery } from '@tanstack/react-query';
 import { colors } from '../../theme';
-import { borderRadius } from '../../theme/spacing';
+import { borderRadius, layout } from '../../theme/spacing';
+import shadows from '../../theme/shadows';
+import Icon from '../../components/common/Icon';
+import ScreenHeader from '../../components/common/ScreenHeader';
 import EmptyState from '../../components/common/EmptyState';
 import useAuthStore from '../../store/useAuthStore';
 import supabase from '../../api/supabaseClient';
+
+// type -> { lucide icon name, tint color }
+const TYPE_META = {
+  new_interest:      { icon: 'heart',    tint: colors.primary },
+  interest_accepted: { icon: 'sparkles', tint: colors.success },
+  new_message:       { icon: 'chat',     tint: colors.secondary },
+  profile_view:      { icon: 'eye',      tint: colors.secondary },
+  daily_match:       { icon: 'star',     tint: colors.gold },
+  premium_expiry:    { icon: 'crown',    tint: colors.gold },
+  system:           { icon: 'bell',     tint: colors.textMuted },
+};
+const metaFor = (type) => TYPE_META[type] || { icon: 'bell', tint: colors.primary };
 
 const NotificationsScreen = ({ navigation }) => {
   const user = useAuthStore((s) => s.user);
@@ -29,79 +48,109 @@ const NotificationsScreen = ({ navigation }) => {
     staleTime: 60 * 1000,
   });
 
-  const getIcon = useCallback((type) => {
-    const icons = {
-      new_interest: '💕', interest_accepted: '🎉',
-      new_message: '💬', profile_view: '👀',
-      daily_match: '⭐', premium_expiry: '👑',
-      system: '📢',
-    };
-    return icons[type] || '🔔';
-  }, []);
+  const unreadCount = (notifications || []).filter((n) => !n.is_read).length;
 
   const formatTime = useCallback((dateStr) => {
     const diff = Date.now() - new Date(dateStr).getTime();
     const min = Math.floor(diff / 60000);
     const hrs = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
+    if (min < 1) return 'Just now';
     if (min < 60) return `${min}m ago`;
     if (hrs < 24) return `${hrs}h ago`;
     return `${days}d ago`;
   }, []);
 
-  const renderItem = useCallback(({ item }) => (
-    <TouchableOpacity
-      style={[styles.item, !item.is_read && styles.itemUnread]}
-      activeOpacity={0.7}
-      onPress={async () => {
-        await supabase.from('notifications').update({ is_read: true }).eq('id', item.id);
-        refetch();
-      }}
-    >
-      <Text style={styles.icon}>{getIcon(item.type)}</Text>
-      <View style={styles.content}>
-        <Text style={[styles.title, !item.is_read && styles.titleUnread]}>{item.title}</Text>
-        <Text style={styles.body} numberOfLines={2}>{item.body}</Text>
-        <Text style={styles.time}>{formatTime(item.created_at)}</Text>
-      </View>
-      {!item.is_read && <View style={styles.unreadDot} />}
-    </TouchableOpacity>
-  ), [getIcon, formatTime, refetch]);
+  const markAllRead = useCallback(async () => {
+    if (!user?.id || unreadCount === 0) return;
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false);
+    refetch();
+  }, [user?.id, unreadCount, refetch]);
+
+  const renderItem = useCallback(({ item, index }) => {
+    const meta = metaFor(item.type);
+    return (
+      <Animated.View entering={FadeInDown.duration(260).delay(Math.min(index, 8) * 45)}>
+        <TouchableOpacity
+          style={[styles.item, !item.is_read && styles.itemUnread]}
+          activeOpacity={0.75}
+          onPress={async () => {
+            if (!item.is_read) {
+              await supabase.from('notifications').update({ is_read: true }).eq('id', item.id);
+              refetch();
+            }
+          }}
+        >
+          <View style={[styles.iconBadge, { backgroundColor: meta.tint + '18' }]}>
+            <Icon name={meta.icon} size={20} color={meta.tint} strokeWidth={2.2} />
+          </View>
+          <View style={styles.content}>
+            <Text style={[styles.title, !item.is_read && styles.titleUnread]} numberOfLines={1}>
+              {item.title}
+            </Text>
+            <Text style={styles.body} numberOfLines={2}>{item.body}</Text>
+            <Text style={styles.time}>{formatTime(item.created_at)}</Text>
+          </View>
+          {!item.is_read && <View style={styles.unreadDot} />}
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  }, [formatTime, refetch]);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Notifications</Text>
-      </View>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <ScreenHeader
+        title="Notifications"
+        subtitle={unreadCount > 0 ? `${unreadCount} new update${unreadCount > 1 ? 's' : ''}` : 'You’re all caught up'}
+        rightIcon={unreadCount > 0 ? 'checkAll' : undefined}
+        onRightPress={markAllRead}
+      />
       <FlatList
         data={notifications || []}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         renderItem={renderItem}
-        ListEmptyComponent={
-          <EmptyState preset="noNotifications" />
-        }
-        refreshControl={<RefreshControl refreshing={false} onRefresh={refetch} colors={[colors.primary]} />}
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={!isLoading ? <EmptyState preset="noNotifications" /> : null}
+        refreshControl={<RefreshControl refreshing={false} onRefresh={refetch} tintColor={colors.primary} colors={[colors.primary]} />}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         showsVerticalScrollIndicator={false}
       />
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
-  headerTitle: { fontSize: 24, fontWeight: '700', color: colors.textPrimary },
-  item: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, paddingVertical: 14 },
-  itemUnread: { backgroundColor: colors.primarySurface },
-  icon: { fontSize: 28, marginRight: 14, marginTop: 2 },
+  listContent: { paddingHorizontal: layout.screenPaddingHorizontal, paddingTop: 8, paddingBottom: 32, flexGrow: 1 },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 14,
+    borderRadius: borderRadius.xl,
+    backgroundColor: colors.cardBackground,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    ...shadows.cardSoft,
+  },
+  itemUnread: {
+    backgroundColor: colors.primarySurface,
+    borderColor: colors.primaryMuted,
+  },
+  iconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
   content: { flex: 1 },
-  title: { fontSize: 15, fontWeight: '500', color: colors.textPrimary },
-  titleUnread: { fontWeight: '700' },
-  body: { fontSize: 13, color: colors.textSecondary, marginTop: 2, lineHeight: 18 },
-  time: { fontSize: 11, color: colors.textMuted, marginTop: 4 },
-  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary, marginTop: 6 },
-  separator: { height: 1, backgroundColor: colors.borderLight },
+  title: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  titleUnread: { fontWeight: '800' },
+  body: { fontSize: 13, color: colors.textSecondary, marginTop: 3, lineHeight: 18 },
+  time: { fontSize: 11, color: colors.textMuted, marginTop: 6, fontWeight: '500' },
+  unreadDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary, marginTop: 6, marginLeft: 6 },
+  separator: { height: 12 },
 });
 
 export default NotificationsScreen;

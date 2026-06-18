@@ -11,7 +11,7 @@ import shadows from '../../theme/shadows';
 const Card = ({
   children,
   onPress,
-  variant = 'elevated', // elevated | outlined | flat
+  variant = 'elevated', // elevated | outlined | flat | gold | soft
   padding = 16,
   style,
   ...props
@@ -45,12 +45,16 @@ const Card = ({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     overflow: 'hidden',
   },
   elevated: {
     backgroundColor: colors.surfaceElevated,
-    ...shadows.card,
+    ...shadows.cardFloat,
+  },
+  soft: {
+    backgroundColor: colors.surfaceElevated,
+    ...shadows.cardSoft,
   },
   outlined: {
     backgroundColor: colors.surfaceElevated,
@@ -59,6 +63,12 @@ const styles = StyleSheet.create({
   },
   flat: {
     backgroundColor: colors.surface,
+  },
+  gold: {
+    backgroundColor: colors.goldLight,
+    borderWidth: 1,
+    borderColor: colors.goldBorder,
+    ...shadows.cardSoft,
   },
 });
 

@@ -21,6 +21,7 @@ import { colors } from '../../theme';
 import { borderRadius, layout } from '../../theme/spacing';
 import shadows from '../../theme/shadows';
 import Avatar from '../../components/common/Avatar';
+import { MyProfileSkeleton } from '../../components/common/SkeletonLoader';
 import useAuthStore from '../../store/useAuthStore';
 import useProfileStore from '../../store/useProfileStore';
 import { uploadProfilePhoto, deactivateProfile } from '../../api/profiles';
@@ -33,15 +34,17 @@ const ProfileScreen = ({ navigation }) => {
   const { user, signOut } = useAuthStore();
   const profile = useProfileStore((s) => s.profile);
   const photos = useProfileStore((s) => s.photos);
+  const isProfileLoading = useProfileStore((s) => s.isLoading);
   const replacePrimaryPhoto = useProfileStore((s) => s.replacePrimaryPhoto);
 
   const [isUploading, setIsUploading] = React.useState(false);
 
-  // Live quota balances from the single source of truth (get_user_quotas).
+  // Live quota balances from the single source of truth (get_user_quota,
+  // wallet-backed — same source unlock_contact / send_interest deduct from).
   const { data: quotas } = useQuery({
     queryKey: ['user_quotas', user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_user_quotas', { p_user_id: user.id });
+      const { data, error } = await supabase.rpc('get_user_quota', { p_user_id: user.id });
       if (error) throw error;
       return data;
     },
@@ -51,6 +54,9 @@ const ProfileScreen = ({ navigation }) => {
   const limitInfo = {
     contactsRemaining: quotas?.contacts_remaining ?? 0,
     interestsRemaining: quotas?.interests_remaining ?? 0,
+    recommendedUnlocked: quotas?.recommended_limit ?? 0,
+    nearbyUnlocked: quotas?.nearby_limit ?? 0,
+    dailyUnlocked: quotas?.daily_limit ?? 0,
     isPremium: quotas?.tier && quotas.tier !== 'FREE',
   };
 
@@ -172,6 +178,15 @@ const ProfileScreen = ({ navigation }) => {
     );
   };
 
+  // Show the profile skeleton while the profile is loading for the first time.
+  if (isProfileLoading && !profile) {
+    return (
+      <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
+        <MyProfileSkeleton />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -239,7 +254,7 @@ const ProfileScreen = ({ navigation }) => {
           ))}
         </View>
 
-        {/* Quota Balances Banner (live from get_user_quotas) */}
+        {/* Quota Balances Banner (live from get_user_quota — wallet-backed) */}
         {limitInfo.isPremium && (
           <View style={styles.limitBanner}>
             <View style={styles.limitHeader}>
@@ -253,6 +268,24 @@ const ProfileScreen = ({ navigation }) => {
               <Text style={styles.limitValue}>
                 {limitInfo.interestsRemaining === -1 ? 'Unlimited' : limitInfo.interestsRemaining}
               </Text>
+            </View>
+            
+            {/* Profile Limits */}
+            <View style={{ height: 1, backgroundColor: colors.borderLight, marginVertical: 12 }} />
+            <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8, textTransform: 'uppercase' }}>Profiles Unlocked</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.primary }}>{limitInfo.recommendedUnlocked}</Text>
+                <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>Recommended</Text>
+              </View>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.primary }}>{limitInfo.nearbyUnlocked}</Text>
+                <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>Nearby</Text>
+              </View>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.primary }}>{limitInfo.dailyUnlocked}</Text>
+                <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>Daily Matches</Text>
+              </View>
             </View>
           </View>
         )}

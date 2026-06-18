@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Save, Trash2, Key, Shield, ImagePlus, Loader2, Crown, Mail, Fingerprint } from 'lucide-react';
+import { X, Save, Trash2, Key, Shield, ImagePlus, Loader2, Crown, Mail, Fingerprint, TrendingUp, History, ListOrdered } from 'lucide-react';
 import Button from '../../components/common/Button';
 import * as adminApi from '../../api/adminApi';
 import * as imageApi from '../../api/imageApi';
@@ -22,8 +22,12 @@ const UserModal = ({ user, onClose, onRefresh }) => {
   const [prefs, setPrefs] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [loadingRel, setLoadingRel] = useState(true);
+  const [distState, setDistState] = useState(null);
+  const [userPlan, setUserPlan] = useState(null);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [photos, setPhotos] = useState(user?.photos || []);
+  const [subHistory, setSubHistory] = useState([]);
+  const [subQueue, setSubQueue] = useState([]);
 
   useEffect(() => {
     if (!user) return;
@@ -37,6 +41,24 @@ const UserModal = ({ user, onClose, onRefresh }) => {
         const rel = await adminApi.fetchUserRelations(user.id);
         setHoroscope(rel.horoscope || {});
         setPrefs(rel.preferences || {});
+        const dist = await adminApi.fetchUserDistributionState(user.id);
+        setDistState(dist || null);
+        
+        const plans = await adminApi.fetchSubscriptionPlans();
+        const currentPlan = plans.find(p => p.tier === (user.tier || 'free')) || null;
+        setUserPlan(currentPlan);
+
+        // Subscription history (all packs) + currently queued/paused packs.
+        try {
+          const [history, queue] = await Promise.all([
+            adminApi.fetchUserSubscriptionHistory(user.id),
+            adminApi.fetchUserSubscriptionQueue(user.id),
+          ]);
+          setSubHistory(history || []);
+          setSubQueue(queue || []);
+        } catch (e) {
+          console.warn('Failed to load subscription history/queue', e);
+        }
       } catch (e) {
         console.warn('Failed to load relations', e);
       } finally {
@@ -131,6 +153,27 @@ const UserModal = ({ user, onClose, onRefresh }) => {
       onRefresh();
     } catch (err) {
       alert('Failed to update plan: ' + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Strip premium so the upgrade -> initial-distribution flow can be re-tested.
+  // resetDistribution = true also clears granted-tiers, pools and wallet so the
+  // next upgrade re-shows the configured initial profiles from scratch.
+  const handleMakeFree = async (resetDistribution) => {
+    const msg = resetDistribution
+      ? 'Make this user FREE and FULLY RESET distribution + wallet?\n\nThe next upgrade will show initial profiles from scratch. This clears their credits and any queued plans.'
+      : 'Make this user FREE?\n\nThis strips premium and clears queued plans. Credits and distribution history are kept.';
+    if (!window.confirm(msg)) return;
+    setIsLoading(true);
+    try {
+      await adminApi.makeUserFree(user.id, resetDistribution);
+      alert(resetDistribution ? 'User reset to Free (full reset).' : 'User downgraded to Free.');
+      onRefresh();
+      onClose();
+    } catch (err) {
+      alert('Failed to make user free: ' + err.message);
     } finally {
       setIsLoading(false);
     }
@@ -352,7 +395,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
                   {/* Subscription */}
                   <div className="border-t border-neutral-100 pt-5">
                     <h3 className="font-semibold text-neutral-900 mb-3 flex items-center gap-2 text-sm">
-                      <Crown size={17} className="text-gold-500" /> Subscription
+                      <Crown size={17} className="text-gold-500" /> Subscription & Quotas
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
@@ -368,6 +411,151 @@ const UserModal = ({ user, onClose, onRefresh }) => {
                       <Txt label="Plan Expiry" k="premium_expires_at" type="date" />
                       <Txt label="Contacts Remaining" k="contacts_remaining" type="number" />
                       <Txt label="Interests Remaining" k="interests_remaining" type="number" />
+                    </div>
+
+                    {/* Make Free / Reset for testing the upgrade flow */}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        onClick={() => handleMakeFree(false)}
+                        disabled={isLoading}
+                        className="text-xs font-semibold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        Make Free
+                      </button>
+                      <button
+                        onClick={() => handleMakeFree(true)}
+                        disabled={isLoading}
+                        className="text-xs font-semibold text-error-600 bg-error-50 hover:bg-error-100 px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        Make Free + Reset Distribution
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-neutral-400 mt-1.5">
+                      "Reset Distribution" wipes credits + initial-profile grants so the next upgrade re-shows the configured initial distribution (for testing).
+                    </p>
+                  </div>
+
+                  {/* Queued / Previous Plans */}
+                  {subQueue.length > 0 && (
+                    <div className="border-t border-neutral-100 pt-5">
+                      <h3 className="font-semibold text-neutral-900 mb-3 flex items-center gap-2 text-sm">
+                        <ListOrdered size={17} className="text-amber-500" /> Queued / Paused Plans
+                      </h3>
+                      <div className="space-y-2">
+                        {subQueue.map((q) => (
+                          <div key={q.id} className="flex justify-between items-center bg-amber-50 border border-amber-100 rounded-xl px-4 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-neutral-800 text-sm">{q.plan_tier?.toUpperCase()}</span>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${q.status === 'paused' ? 'bg-blue-100 text-blue-700' : 'bg-neutral-200 text-neutral-600'}`}>
+                                {q.status === 'paused' ? 'PAUSED' : 'PENDING'}
+                              </span>
+                            </div>
+                            <span className="text-xs text-neutral-500">
+                              {q.status === 'paused'
+                                ? `${q.remaining_days ?? 0} days banked`
+                                : `${q.duration_months ?? 0} mo when activated`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-neutral-400 mt-1.5">
+                        Paused plans resume automatically when the active plan expires (highest tier first).
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Full Subscription History */}
+                  <div className="border-t border-neutral-100 pt-5">
+                    <h3 className="font-semibold text-neutral-900 mb-3 flex items-center gap-2 text-sm">
+                      <History size={17} className="text-neutral-500" /> Subscription History
+                    </h3>
+                    {subHistory.length === 0 ? (
+                      <p className="text-sm text-neutral-400 italic">No purchase history.</p>
+                    ) : (
+                      <div className="space-y-2 max-h-52 overflow-y-auto">
+                        {subHistory.map((h) => (
+                          <div key={h.id} className="flex justify-between items-center bg-neutral-50 border border-neutral-100 rounded-xl px-4 py-2.5">
+                            <div>
+                              <span className="font-semibold text-neutral-800 text-sm">{h.plan_type?.toUpperCase()}</span>
+                              <span className={`ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                h.status === 'active' ? 'bg-emerald-100 text-emerald-700'
+                                : h.status === 'queued' ? 'bg-amber-100 text-amber-700'
+                                : 'bg-neutral-200 text-neutral-500'
+                              }`}>{h.status?.toUpperCase()}</span>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-neutral-600">₹{h.amount ?? 0} · {h.contacts_added ?? 0}c / {h.interests_added ?? 0}i</p>
+                              <p className="text-[11px] text-neutral-400">
+                                {h.starts_at ? new Date(h.starts_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }) : '—'}
+                                {' → '}
+                                {h.expires_at ? new Date(h.expires_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }) : '—'}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Profile Distribution Limits */}
+                  <div className="border-t border-neutral-100 pt-5">
+                    <h3 className="font-semibold text-neutral-900 mb-3 flex items-center gap-2 text-sm">
+                      <TrendingUp size={17} className="text-violet-500" /> Profile Distribution Limits
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="bg-violet-50 rounded-2xl p-4 border border-violet-100">
+                        <p className="text-xs text-violet-600 mb-2 font-semibold uppercase tracking-wider">Recommended</p>
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-violet-500">Initial:</span>
+                            <span className="font-medium text-violet-700">{userPlan?.initial_recommended_profiles || 0}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-violet-500">Daily Inc:</span>
+                            <span className="font-medium text-violet-700">+{userPlan?.daily_recommended_increment || 0}</span>
+                          </div>
+                          <div className="pt-2 mt-2 border-t border-violet-100/50 flex justify-between items-center">
+                            <span className="text-[11px] font-semibold text-violet-600 uppercase">Total Unlocked:</span>
+                            <span className="font-extrabold text-violet-900 text-lg">{distState ? (distState.recommended_profiles_shown ?? distState.total_recommended_unlocked) : (userPlan?.initial_recommended_profiles || 0)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-blue-50 rounded-2xl p-4 border border-blue-100">
+                        <p className="text-xs text-blue-600 mb-2 font-semibold uppercase tracking-wider">Nearby</p>
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-blue-500">Initial:</span>
+                            <span className="font-medium text-blue-700">{userPlan?.initial_nearby_profiles || 0}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-blue-500">Daily Inc:</span>
+                            <span className="font-medium text-blue-700">+{userPlan?.daily_nearby_increment || 0}</span>
+                          </div>
+                          <div className="pt-2 mt-2 border-t border-blue-100/50 flex justify-between items-center">
+                            <span className="text-[11px] font-semibold text-blue-600 uppercase">Total Unlocked:</span>
+                            <span className="font-extrabold text-blue-900 text-lg">{distState ? (distState.nearby_profiles_shown ?? distState.total_nearby_unlocked) : (userPlan?.initial_nearby_profiles || 0)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100">
+                        <p className="text-xs text-emerald-600 mb-2 font-semibold uppercase tracking-wider">Daily Matches</p>
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-emerald-500">Initial:</span>
+                            <span className="font-medium text-emerald-700">{userPlan?.initial_daily_profiles || 0}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-emerald-500">Daily Inc:</span>
+                            <span className="font-medium text-emerald-700">+{userPlan?.daily_profiles_increment || 0}</span>
+                          </div>
+                          <div className="pt-2 mt-2 border-t border-emerald-100/50 flex justify-between items-center">
+                            <span className="text-[11px] font-semibold text-emerald-600 uppercase">Total Unlocked:</span>
+                            <span className="font-extrabold text-emerald-900 text-lg">{distState ? (distState.daily_profiles_shown ?? distState.total_daily_unlocked) : (userPlan?.initial_daily_profiles || 0)}</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
 

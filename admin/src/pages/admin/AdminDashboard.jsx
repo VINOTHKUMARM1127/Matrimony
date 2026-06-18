@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import * as adminApi from '../../api/adminApi';
-import { Users, Crown, UserCircle, TrendingUp, Sparkles, Zap } from 'lucide-react';
+import { Users, Crown, UserCircle, TrendingUp, Sparkles, Zap, IndianRupee, Wallet } from 'lucide-react';
 import Card from '../../components/common/Card';
 
 const AdminDashboard = () => {
@@ -9,15 +9,16 @@ const AdminDashboard = () => {
     premiumUsers: 0,
     freeUsers: 0,
   });
+  const [revenue, setRevenue] = useState(null);
   const [limits, setLimits] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadStats = async () => {
       try {
-        const [users, adminSettings] = await Promise.all([
+        const [users, plans] = await Promise.all([
           adminApi.fetchAllUsers(),
-          adminApi.fetchAdminSettings(),
+          adminApi.fetchSubscriptionPlans(),
         ]);
 
         const premiumCount = users.filter((u) => u.is_premium).length;
@@ -28,8 +29,16 @@ const AdminDashboard = () => {
           freeUsers: users.length - premiumCount,
         });
 
-        if (adminSettings && adminSettings.matches_limits) {
-          setLimits(adminSettings.matches_limits);
+        if (plans && plans.length > 0) {
+          setLimits(plans);
+        }
+
+        // Revenue is best-effort; don't block the dashboard if it fails.
+        try {
+          const rev = await adminApi.fetchRevenueStats();
+          setRevenue(rev);
+        } catch (e) {
+          console.warn('Revenue stats unavailable:', e);
         }
       } catch (err) {
         console.error('Failed to load stats:', err);
@@ -43,17 +52,19 @@ const AdminDashboard = () => {
   const premiumRate =
     stats.totalUsers > 0 ? Math.round((stats.premiumUsers / stats.totalUsers) * 100) : 0;
 
+  const formatINR = (n) => `₹${(n || 0).toLocaleString('en-IN')}`;
+
   const statCards = [
     {
       label: 'Total Members',
-      value: stats.totalUsers,
+      value: stats.totalUsers.toLocaleString(),
       icon: Users,
       iconBg: 'bg-primary-100 text-primary-600',
       accent: 'from-primary-500/10',
     },
     {
       label: 'Premium Members',
-      value: stats.premiumUsers,
+      value: stats.premiumUsers.toLocaleString(),
       icon: Crown,
       iconBg: 'bg-gold-100 text-gold-600',
       accent: 'from-gold-500/10',
@@ -61,51 +72,69 @@ const AdminDashboard = () => {
     },
     {
       label: 'Free Members',
-      value: stats.freeUsers,
+      value: stats.freeUsers.toLocaleString(),
       icon: UserCircle,
       iconBg: 'bg-neutral-200 text-neutral-600',
       accent: 'from-neutral-400/10',
     },
+    {
+      label: 'Total Revenue',
+      value: formatINR(revenue?.total_revenue),
+      icon: IndianRupee,
+      iconBg: 'bg-success-100 text-success-600',
+      accent: 'from-success-500/10',
+      sub: revenue?.today_revenue != null ? `${formatINR(revenue.today_revenue)} today` : undefined,
+    },
   ];
 
   const tierMeta = {
-    non_premium: { label: 'Free', dot: 'bg-neutral-400', ring: 'ring-neutral-200', text: 'text-neutral-600', chip: 'bg-neutral-100 text-neutral-600' },
+    free: { label: 'Free', dot: 'bg-neutral-400', ring: 'ring-neutral-200', text: 'text-neutral-600', chip: 'bg-neutral-100 text-neutral-600' },
     silver: { label: 'Silver', dot: 'bg-slate-400', ring: 'ring-slate-200', text: 'text-slate-600', chip: 'bg-slate-100 text-slate-700' },
     gold: { label: 'Gold', dot: 'bg-gold-500', ring: 'ring-gold-200', text: 'text-gold-700', chip: 'bg-gold-100 text-gold-700' },
     platinum: { label: 'Platinum', dot: 'bg-violet-500', ring: 'ring-violet-200', text: 'text-violet-700', chip: 'bg-violet-100 text-violet-700' },
   };
 
-  const renderLimitCard = (tierKey, limitData) => {
-    if (!limitData) return null;
-    const meta = tierMeta[tierKey];
+  const renderLimitCard = (plan) => {
+    if (!plan) return null;
+    const meta = tierMeta[plan.tier] || tierMeta.free;
+    const isFree = plan.tier === 'free';
     return (
-      <Card hover className="overflow-hidden">
+      <Card hover className="overflow-hidden h-full flex flex-col">
         <div className={`px-5 py-4 flex items-center justify-between border-b border-neutral-100`}>
           <div className="flex items-center gap-2.5">
             <span className={`w-2.5 h-2.5 rounded-full ${meta.dot} ring-4 ${meta.ring}`} />
-            <h3 className="font-bold text-neutral-900">{meta.label} Tier</h3>
+            <h3 className="font-bold text-neutral-900">{plan.plan_name || meta.label}</h3>
           </div>
-          {limitData.dynamic_daily_updates ? (
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full bg-success-50 text-success-700">
-              <Zap size={11} /> Dynamic
-            </span>
-          ) : (
-            <span className="text-[11px] font-semibold px-2 py-1 rounded-full bg-neutral-100 text-neutral-500">
-              Static
-            </span>
-          )}
+          <span className="text-sm font-bold text-neutral-700">
+            {isFree ? 'Free' : `₹${Number(plan.price_inr || 0).toLocaleString('en-IN')}`}
+          </span>
         </div>
         <div className="grid grid-cols-3 divide-x divide-neutral-100">
           {[
-            { k: 'Recommended', v: limitData.recommended },
-            { k: 'Nearby', v: limitData.nearby },
-            { k: 'Daily', v: limitData.daily },
+            { k: 'Recommended', initial: plan.initial_recommended_profiles, daily: plan.daily_recommended_increment },
+            { k: 'Nearby', initial: plan.initial_nearby_profiles, daily: plan.daily_nearby_increment },
+            { k: 'Daily', initial: plan.initial_daily_profiles, daily: plan.daily_profiles_increment },
           ].map((m) => (
             <div key={m.k} className="px-2 py-4 text-center">
-              <p className={`text-2xl font-extrabold ${meta.text}`}>{m.v ?? 0}</p>
-              <p className="text-[11px] text-neutral-400 font-medium mt-0.5">{m.k}</p>
+              <p className={`text-xl font-extrabold ${meta.text}`}>{m.initial ?? 0}</p>
+              <p className="text-[10px] text-neutral-400 font-medium mt-0.5 mb-2">{m.k} (Initial)</p>
+
+              <div className="border-t border-neutral-50 pt-2 mx-1">
+                <p className={`text-sm font-bold text-success-600`}>+{m.daily ?? 0}</p>
+                <p className="text-[9px] text-neutral-400 font-medium mt-0.5">Daily Inc.</p>
+              </div>
             </div>
           ))}
+        </div>
+        <div className="mt-auto grid grid-cols-2 divide-x divide-neutral-100 border-t border-neutral-100 bg-neutral-50/40">
+          <div className="px-3 py-2.5 text-center">
+            <p className="text-sm font-bold text-emerald-700">{plan.contacts_limit ?? 0}</p>
+            <p className="text-[9px] text-neutral-400 font-medium">Contact credits</p>
+          </div>
+          <div className="px-3 py-2.5 text-center">
+            <p className="text-sm font-bold text-emerald-700">{plan.interests_limit ?? 0}</p>
+            <p className="text-[9px] text-neutral-400 font-medium">Interest credits</p>
+          </div>
         </div>
       </Card>
     );
@@ -158,27 +187,29 @@ const AdminDashboard = () => {
       </div>
 
       {/* Tier limits */}
-      <div className="flex items-center gap-2 mb-4">
-        <h2 className="text-lg font-bold text-neutral-900">Profile Distribution Limits</h2>
-        <span className="text-xs text-neutral-400 font-medium">· live from tier settings</span>
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-bold text-neutral-900">Tier Distribution &amp; Pricing</h2>
+          <span className="hidden sm:inline text-xs text-neutral-400 font-medium">· single source of truth: Premium Plans</span>
+        </div>
+        <a href="/settings" className="text-xs font-semibold text-primary-600 hover:text-primary-700 bg-primary-50 hover:bg-primary-100 px-3 py-1.5 rounded-lg transition-colors">
+          Edit in Premium Plans →
+        </a>
       </div>
 
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-36 rounded-2xl bg-white border border-neutral-200/70 animate-pulse" />
+            <div key={i} className="h-44 rounded-2xl bg-white border border-neutral-200/70 animate-pulse" />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {limits && (
-            <>
-              {renderLimitCard('non_premium', limits.non_premium)}
-              {renderLimitCard('silver', limits.silver)}
-              {renderLimitCard('gold', limits.gold)}
-              {renderLimitCard('platinum', limits.platinum)}
-            </>
-          )}
+          {limits && limits.map((plan) => (
+            <div key={plan.tier}>
+              {renderLimitCard(plan)}
+            </div>
+          ))}
         </div>
       )}
     </div>
