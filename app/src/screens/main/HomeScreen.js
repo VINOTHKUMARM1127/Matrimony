@@ -80,7 +80,7 @@ const HomeScreen = ({ navigation }) => {
     return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
   }, [quotas?.expires_at]);
 
-  const firstName = profile?.display_name?.split(' ')[0] || 'User';
+  const firstName = profile?.name?.split(' ')[0] || 'User';
 
   // Derive "Recently Active" from recommended (sorted by last_active_at)
   const recentlyActive = useMemo(() => {
@@ -142,7 +142,7 @@ const HomeScreen = ({ navigation }) => {
     <View style={styles.headerContainer}>
       <View style={styles.headerLeft}>
         <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
-          <Avatar source={primaryPhoto} name={profile?.display_name || ''} size={48} />
+          <Avatar source={primaryPhoto} name={profile?.name || ''} size={48} />
         </TouchableOpacity>
         <View style={styles.headerTextBlock}>
           <Text style={styles.greetingText}>Hello, {firstName}</Text>
@@ -178,14 +178,14 @@ const HomeScreen = ({ navigation }) => {
           <View style={styles.dashboardAvatarWrapper}>
             <Avatar
               source={primaryPhoto}
-              name={profile?.display_name || ''}
+              name={profile?.name || ''}
               size={56}
               showVerified={profile?.is_verified}
             />
           </View>
           <View style={styles.dashboardInfo}>
             <Text style={styles.dashboardName}>
-              {profile?.display_name || 'Your Name'}
+              {profile?.name || 'Your Name'}
             </Text>
             <Text style={styles.dashboardSubtext}>
               {getTierDisplay()}
@@ -247,10 +247,14 @@ const HomeScreen = ({ navigation }) => {
             {Array.isArray(quotas.other_plans) && quotas.other_plans.length > 0 && (
               <View style={styles.otherPlansContainer}>
                 <Text style={styles.otherPlansTitle}>Other Active Plans</Text>
-                {quotas.other_plans.map((op) => (
-                  <View key={`${op.plan}-${op.expires_at}`} style={styles.otherPlanRow}>
+                {quotas.other_plans.map((op, idx) => (
+                  <View key={`${op.plan}-${idx}`} style={styles.otherPlanRow}>
                     <Text style={styles.otherPlanName}>{op.label || op.plan}</Text>
-                    <Text style={styles.otherPlanDays}>{op.days_left} days left</Text>
+                    <Text style={styles.otherPlanDays}>
+                      {op.status === 'paused' 
+                        ? `${op.remaining_days || 0} days banked` 
+                        : `${op.duration_months || 0} months pending`}
+                    </Text>
                   </View>
                 ))}
               </View>

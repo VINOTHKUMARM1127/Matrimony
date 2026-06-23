@@ -26,9 +26,9 @@ export const getReceivedInterests = async (userId, status = 'pending') => {
     .from('interests')
     .select(`
       *,
-      sender:profiles!interests_sender_id_fkey (
-        id, display_name, date_of_birth, city, education, occupation,
-        photos (id, storage_path, thumbnail_path, is_primary)
+      sender:users!interests_sender_id_fkey (
+        profiles (id, name, date_of_birth, city, highest_qualification, occupation),
+        profile_photos (id, photo_url, is_primary)
       )
     `)
     .eq('receiver_id', userId)
@@ -47,9 +47,9 @@ export const getSentInterests = async (userId) => {
     .from('interests')
     .select(`
       *,
-      receiver:profiles!interests_receiver_id_fkey (
-        id, display_name, date_of_birth, city, education, occupation,
-        photos (id, storage_path, thumbnail_path, is_primary)
+      receiver:users!interests_receiver_id_fkey (
+        profiles (id, name, date_of_birth, city, highest_qualification, occupation),
+        profile_photos (id, photo_url, is_primary)
       )
     `)
     .eq('sender_id', userId)
@@ -124,20 +124,35 @@ export const passProfile = async (senderId, receiverId) => {
  */
 export const getPassedProfiles = async (userId) => {
   const { data, error } = await supabase
-    .from('interests')
+    .from('not_interested')
     .select(`
       *,
-      receiver:profiles!interests_receiver_id_fkey (
-        id, display_name, date_of_birth, city, education, occupation,
-        photos (id, storage_path, thumbnail_path, is_primary)
+      target:users!not_interested_target_user_id_fkey (
+        profiles (id, name, date_of_birth, city, highest_qualification, occupation),
+        profile_photos (id, photo_url, is_primary)
       )
     `)
-    .eq('sender_id', userId)
-    .eq('status', 'declined')
+    .eq('user_id', userId)
+    .eq('is_restored', false)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
   return data || [];
+};
+
+/**
+ * Restore a passed profile
+ */
+export const restorePassedProfile = async (notInterestedId) => {
+  const { data, error } = await supabase
+    .from('not_interested')
+    .update({ is_restored: true, restored_at: new Date().toISOString() })
+    .eq('id', notInterestedId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
 };
 
 /**
@@ -161,4 +176,17 @@ export const getUserInteractions = async (userId) => {
   });
 
   return Array.from(interactedIds);
+};
+
+/**
+ * View contact details with quota check
+ */
+export const viewContact = async (viewerId, targetId) => {
+  const { data, error } = await supabase.rpc('view_contact_with_quota', {
+    p_viewer_id: viewerId,
+    p_target_id: targetId,
+  });
+
+  if (error) throw error;
+  return data;
 };

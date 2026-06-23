@@ -2061,6 +2061,29 @@ export const HEIGHT_OPTIONS = (() => {
   return heights;
 })();
 
+// Weight range (kg)
+export const WEIGHT_OPTIONS = (() => {
+  const weights = [];
+  for (let kg = 40; kg <= 120; kg += 5) {
+    weights.push({ label: `${kg} kg`, value: kg });
+  }
+  return weights;
+})();
+
+// Physical Status
+export const PHYSICAL_STATUS = [
+  { label: 'Normal', value: 'normal' },
+  { label: 'Physically Challenged', value: 'physically_challenged' },
+];
+
+// Family Values
+export const FAMILY_VALUES = [
+  { label: 'Orthodox', value: 'orthodox' },
+  { label: 'Traditional', value: 'traditional' },
+  { label: 'Moderate', value: 'moderate' },
+  { label: 'Liberal', value: 'liberal' },
+];
+
 // Food habits
 export const FOOD_HABITS = [
   { label: 'Vegetarian', value: 'vegetarian' },

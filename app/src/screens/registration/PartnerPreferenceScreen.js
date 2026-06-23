@@ -10,7 +10,7 @@ import OptionSelector from '../../components/registration/OptionSelector';
 import StepIndicator from '../../components/registration/StepIndicator';
 import {
   RELIGIONS, EDUCATION_LEVELS, OCCUPATIONS, FOOD_HABITS,
-  MARITAL_STATUS, STARS, CASTES, HEIGHT_OPTIONS,
+  MARITAL_STATUS, CASTES, HEIGHT_OPTIONS,
 } from '../../utils/constants';
 import SearchablePicker from '../../components/common/SearchablePicker';
 import useProfileStore from '../../store/useProfileStore';
@@ -70,7 +70,6 @@ const PartnerPreferenceScreen = ({ navigation }) => {
   const [education, setEducation] = useState([]);
   const [occupation, setOccupation] = useState([]);
   const [foodHabit, setFoodHabit] = useState([]);
-  const [stars, setStars] = useState([]);
 
   // Exclusive selection: choosing "No Education Bar" clears other fields and vice-versa
   const handleEducationChange = useCallback((newValues) => {
@@ -97,17 +96,16 @@ const PartnerPreferenceScreen = ({ navigation }) => {
     try {
       const prefPayload = {
         user_id: user.id,
-        age_min: parseInt(ageMin) || 18,
-        age_max: parseInt(ageMax) || 60,
-        height_min: heightMin ? parseInt(heightMin) : null,
-        height_max: heightMax ? parseInt(heightMax) : null,
-        marital_status: maritalStatus.length > 0 ? maritalStatus : null,
-        religion: religion.length > 0 ? religion : null,
-        caste: caste.length > 0 ? caste : null,
-        education: education.length > 0 ? education : null,
-        occupation: occupation.length > 0 ? occupation : null,
-        food_habit: foodHabit.length > 0 ? foodHabit : null,
-        star: stars.length > 0 ? stars : null,
+        pref_age_min: parseInt(ageMin) || 18,
+        pref_age_max: parseInt(ageMax) || 60,
+        pref_height_min: heightMin ? parseInt(heightMin) : null,
+        pref_height_max: heightMax ? parseInt(heightMax) : null,
+        pref_marital_status: maritalStatus.length > 0 ? maritalStatus : null,
+        pref_religion: religion.length > 0 ? religion : null,
+        pref_caste: caste.length > 0 ? caste : null,
+        pref_education: education.length > 0 ? education : null,
+        pref_occupation: occupation.length > 0 ? occupation : null,
+        pref_food_habit: foodHabit.length > 0 ? foodHabit : null,
       };
       await savePartnerPreferences(prefPayload);
 
@@ -121,8 +119,7 @@ const PartnerPreferenceScreen = ({ navigation }) => {
       });
 
       await updateProfile(user.id, {
-        is_profile_complete: percent >= 60, // basic+religion+education thresholds met
-        profile_completion_percent: percent,
+        profile_completion: percent,
       });
 
       Alert.alert(
@@ -135,7 +132,7 @@ const PartnerPreferenceScreen = ({ navigation }) => {
       console.error('Save error:', error);
       Alert.alert('Error', error.message || 'Failed to save preferences. Please try again.');
     }
-  }, [ageMin, ageMax, heightMin, heightMax, maritalStatus, religion, caste, education, occupation, foodHabit, stars, user, savePartnerPreferences, updateProfile]);
+  }, [ageMin, ageMax, heightMin, heightMax, maritalStatus, religion, caste, education, occupation, foodHabit, user, savePartnerPreferences, updateProfile]);
 
   return (
     <View style={styles.container}>
@@ -245,15 +242,6 @@ const PartnerPreferenceScreen = ({ navigation }) => {
           options={FOOD_HABITS}
           value={foodHabit}
           onChange={setFoodHabit}
-          multiple
-          columns={3}
-        />
-
-        <OptionSelector
-          label="Preferred Stars"
-          options={STARS.slice(0, 15)}
-          value={stars}
-          onChange={setStars}
           multiple
           columns={3}
         />

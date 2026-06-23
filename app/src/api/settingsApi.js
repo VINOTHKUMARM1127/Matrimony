@@ -54,46 +54,48 @@ export const fetchUserLimits = async (userId) => {
  * Falls back to tier_settings if subscription_plans doesn't exist yet.
  */
 export const fetchPremiumPlans = async () => {
-  // Try new subscription_plans table first
   const { data, error } = await supabase
-    .from('subscription_plans')
-    .select('tier, plan_name, price_inr, duration_months, features, color_code, is_popular, contacts_limit, interests_limit')
-    .neq('tier', 'free')
+    .from('membership_plans')
+    .select('id, name, price_inr, validity_days, contact_credits, interest_credits, is_active')
+    .eq('is_active', true)
+    .neq('name', 'Free') // Assuming we don't show Free in premium screen
     .order('price_inr', { ascending: true });
 
-  if (!error && data && data.length > 0) {
-    return data.map((d) => ({
-      id: d.tier,
-      name: d.plan_name || d.tier,
-      price: Number(d.price_inr),
-      durationMonths: d.duration_months,
-      duration: `${d.duration_months} Month${d.duration_months > 1 ? 's' : ''}`,
-      features: d.features || [],
-      color: d.color_code || '#D4AF37',
-      popular: d.is_popular,
-      contactsLimit: d.contacts_limit,
-      interestsLimit: d.interests_limit,
-    }));
-  }
+  if (error) throw error;
 
-  // Fallback to tier_settings
-  const { data: fallback, error: fbErr } = await supabase
-    .from('tier_settings')
-    .select('tier, plan_name, price_inr, duration_months, features, color_code, is_popular, contacts_limit, interests_limit')
-    .neq('tier', 'free')
-    .order('price_inr', { ascending: true });
+  return (data || []).map((d) => {
+    // Generate UI attributes based on plan name
+    const planName = d.name.toLowerCase();
+    let color = '#D4AF37'; // Default Gold
+    let popular = false;
+    let features = [
+      `${d.contact_credits} Contact Credits`,
+      `${d.interest_credits} Interest Credits`,
+      `Valid for ${d.validity_days} Days`,
+    ];
 
-  if (fbErr) throw fbErr;
-  return (fallback || []).map((d) => ({
-    id: d.tier,
-    name: d.plan_name || d.tier,
-    price: d.price_inr,
-    durationMonths: d.duration_months,
-    duration: `${d.duration_months} Month${d.duration_months > 1 ? 's' : ''}`,
-    features: d.features || [],
-    color: d.color_code || '#D4AF37',
-    popular: d.is_popular,
-    contactsLimit: d.contacts_limit,
-    interestsLimit: d.interests_limit,
-  }));
+    if (planName.includes('silver')) {
+      color = '#C0C0C0';
+    } else if (planName.includes('gold')) {
+      color = '#D4AF37';
+      popular = true;
+      features.push('Priority Support');
+    } else if (planName.includes('platinum') || planName.includes('diamond')) {
+      color = '#E5E4E2';
+      features.push('Priority Support', 'Dedicated Manager');
+    }
+
+    return {
+      id: d.id,
+      name: d.name,
+      price: d.price_inr,
+      durationMonths: Math.round(d.validity_days / 30),
+      duration: `${d.validity_days} Days`,
+      features,
+      color,
+      popular,
+      contactsLimit: d.contact_credits,
+      interestsLimit: d.interest_credits,
+    };
+  });
 };

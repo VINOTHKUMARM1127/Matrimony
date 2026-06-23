@@ -25,6 +25,7 @@ import { ProfileDetailSkeleton } from '../../components/common/SkeletonLoader';
 import SuccessOverlay from '../../components/common/SuccessOverlay';
 import useAuthStore from '../../store/useAuthStore';
 import useProfileStore from '../../store/useProfileStore';
+import useToastStore from '../../store/useToastStore';
 import * as profilesApi from '../../api/profiles';
 import * as interestApi from '../../api/interests';
 import { calculateCompatibility } from '../../utils/matchingEngine';
@@ -71,6 +72,7 @@ const UserProfileScreen = ({ route, navigation }) => {
   const [revealingPhone, setRevealingPhone] = useState(false);
   const [showInterestSent, setShowInterestSent] = useState(false);
   const [showContactUnlocked, setShowContactUnlocked] = useState(false);
+  const showToast = useToastStore((state) => state.showToast);
 
   // 1. Fetch details of target user
   const { data: targetProfile, isLoading, error, refetch: refetchProfile } = useQuery({
@@ -193,9 +195,9 @@ const UserProfileScreen = ({ route, navigation }) => {
     } catch (err) {
       setRevealingPhone(false);
       if (err.message?.includes('QUOTA_EXCEEDED')) {
-        Alert.alert('Limit Exceeded', 'You do not have enough contact views remaining. Please recharge.');
+        showToast('warning', 'Limit Exceeded', 'You do not have enough contact views remaining. Please recharge.');
       } else {
-        Alert.alert('Error', err.message || 'Failed to unlock contact details.');
+        showToast('error', 'Error', err.message || 'Failed to unlock contact details.');
       }
     }
   };
@@ -241,7 +243,7 @@ const UserProfileScreen = ({ route, navigation }) => {
           ]
         );
       } else {
-        Alert.alert('Error', err.message || 'Failed to send interest request');
+        showToast('error', 'Error', err.message || 'Failed to send interest request');
       }
     },
   });
@@ -291,7 +293,7 @@ const UserProfileScreen = ({ route, navigation }) => {
     mutationFn: (interestId) => interestApi.acceptInterest(interestId),
     onSuccess: () => {
       refetchInterest();
-      Alert.alert('Success', 'Interest request accepted! You are now connected.');
+      showToast('success', 'Success', 'Interest request accepted! You are now connected.');
     },
   });
 
@@ -305,7 +307,7 @@ const UserProfileScreen = ({ route, navigation }) => {
           text: 'Report', 
           style: 'destructive',
           onPress: async () => {
-            Alert.alert('Report Received', 'Thank you. Our team will review this profile within 24 hours.');
+            showToast('info', 'Report Received', 'Thank you. Our team will review this profile within 24 hours.');
           }
         }
       ]

@@ -132,16 +132,16 @@ const PaymentHistory = () => {
       const esc = (c) => `"${String(c ?? '').replace(/"/g, '""')}"`;
       const dataRows = rows.map((p) => [
         p.id,
-        formatDate(p.created_at),
-        p.profile?.display_name || '-',
+        formatDate(p.purchased_at),
+        p.profile?.name || '-',
         p.profile?.phone || '-',
-        p.plan_type,
+        p.tier,
         p.amount,
         p.tax,
         p.final_amount,
         p.payment_gateway,
         p.gateway_transaction_id || '-',
-        p.status,
+        p.payment_status,
       ]);
 
       const csv = [headers, ...dataRows].map((r) => r.map(esc).join(',')).join('\n');
@@ -185,6 +185,17 @@ const PaymentHistory = () => {
       alert('Failed to clear payment history: ' + (err.message || err));
     } finally {
       setIsClearing(false);
+    }
+  };
+
+  const handleRefund = async (paymentId) => {
+    if (!window.confirm('Mark this payment as refunded? This will just update the status record and will NOT automatically reverse the transaction in Razorpay.')) return;
+    try {
+      await adminApi.markPaymentAsRefunded(paymentId);
+      alert('Payment marked as refunded.');
+      await Promise.all([loadStats(), loadPayments()]);
+    } catch (err) {
+      alert('Failed to mark as refunded: ' + (err.message || err));
     }
   };
 
@@ -263,8 +274,8 @@ const PaymentHistory = () => {
           <h3 className="font-bold text-neutral-900 mb-3">Revenue by Plan</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {stats.plan_revenue.map((p) => (
-              <div key={p.plan_type} className="bg-neutral-50 rounded-xl border border-neutral-100 p-4 text-center">
-                <p className="text-xs font-semibold text-neutral-500 uppercase mb-1">{p.plan_type}</p>
+              <div key={p.tier} className="bg-neutral-50 rounded-xl border border-neutral-100 p-4 text-center">
+                <p className="text-xs font-semibold text-neutral-500 uppercase mb-1">{p.tier}</p>
                 <p className="text-lg font-extrabold text-neutral-900">{formatCurrency(p.revenue)}</p>
                 <p className="text-[11px] text-neutral-400">{p.count} transactions</p>
               </div>
@@ -350,6 +361,7 @@ const PaymentHistory = () => {
                     <th className="px-4 py-3 text-left font-semibold text-neutral-600">Gateway</th>
                     <th className="px-4 py-3 text-left font-semibold text-neutral-600">Txn ID</th>
                     <th className="px-4 py-3 text-center font-semibold text-neutral-600">Status</th>
+                    <th className="px-4 py-3 text-right font-semibold text-neutral-600">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -357,26 +369,36 @@ const PaymentHistory = () => {
                     const StatusIcon = STATUS_ICONS[p.status] || Clock;
                     return (
                       <tr key={p.id} className="border-b border-neutral-50 hover:bg-neutral-50/50 transition-colors">
-                        <td className="px-4 py-3 text-neutral-600 text-xs whitespace-nowrap">{formatDate(p.created_at)}</td>
+                        <td className="px-4 py-3 text-neutral-600 text-xs whitespace-nowrap">{formatDate(p.purchased_at)}</td>
                         <td className="px-4 py-3">
                           <div>
-                            <p className="font-medium text-neutral-900 text-sm">{p.profile?.display_name || 'Unknown'}</p>
+                            <p className="font-medium text-neutral-900 text-sm">{p.profile?.name || 'Unknown'}</p>
                             <p className="text-[11px] text-neutral-400">{p.profile?.phone || '-'}</p>
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="capitalize font-semibold text-neutral-700">{p.plan_type}</span>
+                          <span className="capitalize font-semibold text-neutral-700">{p.tier}</span>
                         </td>
-                        <td className="px-4 py-3 text-right font-bold text-neutral-900">{formatCurrency(p.final_amount)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-neutral-900">{formatCurrency(p.amount)}</td>
                         <td className="px-4 py-3 text-neutral-500 capitalize text-xs">{p.payment_gateway}</td>
                         <td className="px-4 py-3 text-neutral-400 text-xs font-mono truncate max-w-[120px]">
                           {p.gateway_transaction_id || '-'}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full ${STATUS_COLORS[p.status] || STATUS_COLORS.pending}`}>
+                          <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full ${STATUS_COLORS[p.payment_status] || STATUS_COLORS.pending}`}>
                             <StatusIcon size={11} />
-                            {p.status}
+                            {p.payment_status}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {p.payment_status === 'success' && (
+                            <button
+                              onClick={() => handleRefund(p.id)}
+                              className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                            >
+                              Refund
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );

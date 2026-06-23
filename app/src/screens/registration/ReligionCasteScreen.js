@@ -9,7 +9,7 @@ import Button from '../../components/common/Button';
 import OptionSelector from '../../components/registration/OptionSelector';
 import StepIndicator from '../../components/registration/StepIndicator';
 import SearchablePicker from '../../components/common/SearchablePicker';
-import { RELIGIONS, CASTES, DOSHAM_OPTIONS } from '../../utils/constants';
+import { RELIGIONS, CASTES } from '../../utils/constants';
 import useProfileStore from '../../store/useProfileStore';
 import useAuthStore from '../../store/useAuthStore';
 
@@ -37,7 +37,7 @@ const ReligionCasteScreen = ({ navigation }) => {
   });
 
   const [subcaste, setSubcaste] = useState(profile?.subcaste || '');
-  const [dosham, setDosham] = useState(profile?.dosham || '');
+
   const [errors, setErrors] = useState({});
 
   const casteOptions = useMemo(() => {
@@ -63,13 +63,13 @@ const ReligionCasteScreen = ({ navigation }) => {
         religion,
         caste: finalCaste || null,
         subcaste: subcaste.trim() || null,
-        dosham: dosham || null,
+
       });
       navigation.navigate('Education');
     } catch (error) {
       console.error('Save error:', error);
     }
-  }, [validate, religion, caste, customCaste, subcaste, dosham, user, saveProfile, navigation]);
+  }, [validate, religion, caste, customCaste, subcaste, user, saveProfile, navigation]);
 
   return (
     <View style={styles.container}>
@@ -122,13 +122,6 @@ const ReligionCasteScreen = ({ navigation }) => {
           placeholder="Enter your sub-caste"
         />
 
-        <OptionSelector
-          label="Dosham / Chevvai"
-          options={DOSHAM_OPTIONS}
-          value={dosham}
-          onChange={setDosham}
-          columns={3}
-        />
 
         <View style={styles.buttonRow}>
           <Button

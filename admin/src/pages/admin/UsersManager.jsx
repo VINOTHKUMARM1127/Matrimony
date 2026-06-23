@@ -43,9 +43,8 @@ const UsersManager = () => {
       const lower = searchTerm.toLowerCase();
       result = result.filter(
         (u) =>
-          u.display_name?.toLowerCase().includes(lower) ||
-          u.email?.toLowerCase().includes(lower) ||
-          u.phone?.includes(lower)
+          u.name?.toLowerCase().includes(lower) ||
+          u.email?.toLowerCase().includes(lower)
       );
     }
 
@@ -55,17 +54,23 @@ const UsersManager = () => {
 
     if (filterTier) {
       if (filterTier === 'free') {
-        result = result.filter((u) => !u.is_premium || u.tier === 'free');
+        result = result.filter((u) => {
+          const activeMembership = (u.user_memberships || []).find(m => m.status === 'active');
+          return !activeMembership || activeMembership.tier === 'free';
+        });
       } else {
-        result = result.filter((u) => u.tier === filterTier);
+        result = result.filter((u) => {
+          const activeMembership = (u.user_memberships || []).find(m => m.status === 'active');
+          return activeMembership?.tier === filterTier;
+        });
       }
     }
 
     if (filterStatus) {
       if (filterStatus === 'complete') {
-        result = result.filter((u) => u.is_profile_complete === true);
+        result = result.filter((u) => u.profile_completion > 50);
       } else if (filterStatus === 'incomplete') {
-        result = result.filter((u) => u.is_profile_complete === false || u.is_profile_complete === null);
+        result = result.filter((u) => !u.profile_completion || u.profile_completion <= 50);
       }
     }
 
@@ -150,16 +155,18 @@ const UsersManager = () => {
   };
 
   const tierChip = (u) => {
-    if (u.is_premium) {
+    const activeMembership = (u.user_memberships || []).find(m => m.status === 'active');
+    const tier = activeMembership?.tier || 'free';
+    if (tier !== 'free') {
       const map = {
         silver: 'bg-slate-100 text-slate-700 ring-slate-200',
         gold: 'bg-gold-100 text-gold-700 ring-gold-200',
         platinum: 'bg-violet-100 text-violet-700 ring-violet-200',
       };
-      const cls = map[u.tier] || 'bg-gold-100 text-gold-700 ring-gold-200';
+      const cls = map[tier] || 'bg-gold-100 text-gold-700 ring-gold-200';
       return (
         <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold capitalize ring-1 ${cls}`}>
-          <Crown size={12} /> {u.tier || 'Premium'}
+          <Crown size={12} /> {tier}
         </span>
       );
     }
@@ -171,13 +178,13 @@ const UsersManager = () => {
   };
 
   const avatarFor = (u) => {
-    const photo = u.photos?.find((p) => p.is_primary) || u.photos?.[0];
-    if (photo?.storage_path) {
-      return <img src={photo.storage_path} alt="" className="w-full h-full object-cover" />;
+    const photo = u.profile_photos?.find((p) => p.is_primary) || u.profile_photos?.[0];
+    if (photo?.photo_url) {
+      return <img src={photo.photo_url} alt="" className="w-full h-full object-cover" />;
     }
     return (
       <span className="text-sm font-bold text-primary-600">
-        {(u.display_name || '?').charAt(0).toUpperCase()}
+        {(u.name || '?').charAt(0).toUpperCase()}
       </span>
     );
   };
@@ -347,7 +354,7 @@ const UsersManager = () => {
                         </div>
                         <div className="min-w-0">
                           <p className="font-semibold text-neutral-900 group-hover:text-primary-600 transition-colors truncate">
-                            {u.display_name || 'No Name'}
+                            {u.name || 'No Name'}
                           </p>
                           <p className="text-xs text-neutral-500 truncate">{u.email || '—'}</p>
                           {u.phone && <p className="text-xs text-neutral-400">{u.phone}</p>}
@@ -357,13 +364,13 @@ const UsersManager = () => {
                     <td className="px-6 py-4 capitalize text-sm text-neutral-600">{u.gender || '—'}</td>
                     <td className="px-6 py-4">{tierChip(u)}</td>
                     <td className="px-6 py-4">
-                      {u.is_profile_complete ? (
+                      {u.profile_completion > 50 ? (
                         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-success-700">
-                          <span className="w-1.5 h-1.5 rounded-full bg-success-500" /> Complete
+                          <span className="w-1.5 h-1.5 rounded-full bg-success-500" /> {u.profile_completion}%
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-400">
-                          <span className="w-1.5 h-1.5 rounded-full bg-neutral-300" /> Incomplete
+                          <span className="w-1.5 h-1.5 rounded-full bg-neutral-300" /> {u.profile_completion || 0}%
                         </span>
                       )}
                     </td>

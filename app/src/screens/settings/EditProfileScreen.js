@@ -26,6 +26,7 @@ import Button from '../../components/common/Button';
 import SearchablePicker from '../../components/common/SearchablePicker';
 import useProfileStore from '../../store/useProfileStore';
 import useAuthStore from '../../store/useAuthStore';
+import useToastStore from '../../store/useToastStore';
 import { uploadProfilePhoto, deleteProfilePhoto, setPrimaryProfilePhoto } from '../../api/profiles';
 import { HEIGHT_OPTIONS, FOOD_HABITS, MARITAL_STATUS, STARS, RAASIS } from '../../utils/constants';
 
@@ -52,9 +53,10 @@ const EditProfileScreen = ({ route, navigation }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const showToast = useToastStore((state) => state.showToast);
 
   // Personal Fields
-  const [displayName, setDisplayName] = useState(profile?.display_name || '');
+  const [displayName, setDisplayName] = useState(profile?.name || '');
   const [aboutMe, setAboutMe] = useState(profile?.about_me || '');
   const [city, setCity] = useState(profile?.city || '');
   const [occupation, setOccupation] = useState(profile?.occupation || '');
@@ -71,8 +73,8 @@ const EditProfileScreen = ({ route, navigation }) => {
   const [foodHabit, setFoodHabit] = useState(profile?.food_habit || '');
 
   // Horoscope Fields
-  const [star, setStar] = useState(horoscope?.star || '');
-  const [raasi, setRaasi] = useState(horoscope?.raasi || '');
+  const [star, setStar] = useState(horoscope?.nakshatra || '');
+  const [raasi, setRaasi] = useState(horoscope?.rasi || '');
   const [lagnam, setLagnam] = useState(horoscope?.lagnam || '');
   const [gothram, setGothram] = useState(horoscope?.gothram || '');
   const [dasaBalance, setDasaBalance] = useState(horoscope?.dasa_balance || '');
@@ -80,7 +82,7 @@ const EditProfileScreen = ({ route, navigation }) => {
   // Synchronize local states with store data when loaded asynchronously
   useEffect(() => {
     if (profile) {
-      setDisplayName(profile.display_name || '');
+      setDisplayName(profile.name || '');
       setAboutMe(profile.about_me || '');
       setCity(profile.city || '');
       setOccupation(profile.occupation || '');
@@ -96,8 +98,8 @@ const EditProfileScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     if (horoscope) {
-      setStar(horoscope.star || '');
-      setRaasi(horoscope.raasi || '');
+      setStar(horoscope.nakshatra || '');
+      setRaasi(horoscope.rasi || '');
       setLagnam(horoscope.lagnam || '');
       setGothram(horoscope.gothram || '');
       setDasaBalance(horoscope.dasa_balance || '');
@@ -106,14 +108,14 @@ const EditProfileScreen = ({ route, navigation }) => {
 
   const handleSave = async () => {
     if (!displayName.trim()) {
-      Alert.alert('Required field', 'Please specify your display name');
+      showToast('error', 'Required field', 'Please specify your display name');
       return;
     }
 
     try {
       setIsSaving(true);
       await updateProfile(user.id, {
-        display_name: displayName,
+        name: displayName,
         about_me: aboutMe,
         city,
         occupation,
@@ -128,32 +130,31 @@ const EditProfileScreen = ({ route, navigation }) => {
 
       await saveHoroscope({
         user_id: user.id,
-        star: star || null,
-        raasi: raasi || null,
+        nakshatra: star || null,
+        rasi: raasi || null,
         lagnam: lagnam || null,
         gothram: gothram.trim() || null,
         dasa_balance: dasaBalance.trim() || null,
       });
       setIsSaving(false);
-      Alert.alert('Success', 'Profile updated successfully!', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
+      showToast('success', 'Success', 'Profile updated successfully!');
+      navigation.goBack();
     } catch (err) {
       setIsSaving(false);
-      Alert.alert('Error', err.message || 'Failed to update profile');
+      showToast('error', 'Error', err.message || 'Failed to update profile');
     }
   };
 
   const handleAddPhoto = async () => {
     if (photos.length >= 4) {
-      Alert.alert('Limit Reached', 'You can only upload up to 4 photos.');
+      showToast('warning', 'Limit Reached', 'You can only upload up to 4 photos.');
       return;
     }
 
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert('Permission Required', 'Please allow access to your photos to upload a picture.');
+        showToast('warning', 'Permission Required', 'Please allow access to your photos to upload a picture.');
         return;
       }
 
@@ -182,7 +183,7 @@ const EditProfileScreen = ({ route, navigation }) => {
     } catch (error) {
       setIsUploading(false);
       console.error('Error in handleAddPhoto:', error);
-      Alert.alert('Upload Failed', `Error: ${error.message || 'There was an issue uploading your photo. Please try again.'}`);
+      showToast('error', 'Upload Failed', `Error: ${error.message || 'There was an issue uploading your photo. Please try again.'}`);
     }
   };
 
@@ -191,8 +192,9 @@ const EditProfileScreen = ({ route, navigation }) => {
     try {
       await setPrimaryProfilePhoto(user.id, photo.id);
       setPrimaryPhoto(photo.id);
+      showToast('success', 'Photo Updated', 'Primary photo set successfully.');
     } catch (error) {
-      Alert.alert('Error', 'Failed to set primary photo.');
+      showToast('error', 'Error', 'Failed to set primary photo.');
     }
   };
 
@@ -206,8 +208,9 @@ const EditProfileScreen = ({ route, navigation }) => {
           try {
             await deleteProfilePhoto(photo.id, photo.storage_path);
             removePhoto(photo.id);
+            showToast('success', 'Deleted', 'Photo removed.');
           } catch (error) {
-            Alert.alert('Error', 'Failed to delete photo.');
+            showToast('error', 'Error', 'Failed to delete photo.');
           }
         }
       }

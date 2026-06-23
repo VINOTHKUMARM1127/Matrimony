@@ -8,8 +8,7 @@ import Button from '../../components/common/Button';
 import OptionSelector from '../../components/registration/OptionSelector';
 import StepIndicator from '../../components/registration/StepIndicator';
 import {
-  FOOD_HABITS, SMOKING_OPTIONS, DRINKING_OPTIONS,
-  LANGUAGES, INTERESTS_OPTIONS,
+  FOOD_HABITS, LANGUAGES, INTERESTS_OPTIONS,
 } from '../../utils/constants';
 import useProfileStore from '../../store/useProfileStore';
 import useAuthStore from '../../store/useAuthStore';
@@ -20,8 +19,6 @@ const LifestyleScreen = ({ navigation }) => {
   const { saveProfile, isLoading } = useProfileStore();
 
   const [foodHabit, setFoodHabit] = useState(profile?.food_habit || '');
-  const [smoking, setSmoking] = useState(profile?.smoking || '');
-  const [drinking, setDrinking] = useState(profile?.drinking || '');
   const [languages, setLanguages] = useState(profile?.languages_known || ['Tamil']);
   const [interests, setInterests] = useState(profile?.interests || []);
 
@@ -30,8 +27,6 @@ const LifestyleScreen = ({ navigation }) => {
       await saveProfile({
         id: user.id,
         food_habit: foodHabit || null,
-        smoking: smoking || null,
-        drinking: drinking || null,
         languages_known: languages.length > 0 ? languages : ['Tamil'],
         interests: interests.length > 0 ? interests : null,
         hobbies: interests.length > 0 ? interests : null,
@@ -40,7 +35,7 @@ const LifestyleScreen = ({ navigation }) => {
     } catch (error) {
       console.error('Save error:', error);
     }
-  }, [foodHabit, smoking, drinking, languages, interests, user, saveProfile, navigation]);
+  }, [foodHabit, languages, interests, user, saveProfile, navigation]);
 
   return (
     <View style={styles.container}>
@@ -61,21 +56,6 @@ const LifestyleScreen = ({ navigation }) => {
           columns={3}
         />
 
-        <OptionSelector
-          label="Smoking"
-          options={SMOKING_OPTIONS}
-          value={smoking}
-          onChange={setSmoking}
-          columns={3}
-        />
-
-        <OptionSelector
-          label="Drinking"
-          options={DRINKING_OPTIONS}
-          value={drinking}
-          onChange={setDrinking}
-          columns={3}
-        />
 
         <OptionSelector
           label="Languages Known"

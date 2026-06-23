@@ -20,6 +20,7 @@ import Button from '../../components/common/Button';
 import Icon from '../../components/common/Icon';
 import useAuthStore from '../../store/useAuthStore';
 import useProfileStore from '../../store/useProfileStore';
+import useToastStore from '../../store/useToastStore';
 import { RAZORPAY_KEY_ID } from '../../utils/constants';
 import { createSubscription } from '../../api/subscriptions';
 import { fetchPremiumPlans } from '../../api/settingsApi';
@@ -28,8 +29,9 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import supabase from '../../api/supabaseClient';
 
-const PremiumScreen = () => {
+const PremiumScreen = ({ navigation }) => {
   const user = useAuthStore((s) => s.user);
+  const showToast = useToastStore((state) => state.showToast);
   const queryClient = useQueryClient();
   const [plans, setPlans] = useState([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
@@ -71,16 +73,18 @@ const PremiumScreen = () => {
         })();
         
         if (data && !error) {
-          const mappedPlans = data.map(d => ({
-            id: d.id,
-            name: d.name,
-            duration: d.duration,
-            price: d.price,
-            currency: 'INR',
-            features: d.features || [],
-            color: d.color || '#D4AF37',
-            popular: d.popular
-          }));
+          const mappedPlans = data
+            .filter(d => d.name && d.name.toLowerCase() !== 'free')
+            .map(d => ({
+              id: d.id,
+              name: d.name,
+              duration: d.duration,
+              price: d.price,
+              currency: 'INR',
+              features: d.features || [],
+              color: d.color || '#D4AF37',
+              popular: d.popular
+            }));
           setPlans(mappedPlans);
           if (mappedPlans.length > 0) {
             setSelectedPlan(mappedPlans.find(p => p.popular)?.id || mappedPlans[0].id);
@@ -114,18 +118,28 @@ const PremiumScreen = () => {
               text: 'Simulate Success ✔',
               onPress: async () => {
                 const mockPaymentId = `pay_mock_${Date.now()}`;
-                await createSubscription({
-                  user_id: user.id,
-                  plan_type: plan.id,
-                  razorpay_payment_id: mockPaymentId,
-                  amount: plan.price
-                });
+                try {
+                  await createSubscription({
+                    user_id: user.id,
+                    plan_type: plan.name.toLowerCase(),
+                    razorpay_payment_id: mockPaymentId,
+                    amount: plan.price
+                  });
 
-                // Reload profile and invalidate all plan/quota caches
-                await refreshAfterPurchase();
+                  // Reload profile and invalidate all plan/quota caches
+                  await refreshAfterPurchase();
 
-                Alert.alert('🎉 Subscription Successful!', `Welcome to ${plan.name}!`);
-                setProcessing(false);
+                  Alert.alert(
+                    'Subscription Successful! 🎉', 
+                    `Welcome to ${plan.name}! Your account has been upgraded.`,
+                    [{ text: 'Great!', onPress: () => navigation.goBack() }]
+                  );
+                } catch (error) {
+                  console.error('Subscription error:', error);
+                  showToast('error', 'Error', 'Failed to process checkout. Please try again.');
+                } finally {
+                  setProcessing(false);
+                }
               },
             },
           ]
@@ -144,7 +158,7 @@ const PremiumScreen = () => {
         }
       } catch (err) {
         console.error('Razorpay order creation error:', err.message);
-        Alert.alert('Payment Initialization Failed', 'Could not start the payment process. Please check your connection or contact support.');
+        showToast('error', 'Payment Initialization Failed', 'Could not start the payment process. Please check your connection or contact support.');
         setProcessing(false);
         return;
       }
@@ -180,31 +194,40 @@ const PremiumScreen = () => {
           console.warn('Payment signature verification bypassed:', verifyErr.message);
         }
 
-        await createSubscription({
-          user_id: user.id,
-          plan_type: plan.id,
-          razorpay_payment_id: paymentData.razorpay_payment_id,
-          amount: plan.price
-        });
+        try {
+          await createSubscription({
+            user_id: user.id,
+            plan_type: plan.name.toLowerCase(),
+            razorpay_payment_id: paymentData.razorpay_payment_id,
+            amount: plan.price
+          });
 
-        await refreshAfterPurchase();
+          await refreshAfterPurchase();
 
-        Alert.alert('🎉 Success!', `Welcome to ${plan.name}! Enjoy premium access.`);
+          Alert.alert(
+            'Success! 🎉', 
+            `Welcome to ${plan.name}! Enjoy premium access.`,
+            [{ text: 'Awesome', onPress: () => navigation.goBack() }]
+          );
+        } catch (subErr) {
+          console.error('Subscription error:', subErr);
+          showToast('error', 'Error', 'Failed to activate your subscription. Please contact support.');
+        }
       } else {
         const errorMsg = checkoutResult.error?.message || 'Checkout process was closed.';
         if (errorMsg.includes("RazorpayCheckout") || errorMsg.toLowerCase().includes("open") || errorMsg.includes("null")) {
-          Alert.alert('Native Module Required', 'Razorpay requires a custom development build to run. Expo Go does not support this native module. Please run a development build (Press "s" in terminal) or build the APK.');
+          showToast('warning', 'Native Module Required', 'Razorpay requires a custom development build to run.');
         } else {
-          Alert.alert('Payment Cancelled', errorMsg);
+          showToast('error', 'Payment Cancelled', errorMsg);
         }
       }
     } catch (error) {
       console.error('Subscription error:', error);
-      Alert.alert('Error', 'Failed to process checkout. Please try again.');
+      showToast('error', 'Error', 'Failed to process checkout. Please try again.');
     } finally {
       setProcessing(false);
     }
-  }, [selectedPlan, user, plans]);
+  }, [selectedPlan, user, plans, showToast]);
 
   const activePlan = plans.find((p) => p.id === selectedPlan);
 

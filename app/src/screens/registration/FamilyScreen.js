@@ -8,25 +8,29 @@ import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import OptionSelector from '../../components/registration/OptionSelector';
 import StepIndicator from '../../components/registration/StepIndicator';
-import { FAMILY_TYPES, FAMILY_STATUS, TN_DISTRICTS } from '../../utils/constants';
+import { FAMILY_TYPES, FAMILY_STATUS, FAMILY_VALUES, TN_DISTRICTS } from '../../utils/constants';
 import useProfileStore from '../../store/useProfileStore';
 import useAuthStore from '../../store/useAuthStore';
 
 const FamilyScreen = ({ navigation }) => {
   const user = useAuthStore((s) => s.user);
   const profile = useProfileStore((s) => s.profile);
-  const { saveProfile, isLoading } = useProfileStore();
+  const familyDetails = useProfileStore((s) => s.familyDetails);
+  const { saveProfile, saveFamilyDetails, isLoading } = useProfileStore();
 
-  const [familyType, setFamilyType] = useState(profile?.family_type || '');
-  const [familyStatus, setFamilyStatus] = useState(profile?.family_status || '');
-  const [fatherOccupation, setFatherOccupation] = useState(profile?.father_occupation || '');
-  const [motherOccupation, setMotherOccupation] = useState(profile?.mother_occupation || '');
-  const [brothers, setBrothers] = useState(profile?.brothers_count?.toString() || '0');
-  const [sisters, setSisters] = useState(profile?.sisters_count?.toString() || '0');
-  const [brothersMarried, setBrothersMarried] = useState(profile?.brothers_married?.toString() || '0');
-  const [sistersMarried, setSistersMarried] = useState(profile?.sisters_married?.toString() || '0');
+  // Family details (stored in family_details table)
+  const [fatherName, setFatherName] = useState(familyDetails?.father_name || '');
+  const [motherName, setMotherName] = useState(familyDetails?.mother_name || '');
+  const [familyType, setFamilyType] = useState(familyDetails?.family_type || '');
+  const [familyStatus, setFamilyStatus] = useState(familyDetails?.family_status || '');
+  const [familyValues, setFamilyValues] = useState(familyDetails?.family_values || '');
+  const [brothers, setBrothers] = useState(familyDetails?.number_of_brothers?.toString() || '0');
+  const [sisters, setSisters] = useState(familyDetails?.number_of_sisters?.toString() || '0');
+
+  // Location + About Me (stored in profiles table)
   const [city, setCity] = useState(profile?.city || '');
   const [district, setDistrict] = useState(profile?.district || '');
+  const [state, setState] = useState(profile?.state || 'Tamil Nadu');
   const [aboutMe, setAboutMe] = useState(profile?.about_me || '');
 
   const handleNext = useCallback(async () => {
@@ -36,25 +40,33 @@ const FamilyScreen = ({ navigation }) => {
     }
 
     try {
-      await saveProfile({
-        id: user.id,
+      // Save family details to family_details table
+      await saveFamilyDetails({
+        user_id: user.id,
+        father_name: fatherName.trim() || null,
+        mother_name: motherName.trim() || null,
         family_type: familyType || null,
         family_status: familyStatus || null,
-        father_occupation: fatherOccupation.trim() || null,
-        mother_occupation: motherOccupation.trim() || null,
-        brothers_count: parseInt(brothers) || 0,
-        sisters_count: parseInt(sisters) || 0,
-        brothers_married: parseInt(brothersMarried) || 0,
-        sisters_married: parseInt(sistersMarried) || 0,
+        family_values: familyValues || null,
+        number_of_brothers: parseInt(brothers) || 0,
+        number_of_sisters: parseInt(sisters) || 0,
+      });
+
+      // Save location + about me to profiles table
+      await saveProfile({
+        id: user.id,
         city: city.trim() || null,
         district: district || null,
+        state: state || null,
+        country: 'India',
         about_me: aboutMe.trim() || null,
       });
+
       navigation.navigate('Horoscope');
     } catch (error) {
       console.error('Save error:', error);
     }
-  }, [familyType, familyStatus, fatherOccupation, motherOccupation, brothers, sisters, brothersMarried, sistersMarried, city, district, aboutMe, user, saveProfile, navigation]);
+  }, [fatherName, motherName, familyType, familyStatus, familyValues, brothers, sisters, city, district, state, aboutMe, user, saveProfile, saveFamilyDetails, navigation]);
 
   const districtOptions = TN_DISTRICTS.map((d) => ({ label: d, value: d }));
 
@@ -69,6 +81,20 @@ const FamilyScreen = ({ navigation }) => {
       >
         <Text style={styles.title}>Family & Location</Text>
         <Text style={styles.subtitle}>Help matches know about your family</Text>
+
+        <Input
+          label="Father's Name"
+          value={fatherName}
+          onChangeText={setFatherName}
+          placeholder="Enter father's name"
+        />
+
+        <Input
+          label="Mother's Name"
+          value={motherName}
+          onChangeText={setMotherName}
+          placeholder="Enter mother's name"
+        />
 
         <OptionSelector
           label="Family Type"
@@ -86,18 +112,12 @@ const FamilyScreen = ({ navigation }) => {
           columns={2}
         />
 
-        <Input
-          label="Father's Occupation"
-          value={fatherOccupation}
-          onChangeText={setFatherOccupation}
-          placeholder="e.g., Government Employee"
-        />
-
-        <Input
-          label="Mother's Occupation"
-          value={motherOccupation}
-          onChangeText={setMotherOccupation}
-          placeholder="e.g., Homemaker"
+        <OptionSelector
+          label="Family Values"
+          options={FAMILY_VALUES}
+          value={familyValues}
+          onChange={setFamilyValues}
+          columns={2}
         />
 
         <View style={styles.siblingRow}>
@@ -110,25 +130,9 @@ const FamilyScreen = ({ navigation }) => {
             containerStyle={styles.siblingInput}
           />
           <Input
-            label="Married"
-            value={brothersMarried}
-            onChangeText={setBrothersMarried}
-            keyboardType="number-pad"
-            maxLength={2}
-            containerStyle={styles.siblingInput}
-          />
-          <Input
             label="Sisters"
             value={sisters}
             onChangeText={setSisters}
-            keyboardType="number-pad"
-            maxLength={2}
-            containerStyle={styles.siblingInput}
-          />
-          <Input
-            label="Married"
-            value={sistersMarried}
-            onChangeText={setSistersMarried}
             keyboardType="number-pad"
             maxLength={2}
             containerStyle={styles.siblingInput}

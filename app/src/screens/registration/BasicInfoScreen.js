@@ -11,7 +11,7 @@ import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import OptionSelector from '../../components/registration/OptionSelector';
 import StepIndicator from '../../components/registration/StepIndicator';
-import { GENDERS, MARITAL_STATUS, HEIGHT_OPTIONS } from '../../utils/constants';
+import { GENDERS, MARITAL_STATUS, HEIGHT_OPTIONS, WEIGHT_OPTIONS, PHYSICAL_STATUS } from '../../utils/constants';
 import useProfileStore from '../../store/useProfileStore';
 import useAuthStore from '../../store/useAuthStore';
 
@@ -21,11 +21,12 @@ const BasicInfoScreen = ({ navigation }) => {
   const { saveProfile, isLoading } = useProfileStore();
   const { signOut } = useAuthStore();
 
-  const [name, setName] = useState(profile?.display_name || '');
+  const [name, setName] = useState(profile?.name || '');
   const [gender, setGender] = useState('');
   const [dob, setDob] = useState('');
-  const [height, setHeight] = useState('');
-  const [maritalStatus, setMaritalStatus] = useState('');
+  const [height, setHeight] = useState(profile?.height_cm ? profile.height_cm.toString() : '');
+  const [physicalStatus, setPhysicalStatus] = useState(profile?.physical_status || '');
+  const [maritalStatus, setMaritalStatus] = useState(profile?.marital_status || '');
   const [errors, setErrors] = useState({});
 
   const validate = useCallback(() => {
@@ -59,10 +60,11 @@ const BasicInfoScreen = ({ navigation }) => {
     try {
       await saveProfile({
         id: user.id,
-        display_name: name.trim(),
+        name: name.trim(),
         gender,
         date_of_birth: dateOfBirth,
         height_cm: height ? parseInt(height) : null,
+        physical_status: physicalStatus || null,
         marital_status: maritalStatus,
       });
       navigation.navigate('ReligionCaste');
@@ -169,6 +171,16 @@ const BasicInfoScreen = ({ navigation }) => {
             </TouchableOpacity>
           ))}
         </ScrollView>
+
+
+        <OptionSelector
+          label="Physical Status"
+          options={PHYSICAL_STATUS}
+          value={physicalStatus}
+          onChange={setPhysicalStatus}
+          columns={2}
+          required={false}
+        />
 
         <OptionSelector
           label="Marital Status"

@@ -9,11 +9,11 @@ import supabase from './supabaseClient';
  */
 export const getActiveSubscription = async (userId) => {
   const { data, error } = await supabase
-    .from('subscriptions')
-    .select('*')
+    .from('user_memberships')
+    .select('*, membership_plans(*)')
     .eq('user_id', userId)
     .eq('status', 'active')
-    .gte('expires_at', new Date().toISOString())
+    .gte('expiry_date', new Date().toISOString())
     .order('created_at', { ascending: false })
     .maybeSingle();
 
@@ -26,8 +26,8 @@ export const getActiveSubscription = async (userId) => {
  */
 export const getSubscriptionHistory = async (userId) => {
   const { data, error } = await supabase
-    .from('subscriptions')
-    .select('*')
+    .from('user_memberships')
+    .select('*, membership_plans(*)')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
@@ -65,6 +65,6 @@ export const checkPremiumAccess = async (userId, feature) => {
     platinum: ['view_contacts', 'unlimited_messages', 'horoscope_unlock', 'priority_visibility', 'advanced_search', 'profile_visitors', 'boosted_profile', 'verified_access', 'relationship_manager'],
   };
 
-  const planFeatures = featureMap[sub.plan_type] || [];
+  const planFeatures = featureMap[sub.tier] || [];
   return planFeatures.includes(feature);
 };

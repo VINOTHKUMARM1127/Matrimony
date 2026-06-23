@@ -133,7 +133,7 @@ export const calculateCompatibility = (
 
   // 10. Profile Completeness (5%)
   scores.profileCompleteness = Math.round(
-    WEIGHTS.profileCompleteness * ((candidateProfile?.profile_completion_percent || 50) / 100)
+    WEIGHTS.profileCompleteness * ((candidateProfile?.profile_completion || 50) / 100)
   );
 
   // 11. Verification Status (5%)

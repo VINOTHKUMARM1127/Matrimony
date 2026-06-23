@@ -124,10 +124,10 @@ const PhotoUploadScreen = ({ navigation }) => {
 
           // Save to DB
           const { data: photoData, error: dbError } = await supabase
-            .from('photos')
+            .from('profile_photos')
             .insert({
               user_id: user.id,
-              storage_path: publicUrl,
+              photo_url: publicUrl,
               is_primary: localPhotos.length === 0,
               display_order: localPhotos.length,
             })
@@ -175,7 +175,7 @@ const PhotoUploadScreen = ({ navigation }) => {
           {localPhotos.map((photo, index) => (
             <View key={photo.id || index} style={styles.photoItem}>
               <Image
-                source={{ uri: photo.localUri || photo.storage_path }}
+                source={{ uri: photo.localUri || photo.photo_url || photo.storage_path }}
                 style={styles.photoImage}
                 contentFit="cover"
                 transition={200}

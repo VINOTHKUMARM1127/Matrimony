@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Outlet, Navigate, NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, UploadCloud, Settings, LogOut, Heart, ChevronLeft, Menu, SlidersHorizontal, CreditCard } from 'lucide-react';
+import { LayoutDashboard, Users, UploadCloud, Settings, LogOut, Heart, ChevronLeft, Menu, SlidersHorizontal, CreditCard, Download } from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
 import * as adminApi from '../../api/adminApi';
 
@@ -61,6 +61,7 @@ const AdminLayout = () => {
       items: [
         { to: '/settings', icon: Settings, label: 'Premium Plans' },
         { to: '/distribution', icon: SlidersHorizontal, label: 'Distribution' },
+        { to: '/reports', icon: Download, label: 'Reports' },
       ],
     },
   ];

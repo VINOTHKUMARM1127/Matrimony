@@ -11,6 +11,7 @@ import BulkUploader from './pages/admin/BulkUploader';
 import PremiumSettings from './pages/admin/PremiumSettings';
 import DistributionManager from './pages/admin/DistributionManager';
 import PaymentHistory from './pages/admin/PaymentHistory';
+import ReportsManager from './pages/admin/ReportsManager';
 
 const App = () => {
   const { initialize, isInitializing } = useAuthStore();
@@ -36,6 +37,7 @@ const App = () => {
           <Route path="settings" element={<PremiumSettings />} />
           <Route path="distribution" element={<DistributionManager />} />
           <Route path="payments" element={<PaymentHistory />} />
+          <Route path="reports" element={<ReportsManager />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -61,7 +61,7 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const primaryPhoto = photos?.find((p) => p.is_primary)?.storage_path;
-  const completionPercent = profile?.profile_completion_percent || 0;
+  const completionPercent = profile?.profile_completion || 0;
 
   const calculateAge = (dob) => {
     if (!dob) return '';
@@ -199,7 +199,7 @@ const ProfileScreen = ({ navigation }) => {
             <View style={styles.avatarContainer}>
               <Avatar
                 source={primaryPhoto}
-                name={profile?.display_name || ''}
+                name={profile?.name || ''}
                 size={100}
                 showVerified={profile?.is_verified}
               />
@@ -217,7 +217,7 @@ const ProfileScreen = ({ navigation }) => {
               )}
             </View>
             <Text style={styles.heroName}>
-              {profile?.display_name || 'Your Name'}
+              {profile?.name || 'Your Name'}
               {profile?.date_of_birth ? `, ${calculateAge(profile.date_of_birth)}` : ''}
             </Text>
             <Text style={styles.heroId}>{profile?.profile_id || 'TM000000'}</Text>
@@ -243,7 +243,7 @@ const ProfileScreen = ({ navigation }) => {
         <View style={styles.statsRow}>
           {[
             { label: 'Location', value: profile?.city || profile?.district || '—' },
-            { label: 'Education', value: profile?.education || '—' },
+            { label: 'Education', value: profile?.highest_qualification || '—' },
             { label: 'Occupation', value: profile?.occupation || '—' },
             { label: 'Religion', value: profile?.religion || '—' },
           ].map((stat, i) => (

@@ -11,7 +11,8 @@ const useProfileStore = create((set, get) => ({
   partnerPreferences: null,
   horoscope: null,
   photos: [],
-  subscriptions: [],
+  user_memberships: [],
+  familyDetails: null,
   isProfileLoaded: false,
   isProfileComplete: false,
   registrationStep: 0,
@@ -21,7 +22,7 @@ const useProfileStore = create((set, get) => ({
   // Actions
   setProfile: (profile) => set({
     profile,
-    isProfileComplete: profile?.is_profile_complete || false,
+    isProfileComplete: (profile?.profile_completion || 0) > 0,
     isProfileLoaded: true,
   }),
 
@@ -38,9 +39,10 @@ const useProfileStore = create((set, get) => ({
         profile: data,
         partnerPreferences: data?.partner_preferences,
         horoscope: data?.horoscope_details,
-        photos: data?.photos || [],
-        subscriptions: data?.subscriptions || [],
-        isProfileComplete: data?.is_profile_complete || false,
+        photos: data?.profile_photos || [],
+        user_memberships: data?.user_memberships || [],
+        familyDetails: data?.family_details,
+        isProfileComplete: (data?.profile_completion || 0) > 0,
         isProfileLoaded: true,
         isLoading: false,
       });
@@ -78,9 +80,10 @@ const useProfileStore = create((set, get) => ({
       const {
         horoscope_details,
         partner_preferences,
-        photos,
+        profile_photos,
         profile_created_for,
-        subscriptions, // Strip this out to prevent Postgres error
+        user_memberships, // Strip this out to prevent Postgres error
+        family_details,
         ...profileDbFields
       } = mergedData;
 
@@ -90,7 +93,7 @@ const useProfileStore = create((set, get) => ({
 
       set((state) => ({
         profile: { ...state.profile, ...mergedData, ...data },
-        isProfileComplete: data?.is_profile_complete || false,
+        isProfileComplete: (data?.profile_completion || 0) > 0,
         isLoading: false,
       }));
       return data;
@@ -110,7 +113,7 @@ const useProfileStore = create((set, get) => ({
       const data = await profilesApi.updateProfile(userId, updates);
       set((state) => ({
         profile: { ...state.profile, ...data },
-        isProfileComplete: data?.is_profile_complete || false,
+        isProfileComplete: (data?.profile_completion || 0) > 0,
         isLoading: false,
       }));
       return data;
@@ -145,6 +148,21 @@ const useProfileStore = create((set, get) => ({
       // No silent fallback — a failed preferences save must surface.
       const data = await profilesApi.upsertPartnerPreferences(prefData);
       set({ partnerPreferences: data, isLoading: false });
+      return data;
+    } catch (error) {
+      set({ isLoading: false, error: error.message });
+      throw error;
+    }
+  },
+
+  /**
+   * Save family details
+   */
+  saveFamilyDetails: async (familyData) => {
+    try {
+      set({ isLoading: true, error: null });
+      const data = await profilesApi.upsertFamilyDetails(familyData);
+      set({ familyDetails: data, isLoading: false });
       return data;
     } catch (error) {
       set({ isLoading: false, error: error.message });
@@ -203,7 +221,8 @@ const useProfileStore = create((set, get) => ({
     partnerPreferences: null,
     horoscope: null,
     photos: [],
-    subscriptions: [],
+    user_memberships: [],
+    familyDetails: null,
     isProfileLoaded: false,
     isProfileComplete: false,
     registrationStep: 0,

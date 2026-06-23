@@ -25,7 +25,8 @@ const UserModal = ({ user, onClose, onRefresh }) => {
   const [distState, setDistState] = useState(null);
   const [userPlan, setUserPlan] = useState(null);
   const [photoLoading, setPhotoLoading] = useState(false);
-  const [photos, setPhotos] = useState(user?.photos || []);
+  const [photos, setPhotos] = useState(user?.profile_photos || []);
+  const [family, setFamily] = useState({});
   const [subHistory, setSubHistory] = useState([]);
   const [subQueue, setSubQueue] = useState([]);
 
@@ -33,7 +34,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
     if (!user) return;
     // Seed all known profile columns from the row.
     setForm({ ...user });
-    setPhotos(user.photos || []);
+    setPhotos(user.profile_photos || []);
     // Load horoscope + preferences.
     (async () => {
       setLoadingRel(true);
@@ -41,11 +42,13 @@ const UserModal = ({ user, onClose, onRefresh }) => {
         const rel = await adminApi.fetchUserRelations(user.id);
         setHoroscope(rel.horoscope || {});
         setPrefs(rel.preferences || {});
+        setFamily(rel.family || {});
         const dist = await adminApi.fetchUserDistributionState(user.id);
         setDistState(dist || null);
         
         const plans = await adminApi.fetchSubscriptionPlans();
-        const currentPlan = plans.find(p => p.tier === (user.tier || 'free')) || null;
+        const activeMembership = (user.user_memberships || []).find(m => m.status === 'active');
+        const currentPlan = plans.find(p => p.name === (activeMembership?.tier || 'free')) || null;
         setUserPlan(currentPlan);
 
         // Subscription history (all packs) + currently queued/paused packs.
@@ -72,6 +75,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
   const setF = (k, v) => setForm((p) => ({ ...p, [k]: v }));
   const setH = (k, v) => setHoroscope((p) => ({ ...p, [k]: v }));
   const setP = (k, v) => setPrefs((p) => ({ ...p, [k]: v }));
+  const setFam = (k, v) => setFamily((p) => ({ ...p, [k]: v }));
 
   const handleSave = async () => {
     setIsLoading(true);
@@ -91,12 +95,16 @@ const UserModal = ({ user, onClose, onRefresh }) => {
         await adminApi.updateUserPreferences(user.id, prefs);
       }
 
-      // 4. Quota overrides if edited.
-      if (form.contacts_remaining !== undefined || form.interests_remaining !== undefined || form.premium_expires_at !== undefined) {
+      // 4. Family details.
+      if (Object.values(family).some((v) => v !== '' && v != null)) {
+        await adminApi.updateUserFamilyDetails(user.id, family);
+      }
+
+      // 5. Quota overrides if edited.
+      if (form.contact_credits_remaining !== undefined || form.interest_credits_remaining !== undefined) {
         await adminApi.updateUserQuotas(user.id, {
-          contacts_remaining: form.contacts_remaining,
-          interests_remaining: form.interests_remaining,
-          premium_expires_at: form.premium_expires_at,
+          contact_credits_remaining: form.contact_credits_remaining,
+          interest_credits_remaining: form.interest_credits_remaining,
         });
       }
 
@@ -126,7 +134,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
   };
 
   const handleResetPassword = async () => {
-    const pw = prompt('Enter new password for ' + (user.email || user.display_name) + ' (min 6 chars):');
+    const pw = prompt('Enter new password for ' + (user.email || user.name) + ' (min 6 chars):');
     if (!pw || pw.length < 6) {
       if (pw !== null) alert('Password must be at least 6 characters.');
       return;
@@ -203,7 +211,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
     setPhotoLoading(true);
     try {
       await adminApi.deletePhoto(photo.id);
-      await imageApi.deletePhotoFromR2(photo.storage_path);
+      await imageApi.deletePhotoFromR2(photo.photo_url);
       setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
       onRefresh();
     } catch (err) {
@@ -251,10 +259,10 @@ const UserModal = ({ user, onClose, onRefresh }) => {
         <div className="px-6 py-5 border-b border-neutral-100 flex justify-between items-center bg-gradient-to-r from-primary-50/60 to-transparent">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-lg">
-              {(form.display_name || '?').charAt(0).toUpperCase()}
+              {(form.name || '?').charAt(0).toUpperCase()}
             </div>
             <div>
-              <h2 className="text-lg font-bold text-neutral-900 leading-tight">{form.display_name || 'User Details'}</h2>
+              <h2 className="text-lg font-bold text-neutral-900 leading-tight">{form.name || 'User Details'}</h2>
               <p className="text-xs text-neutral-500">Full profile editor</p>
             </div>
           </div>
@@ -287,21 +295,16 @@ const UserModal = ({ user, onClose, onRefresh }) => {
             <>
               {tab === 'Profile' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Txt label="Display Name" k="display_name" />
+                  <Txt label="Name" k="name" />
                   <Sel label="Gender" k="gender" options={GENDER_OPTS} />
                   <Txt label="Date of Birth" k="date_of_birth" type="date" />
                   <Txt label="Height (cm)" k="height_cm" type="number" />
+                  <Txt label="Weight (kg)" k="weight_kg" type="number" />
                   <Sel label="Marital Status" k="marital_status" options={MARITAL_OPTS} />
-                  <Txt label="Mother Tongue" k="mother_tongue" />
                   <Txt label="Religion" k="religion" />
                   <Txt label="Caste" k="caste" />
-                  <Txt label="Sub-caste" k="subcaste" />
-                  <Sel label="Dosham" k="dosham" options={DOSHAM_OPTS} />
-                  <Txt label="Education" k="education" />
-                  <Txt label="Education Details" k="education_detail" />
+                  <Txt label="Qualification" k="highest_qualification" />
                   <Txt label="Occupation" k="occupation" />
-                  <Txt label="Job Details" k="occupation_detail" />
-                  <Txt label="Company" k="company_name" />
                   <Txt label="Annual Income" k="annual_income" />
                   <Txt label="About Me" k="about_me" full />
                 </div>
@@ -309,36 +312,34 @@ const UserModal = ({ user, onClose, onRefresh }) => {
 
               {tab === 'Family' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Sel label="Family Type" k="family_type" options={FAMILY_TYPE_OPTS} />
-                  <Sel label="Family Status" k="family_status" options={FAMILY_STATUS_OPTS} />
-                  <Txt label="Father's Occupation" k="father_occupation" />
-                  <Txt label="Mother's Occupation" k="mother_occupation" />
-                  <Txt label="Brothers" k="brothers_count" type="number" />
-                  <Txt label="Married Brothers" k="brothers_married" type="number" />
-                  <Txt label="Sisters" k="sisters_count" type="number" />
-                  <Txt label="Married Sisters" k="sisters_married" type="number" />
+                  <Txt label="Father's Name" k="father_name" src={family} set={setFam} />
+                  <Txt label="Mother's Name" k="mother_name" src={family} set={setFam} />
+                  <Sel label="Family Type" k="family_type" options={FAMILY_TYPE_OPTS} src={family} set={setFam} />
+                  <Sel label="Family Status" k="family_status" options={FAMILY_STATUS_OPTS} src={family} set={setFam} />
+                  <Txt label="Brothers" k="number_of_brothers" type="number" src={family} set={setFam} />
+                  <Txt label="Sisters" k="number_of_sisters" type="number" src={family} set={setFam} />
                   <Txt label="City" k="city" />
                   <Txt label="District" k="district" />
                   <Txt label="State" k="state" />
-                  <Txt label="Pincode" k="pincode" />
+                  <Txt label="Country" k="country" />
                 </div>
               )}
 
               {tab === 'Horoscope' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Txt label="Star / Nakshatra" k="star" src={horoscope} set={setH} />
-                  <Txt label="Raasi" k="raasi" src={horoscope} set={setH} />
+                  <Txt label="Nakshatra" k="nakshatra" src={horoscope} set={setH} />
+                  <Txt label="Rasi" k="rasi" src={horoscope} set={setH} />
                   <Txt label="Lagnam" k="lagnam" src={horoscope} set={setH} />
                   <Txt label="Gothram" k="gothram" src={horoscope} set={setH} />
-                  <Txt label="Dasa Balance" k="dasa_balance" src={horoscope} set={setH} />
+                  <Sel label="Dosham" k="dosham" options={DOSHAM_OPTS} src={horoscope} set={setH} />
                 </div>
               )}
 
               {tab === 'Lifestyle' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Sel label="Food Habit" k="food_habit" options={FOOD_OPTS} />
-                  <Sel label="Smoking" k="smoking" options={YESNO_OPTS} />
-                  <Sel label="Drinking" k="drinking" options={YESNO_OPTS} />
+                  <Sel label="Smoking" k="smoking_habit" options={YESNO_OPTS} />
+                  <Sel label="Drinking" k="drinking_habit" options={YESNO_OPTS} />
                   <Arr label="Languages Known" k="languages_known" src={form} set={setF} />
                   <Arr label="Interests" k="interests" src={form} set={setF} />
                   <Arr label="Hobbies" k="hobbies" src={form} set={setF} />
@@ -347,17 +348,16 @@ const UserModal = ({ user, onClose, onRefresh }) => {
 
               {tab === 'Preferences' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Txt label="Min Age" k="age_min" type="number" src={prefs} set={setP} />
-                  <Txt label="Max Age" k="age_max" type="number" src={prefs} set={setP} />
-                  <Txt label="Min Height (cm)" k="height_min" type="number" src={prefs} set={setP} />
-                  <Txt label="Max Height (cm)" k="height_max" type="number" src={prefs} set={setP} />
-                  <Arr label="Preferred Religion" k="religion" />
-                  <Arr label="Preferred Caste" k="caste" />
-                  <Arr label="Preferred Education" k="education" />
-                  <Arr label="Preferred Occupation" k="occupation" />
-                  <Arr label="Preferred Marital Status" k="marital_status" />
-                  <Arr label="Preferred Food Habit" k="food_habit" />
-                  <Arr label="Preferred Stars" k="star" full />
+                  <Txt label="Min Age" k="pref_age_min" type="number" src={prefs} set={setP} />
+                  <Txt label="Max Age" k="pref_age_max" type="number" src={prefs} set={setP} />
+                  <Txt label="Min Height (cm)" k="pref_height_min" type="number" src={prefs} set={setP} />
+                  <Txt label="Max Height (cm)" k="pref_height_max" type="number" src={prefs} set={setP} />
+                  <Arr label="Preferred Religion" k="pref_religion" />
+                  <Arr label="Preferred Caste" k="pref_caste" />
+                  <Arr label="Preferred Education" k="pref_education" />
+                  <Arr label="Preferred Occupation" k="pref_occupation" />
+                  <Arr label="Preferred Marital Status" k="pref_marital_status" />
+                  <Arr label="Preferred Location" k="pref_location" full />
                 </div>
               )}
 
@@ -408,9 +408,8 @@ const UserModal = ({ user, onClose, onRefresh }) => {
                           <option value="platinum">Platinum</option>
                         </select>
                       </div>
-                      <Txt label="Plan Expiry" k="premium_expires_at" type="date" />
-                      <Txt label="Contacts Remaining" k="contacts_remaining" type="number" />
-                      <Txt label="Interests Remaining" k="interests_remaining" type="number" />
+                      <Txt label="Contact Credits" k="contact_credits_remaining" type="number" />
+                      <Txt label="Interest Credits" k="interest_credits_remaining" type="number" />
                     </div>
 
                     {/* Make Free / Reset for testing the upgrade flow */}
@@ -445,7 +444,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
                         {subQueue.map((q) => (
                           <div key={q.id} className="flex justify-between items-center bg-amber-50 border border-amber-100 rounded-xl px-4 py-2.5">
                             <div className="flex items-center gap-2">
-                              <span className="font-semibold text-neutral-800 text-sm">{q.plan_tier?.toUpperCase()}</span>
+                              <span className="font-semibold text-neutral-800 text-sm">{q.tier?.toUpperCase()}</span>
                               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${q.status === 'paused' ? 'bg-blue-100 text-blue-700' : 'bg-neutral-200 text-neutral-600'}`}>
                                 {q.status === 'paused' ? 'PAUSED' : 'PENDING'}
                               </span>
@@ -476,7 +475,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
                         {subHistory.map((h) => (
                           <div key={h.id} className="flex justify-between items-center bg-neutral-50 border border-neutral-100 rounded-xl px-4 py-2.5">
                             <div>
-                              <span className="font-semibold text-neutral-800 text-sm">{h.plan_type?.toUpperCase()}</span>
+                              <span className="font-semibold text-neutral-800 text-sm">{h.tier?.toUpperCase()}</span>
                               <span className={`ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full ${
                                 h.status === 'active' ? 'bg-emerald-100 text-emerald-700'
                                 : h.status === 'queued' ? 'bg-amber-100 text-amber-700'
@@ -484,11 +483,11 @@ const UserModal = ({ user, onClose, onRefresh }) => {
                               }`}>{h.status?.toUpperCase()}</span>
                             </div>
                             <div className="text-right">
-                              <p className="text-xs text-neutral-600">₹{h.amount ?? 0} · {h.contacts_added ?? 0}c / {h.interests_added ?? 0}i</p>
+                              <p className="text-xs text-neutral-600">Credits: {h.contact_credits_remaining ?? 0}c / {h.interest_credits_remaining ?? 0}i</p>
                               <p className="text-[11px] text-neutral-400">
-                                {h.starts_at ? new Date(h.starts_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }) : '—'}
+                                {h.start_date ? new Date(h.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }) : '—'}
                                 {' → '}
-                                {h.expires_at ? new Date(h.expires_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }) : '—'}
+                                {h.expiry_date ? new Date(h.expiry_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }) : '—'}
                               </p>
                             </div>
                           </div>
@@ -502,7 +501,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
                     <h3 className="font-semibold text-neutral-900 mb-3 flex items-center gap-2 text-sm">
                       <TrendingUp size={17} className="text-violet-500" /> Profile Distribution Limits
                     </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="bg-violet-50 rounded-2xl p-4 border border-violet-100">
                         <p className="text-xs text-violet-600 mb-2 font-semibold uppercase tracking-wider">Recommended</p>
                         <div className="space-y-1">
@@ -538,24 +537,6 @@ const UserModal = ({ user, onClose, onRefresh }) => {
                           </div>
                         </div>
                       </div>
-
-                      <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100">
-                        <p className="text-xs text-emerald-600 mb-2 font-semibold uppercase tracking-wider">Daily Matches</p>
-                        <div className="space-y-1">
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="text-emerald-500">Initial:</span>
-                            <span className="font-medium text-emerald-700">{userPlan?.initial_daily_profiles || 0}</span>
-                          </div>
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="text-emerald-500">Daily Inc:</span>
-                            <span className="font-medium text-emerald-700">+{userPlan?.daily_profiles_increment || 0}</span>
-                          </div>
-                          <div className="pt-2 mt-2 border-t border-emerald-100/50 flex justify-between items-center">
-                            <span className="text-[11px] font-semibold text-emerald-600 uppercase">Total Unlocked:</span>
-                            <span className="font-extrabold text-emerald-900 text-lg">{distState ? (distState.daily_profiles_shown ?? distState.total_daily_unlocked) : (userPlan?.initial_daily_profiles || 0)}</span>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   </div>
 
@@ -567,7 +548,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
                     <div className="flex gap-3 overflow-x-auto pb-2">
                       {photos && photos.length > 0 ? photos.map((photo) => (
                         <div key={photo.id} className="relative group shrink-0 w-24 h-24 rounded-2xl overflow-hidden border border-neutral-200 shadow-sm">
-                          <img src={photo.storage_path} alt="" className="w-full h-full object-cover" />
+                          <img src={photo.photo_url} alt="" className="w-full h-full object-cover" />
                           <div className="absolute inset-0 bg-neutral-950/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                             <button onClick={() => handlePhotoDelete(photo)} disabled={photoLoading} className="bg-error-500 text-white p-2 rounded-full hover:bg-error-600 disabled:opacity-50">
                               <Trash2 size={15} />
@@ -587,8 +568,18 @@ const UserModal = ({ user, onClose, onRefresh }) => {
                     </div>
                   </div>
 
-                  <div className="border-t border-neutral-100 pt-5">
+                  <div className="border-t border-neutral-100 pt-5 flex items-center gap-3">
                     <Button variant="outline" size="md" onClick={handleResetPassword} disabled={isLoading} icon={Key}>Reset Password</Button>
+                    <Button 
+                      variant={form.is_active === false ? "primary" : "outline"} 
+                      size="md" 
+                      onClick={() => setF('is_active', form.is_active === false ? true : false)} 
+                      disabled={isLoading}
+                      className={form.is_active !== false ? 'text-error-600 border-error-200 hover:bg-error-50' : ''}
+                    >
+                      {form.is_active === false ? "Activate Account" : "Suspend Account"}
+                    </Button>
+                    {form.is_active === false && <span className="text-sm font-bold text-error-600 ml-2">Currently Suspended</span>}
                   </div>
                 </div>
               )}

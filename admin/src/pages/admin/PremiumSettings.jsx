@@ -41,7 +41,7 @@ const PremiumSettings = () => {
       const data = await adminApi.fetchSubscriptionPlans();
       const mapped = {};
       data.forEach((plan) => {
-        mapped[plan.tier] = plan;
+        mapped[plan.name] = plan;
       });
       setPlans(mapped);
     } catch (err) {
@@ -150,7 +150,7 @@ const PremiumSettings = () => {
                 {!isFree && (
                   <div className="flex items-center gap-1.5 text-sm font-bold text-neutral-700">
                     ₹{Number(s.price_inr || 0).toLocaleString()}
-                    <span className="text-xs font-medium text-neutral-400">/ {s.duration_months}mo</span>
+                    <span className="text-xs font-medium text-neutral-400">/ {s.validity_days} days</span>
                   </div>
                 )}
               </div>
@@ -165,16 +165,16 @@ const PremiumSettings = () => {
                     </h3>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className={labelClass}>Display Name</label>
-                        <input type="text" value={s.plan_name || ''} onChange={(e) => handleChange(tier.id, 'plan_name', e.target.value)} className={fieldClass} />
+                        <label className={labelClass}>Plan Name (ID)</label>
+                        <input type="text" value={s.name || ''} onChange={(e) => handleChange(tier.id, 'name', e.target.value)} disabled className={`${fieldClass} disabled:opacity-50`} />
                       </div>
                       <div>
                         <label className={labelClass}>Price (₹)</label>
                         <input type="number" value={s.price_inr || 0} onChange={(e) => handleChange(tier.id, 'price_inr', parseFloat(e.target.value) || 0)} disabled={isFree} className={`${fieldClass} disabled:opacity-50`} />
                       </div>
                       <div>
-                        <label className={labelClass}>Duration (Months)</label>
-                        <input type="number" value={s.duration_months || 0} onChange={(e) => handleChange(tier.id, 'duration_months', parseInt(e.target.value) || 0)} disabled={isFree} className={`${fieldClass} disabled:opacity-50`} />
+                        <label className={labelClass}>Duration (Days)</label>
+                        <input type="number" value={s.validity_days || 0} onChange={(e) => handleChange(tier.id, 'validity_days', parseInt(e.target.value) || 0)} disabled={isFree} className={`${fieldClass} disabled:opacity-50`} />
                       </div>
                       <div>
                         <label className={labelClass}>Brand Color</label>
@@ -231,11 +231,11 @@ const PremiumSettings = () => {
                     <div className="space-y-3">
                       <div>
                         <label className={labelClass}>Contact Credits</label>
-                        <input type="number" value={s.contacts_limit || 0} onChange={(e) => handleChange(tier.id, 'contacts_limit', parseInt(e.target.value) || 0)} disabled={isFree} className={`${fieldClass} disabled:opacity-50`} />
+                        <input type="number" value={s.contact_credits || 0} onChange={(e) => handleChange(tier.id, 'contact_credits', parseInt(e.target.value) || 0)} disabled={isFree} className={`${fieldClass} disabled:opacity-50`} />
                       </div>
                       <div>
                         <label className={labelClass}>Interest Credits</label>
-                        <input type="number" value={s.interests_limit || 0} onChange={(e) => handleChange(tier.id, 'interests_limit', parseInt(e.target.value) || 0)} disabled={isFree} className={`${fieldClass} disabled:opacity-50`} />
+                        <input type="number" value={s.interest_credits || 0} onChange={(e) => handleChange(tier.id, 'interest_credits', parseInt(e.target.value) || 0)} disabled={isFree} className={`${fieldClass} disabled:opacity-50`} />
                       </div>
                     </div>
                   </div>
@@ -248,15 +248,11 @@ const PremiumSettings = () => {
                     <p className="text-[11px] text-neutral-500 mb-3">One-time allocation per tier</p>
                     <div className="space-y-3">
                       <div>
-                        <label className={labelClass}>Recommended Profiles</label>
+                        <label className={labelClass}>All Matches Profiles</label>
                         <input type="number" value={s.initial_recommended_profiles || 0} onChange={(e) => handleChange(tier.id, 'initial_recommended_profiles', parseInt(e.target.value) || 0)} className={fieldClass} />
                       </div>
                       <div>
-                        <label className={labelClass}>Nearby Profiles</label>
-                        <input type="number" value={s.initial_nearby_profiles || 0} onChange={(e) => handleChange(tier.id, 'initial_nearby_profiles', parseInt(e.target.value) || 0)} className={fieldClass} />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Daily Profiles</label>
+                        <label className={labelClass}>Daily Updates Profiles</label>
                         <input type="number" value={s.initial_daily_profiles || 0} onChange={(e) => handleChange(tier.id, 'initial_daily_profiles', parseInt(e.target.value) || 0)} className={fieldClass} />
                       </div>
                     </div>
@@ -270,15 +266,11 @@ const PremiumSettings = () => {
                     <p className="text-[11px] text-neutral-500 mb-3">Added automatically every day</p>
                     <div className="space-y-3">
                       <div>
-                        <label className={labelClass}>Daily Recommended +</label>
+                        <label className={labelClass}>Daily All Matches +</label>
                         <input type="number" value={s.daily_recommended_increment || 0} onChange={(e) => handleChange(tier.id, 'daily_recommended_increment', parseInt(e.target.value) || 0)} disabled={isFree} className={`${fieldClass} disabled:opacity-50`} />
                       </div>
                       <div>
-                        <label className={labelClass}>Daily Nearby +</label>
-                        <input type="number" value={s.daily_nearby_increment || 0} onChange={(e) => handleChange(tier.id, 'daily_nearby_increment', parseInt(e.target.value) || 0)} disabled={isFree} className={`${fieldClass} disabled:opacity-50`} />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Daily Profiles +</label>
+                        <label className={labelClass}>Daily Daily Updates +</label>
                         <input type="number" value={s.daily_profiles_increment || 0} onChange={(e) => handleChange(tier.id, 'daily_profiles_increment', parseInt(e.target.value) || 0)} disabled={isFree} className={`${fieldClass} disabled:opacity-50`} />
                       </div>
                     </div>
@@ -320,28 +312,24 @@ const PremiumSettings = () => {
             ) : (
               <ul className="space-y-2 text-sm">
                 <li className="flex justify-between">
-                  <span className="text-neutral-600">Recommended Profiles</span>
+                  <span className="text-neutral-600">All Matches Profiles</span>
                   <span className="font-bold text-emerald-600">+{targetPlan.initial_recommended_profiles || 0}</span>
                 </li>
                 <li className="flex justify-between">
-                  <span className="text-neutral-600">Nearby Profiles</span>
-                  <span className="font-bold text-emerald-600">+{targetPlan.initial_nearby_profiles || 0}</span>
-                </li>
-                <li className="flex justify-between">
-                  <span className="text-neutral-600">Daily Profiles Limit</span>
+                  <span className="text-neutral-600">Daily Updates Profiles</span>
                   <span className="font-bold text-emerald-600">+{targetPlan.initial_daily_profiles || 0}</span>
                 </li>
                 <li className="flex justify-between pt-2 border-t border-neutral-50">
                   <span className="text-neutral-600">Contact Credits</span>
-                  <span className="font-bold text-emerald-600">+{targetPlan.contacts_limit || 0}</span>
+                  <span className="font-bold text-emerald-600">+{targetPlan.contact_credits || 0}</span>
                 </li>
                 <li className="flex justify-between">
                   <span className="text-neutral-600">Interest Credits</span>
-                  <span className="font-bold text-emerald-600">+{targetPlan.interests_limit || 0}</span>
+                  <span className="font-bold text-emerald-600">+{targetPlan.interest_credits || 0}</span>
                 </li>
                 <li className="flex justify-between pt-2 border-t border-neutral-50">
                   <span className="text-neutral-600">Premium Validity</span>
-                  <span className="font-bold text-emerald-600">+{targetPlan.duration_months || 0} Months</span>
+                  <span className="font-bold text-emerald-600">+{targetPlan.validity_days || 0} Days</span>
                 </li>
               </ul>
             )}

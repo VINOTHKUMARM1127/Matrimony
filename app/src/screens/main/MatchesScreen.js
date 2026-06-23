@@ -35,6 +35,7 @@ import { sendInterest, passProfile } from '../../api/interests';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { fetchPremiumPlans } from '../../api/settingsApi';
 import SuccessOverlay from '../../components/common/SuccessOverlay';
+import Swiper from 'react-native-deck-swiper';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -101,18 +102,13 @@ const ProfileMatchCard = React.memo(({
             contentFit="cover"
             transition={200}
             cachePolicy="memory-disk"
-            blurRadius={item.isLocked ? 15 : 0}
           />
         ) : (
-          <View style={styles.noPhotoBackground}>
-            {item.isLocked ? (
-              <Ionicons name="lock-closed" size={32} color={colors.textMuted} style={styles.noPhotoInitial} />
-            ) : (
+            <View style={styles.noPhotoBackground}>
               <Text style={styles.noPhotoInitial}>
-                {item.display_name?.charAt(0) || '?'}
+                {item.name?.charAt(0) || '?'}
               </Text>
-            )}
-            <Text style={styles.noPhotoText}>{item.isLocked ? 'Premium Match' : 'No Photo'}</Text>
+            <Text style={styles.noPhotoText}>No Photo</Text>
           </View>
         )}
 
@@ -160,44 +156,31 @@ const ProfileMatchCard = React.memo(({
           style={styles.detailsGradient}
         >
           <Text style={styles.nameText} numberOfLines={1}>
-            {item.isLocked ? `${item.display_name?.charAt(0)}*****` : item.display_name}, {age}
+            {item.name}, {age}
           </Text>
           <Text style={styles.infoLine} numberOfLines={1}>
-            {item.isLocked ? 'Location Hidden' : `${item.city}${item.district ? `, ${item.district}` : ''}`} · {item.isLocked ? 'Profession Hidden' : (item.occupation || 'Professional')}
+            {`${item.city}${item.district ? `, ${item.district}` : ''}`} · {item.occupation || 'Professional'}
           </Text>
           <Text style={styles.infoLine} numberOfLines={1}>
-            {item.isLocked ? 'Education Hidden' : (item.education || 'Graduate')} · {item.religion || 'Hindu'} {!item.isLocked && item.caste ? item.caste : ''}
+            {item.highest_qualification || 'Graduate'} · {item.religion || 'Hindu'} {item.caste ? item.caste : ''}
           </Text>
 
           {/* Action Buttons Inside Card */}
           <View style={styles.actionsToolbar}>
-            {item.isLocked ? (
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: colors.goldDark, borderWidth: 1, borderColor: colors.goldDark }]}
-                onPress={onPremiumAlert}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="lock-closed" size={14} color="#FFF" style={{ marginRight: 6 }} />
-                <Text style={[styles.interestedActionText, { color: '#FFF' }]}>Upgrade to View</Text>
-              </TouchableOpacity>
-            ) : (
-              <>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.declineActionBtn]}
-                  onPress={() => onDecline(item)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.declineActionText}>✕  Skip</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.interestedActionBtn]}
-                  onPress={() => onInterested(item)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.interestedActionText}>♥  Interested</Text>
-                </TouchableOpacity>
-              </>
-            )}
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.declineActionBtn]}
+              onPress={() => onDecline(item)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.declineActionText}>✕  Skip</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.interestedActionBtn]}
+              onPress={() => onInterested(item)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.interestedActionText}>♥  Interested</Text>
+            </TouchableOpacity>
           </View>
         </LinearGradient>
       </TouchableOpacity>
@@ -205,13 +188,12 @@ const ProfileMatchCard = React.memo(({
   );
 }, (prev, next) => (
   prev.item.id === next.item.id &&
-  prev.item.isLocked === next.item.isLocked &&
   prev.isPremium === next.isPremium &&
   prev.index === next.index
 ));
 
 const MatchesScreen = ({ navigation }) => {
-  const [activeTab, setActiveTab] = useState('recommended');
+  const [activeTab, setActiveTab] = useState('all_matches');
   const [interestSent, setInterestSent] = useState(false);
   const queryClient = useQueryClient();
 
@@ -219,65 +201,44 @@ const MatchesScreen = ({ navigation }) => {
   const isPremium = profile?.is_premium || false;
 
   const { 
-    recommended: recommendedProfiles = [], 
-    loadingRecommended, 
-    fetchNextRecommended,
-    hasNextRecommended,
-    fetchingNextRecommended,
-    refetchRecommended,
+    allMatches = [], 
+    loadingAllMatches, 
+    fetchNextAllMatches,
+    hasNextAllMatches,
+    fetchingNextAllMatches,
+    refetchAllMatches,
 
-    nearbyMatches = [],
-    loadingNearby,
-    fetchNextNearby,
-    hasNextNearby,
-    fetchingNextNearby,
-    refetchNearby,
-
-    dailyMatches = [], 
-    loadingDaily,
-    fetchNextDaily,
-    hasNextDaily,
-    fetchingNextDaily,
-    refetchDaily,
-
-    refetchAdminSettings,
-    limits,
-    loadingLimits,
-    fetchingLimits
+    dailyUpdates = [], 
+    loadingDailyUpdates,
+    fetchNextDailyUpdates,
+    hasNextDailyUpdates,
+    fetchingNextDailyUpdates,
+    refetchDailyUpdates,
   } = useMatches();
 
   const user = useAuthStore((s) => s.user);
 
   // Whenever this screen gains focus (e.g. returning from a successful upgrade),
-  // re-pull the per-user limits. When they grow (free -> premium), the feed query
-  // keys re-key to the new caps and the additional profiles load automatically.
+  // refresh the active tab to pull newly distributed profiles.
   useFocusEffect(
     useCallback(() => {
-      refetchAdminSettings?.();
-    }, [refetchAdminSettings])
+      if (activeTab === 'all_matches') refetchAllMatches?.();
+      else if (activeTab === 'daily') refetchDailyUpdates?.();
+    }, [activeTab, refetchAllMatches, refetchDailyUpdates])
   );
 
   // Auto-load the FULL per-user allocation for the active tab. The admin-configured
-  // count (e.g. Gold = 30 Recommended) is the per-user pool; the feed RPCs return it
-  // page-by-page (PAGE_SIZE), and React Query gates further pages via hasNext*. Rather
-  // than make the user scroll to reveal the rest, we proactively fetch the next page
-  // as soon as the previous one settles. The "Loading more profiles..." footer shows
-  // during each fetch; it stops automatically when hasNext* becomes false (full pool
-  // loaded). This makes "admin sets 30 -> user receives 30" true on first view for
-  // Recommended, Nearby and Daily alike.
+  // count is the per-user pool; the feed RPCs return it page-by-page.
   useEffect(() => {
-    if (activeTab === 'recommended' && hasNextRecommended && !fetchingNextRecommended) {
-      fetchNextRecommended();
-    } else if (activeTab === 'nearby' && hasNextNearby && !fetchingNextNearby) {
-      fetchNextNearby();
-    } else if (activeTab === 'daily' && hasNextDaily && !fetchingNextDaily) {
-      fetchNextDaily();
+    if (activeTab === 'all_matches' && hasNextAllMatches && !fetchingNextAllMatches) {
+      fetchNextAllMatches();
+    } else if (activeTab === 'daily' && hasNextDailyUpdates && !fetchingNextDailyUpdates) {
+      fetchNextDailyUpdates();
     }
   }, [
     activeTab,
-    hasNextRecommended, fetchingNextRecommended, fetchNextRecommended,
-    hasNextNearby, fetchingNextNearby, fetchNextNearby,
-    hasNextDaily, fetchingNextDaily, fetchNextDaily,
+    hasNextAllMatches, fetchingNextAllMatches, fetchNextAllMatches,
+    hasNextDailyUpdates, fetchingNextDailyUpdates, fetchNextDailyUpdates,
   ]);
 
   // Live plan pricing for the lock card (no hardcoded prices/names).
@@ -287,16 +248,10 @@ const MatchesScreen = ({ navigation }) => {
     staleTime: 5 * 60 * 1000,
   });
 
-  const rawData = activeTab === 'daily' ? (dailyMatches || [])
-                : activeTab === 'nearby' ? nearbyMatches
-                : (recommendedProfiles || []);
-  // Show the skeleton while the feed is loading OR while the per-user limits are
-  // still resolving (e.g. right after an upgrade, before the new caps land) — so
-  // the user never sees an empty section during that brief refetch window.
-  const feedLoading = activeTab === 'daily' ? loadingDaily
-                    : activeTab === 'nearby' ? loadingNearby
-                    : loadingRecommended;
-  const isLoading = feedLoading || loadingLimits || (fetchingLimits && rawData.length === 0);
+  const rawData = activeTab === 'daily' ? (dailyUpdates || [])
+                : (allMatches || []);
+  const isLoading = activeTab === 'daily' ? loadingDailyUpdates
+                  : loadingAllMatches;
 
   // Inject a "New Profiles Added Today" divider before the first profile flagged
   // is_new_today (set by the backend feed_allocation). Profiles are returned in
@@ -335,9 +290,8 @@ const MatchesScreen = ({ navigation }) => {
       try {
         await passProfile(profile.id, targetProfile.id);
         // Refetch all feeds so backend returns fresh profiles (excluding the passed one)
-        queryClient.invalidateQueries({ queryKey: ['recommended'] });
-        queryClient.invalidateQueries({ queryKey: ['nearbyMatches'] });
-        queryClient.invalidateQueries({ queryKey: ['dailyMatches'] });
+        queryClient.invalidateQueries({ queryKey: ['allMatches'] });
+        queryClient.invalidateQueries({ queryKey: ['dailyUpdates'] });
         queryClient.invalidateQueries({ queryKey: ['passedInterests'] });
       } catch (err) {
         console.warn('Failed to pass profile:', err);
@@ -353,9 +307,8 @@ const MatchesScreen = ({ navigation }) => {
         await sendInterest(profile.id, targetProfile.id);
         // Refetch all feeds so backend returns fresh profiles (excluding the interested one)
         queryClient.invalidateQueries({ queryKey: ['user_quotas', user?.id] });
-        queryClient.invalidateQueries({ queryKey: ['recommended'] });
-        queryClient.invalidateQueries({ queryKey: ['nearbyMatches'] });
-        queryClient.invalidateQueries({ queryKey: ['dailyMatches'] });
+        queryClient.invalidateQueries({ queryKey: ['allMatches'] });
+        queryClient.invalidateQueries({ queryKey: ['dailyUpdates'] });
         queryClient.invalidateQueries({ queryKey: ['interestsSent'] });
         queryClient.invalidateQueries({ queryKey: ['interestsReceived'] });
         setInterestSent(true);
@@ -378,11 +331,8 @@ const MatchesScreen = ({ navigation }) => {
   }, [isPremium, profile?.id, queryClient, navigation, showPremiumAlert]);
 
   const handleProfilePress = useCallback((prof) => {
-    if (prof.isLocked) {
-      return showPremiumAlert();
-    }
     navigation.navigate('UserProfile', { profileId: prof.id });
-  }, [navigation, showPremiumAlert]);
+  }, [navigation]);
 
   const renderItem = useCallback(({ item, index }) => {
     if (item.__divider) {
@@ -402,12 +352,10 @@ const MatchesScreen = ({ navigation }) => {
   }, [handleProfilePress, handleInterested, handleDecline, showPremiumAlert, isPremium]);
 
   const renderListFooter = () => {
-    const fetchingNext = activeTab === 'daily' ? fetchingNextDaily
-                       : activeTab === 'nearby' ? fetchingNextNearby
-                       : fetchingNextRecommended;
-    const hasNext = activeTab === 'daily' ? hasNextDaily
-                  : activeTab === 'nearby' ? hasNextNearby
-                  : hasNextRecommended;
+    const fetchingNext = activeTab === 'daily' ? fetchingNextDailyUpdates
+                       : fetchingNextAllMatches;
+    const hasNext = activeTab === 'daily' ? hasNextDailyUpdates
+                  : hasNextAllMatches;
 
     // 1) Loading more — spinner + message while the next page is being fetched.
     if (fetchingNext) {
@@ -441,18 +389,12 @@ const MatchesScreen = ({ navigation }) => {
   const renderLockCard = () => {
     if (isPremium || displayData.length === 0) return null;
 
-    const currentLimit = activeTab === 'daily' ? limits?.daily_limit
-                       : activeTab === 'nearby' ? limits?.nearby_limit
-                       : limits?.recommended_limit;
-
     return (
       <View style={styles.lockCard}>
         <Text style={styles.lockIcon}>⊘</Text>
         <Text style={styles.lockTitle}>Premium Matches Locked</Text>
         <Text style={styles.lockDescription}>
-          {currentLimit
-            ? `You've viewed your limit of ${currentLimit} profiles! Upgrade to instantly unlock all premium matches and daily updates.`
-            : `Upgrade to instantly unlock all premium matches and daily updates.`}
+          Upgrade to instantly unlock all premium matches and daily updates.
         </Text>
         <View style={styles.lockTiers}>
           {lockPlans.map((tier) => (
@@ -482,19 +424,11 @@ const MatchesScreen = ({ navigation }) => {
       {/* Tabs */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'recommended' && styles.tabActive]}
-          onPress={() => handleTabChange('recommended')}
+          style={[styles.tab, activeTab === 'all_matches' && styles.tabActive]}
+          onPress={() => handleTabChange('all_matches')}
         >
-          <Text style={[styles.tabText, activeTab === 'recommended' && styles.tabTextActive]}>
-            Recommended
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'nearby' && styles.tabActive]}
-          onPress={() => handleTabChange('nearby')}
-        >
-          <Text style={[styles.tabText, activeTab === 'nearby' && styles.tabTextActive]}>
-            Nearby
+          <Text style={[styles.tabText, activeTab === 'all_matches' && styles.tabTextActive]}>
+            All Matches
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -502,9 +436,15 @@ const MatchesScreen = ({ navigation }) => {
           onPress={() => handleTabChange('daily')}
         >
           <Text style={[styles.tabText, activeTab === 'daily' && styles.tabTextActive]}>
-            Daily
+            Daily Updates
           </Text>
         </TouchableOpacity>
+      </View>
+
+      <View style={styles.countContainer}>
+        <Text style={styles.countText}>
+          Loaded Profiles: <Text style={styles.countValue}>{displayData.length}</Text>
+        </Text>
       </View>
 
       {/* Card Arena */}
@@ -517,48 +457,60 @@ const MatchesScreen = ({ navigation }) => {
             <View style={{ height: 20 }} />
             <ProfileCardSkeleton />
           </View>
-        ) : (
-            <FlatList
-              key={activeTab} // Force remount on tab change to reset scroll position
-              data={displayData}
-              keyExtractor={(item) => String(item.id)}
-              renderItem={renderItem}
-              contentContainerStyle={styles.flatListContent}
-              showsVerticalScrollIndicator={false}
-              removeClippedSubviews
-              initialNumToRender={4}
-              maxToRenderPerBatch={6}
-              windowSize={7}
-              updateCellsBatchingPeriod={50}
-              onEndReached={() => {
-                if (activeTab === 'recommended' && hasNextRecommended && !fetchingNextRecommended) fetchNextRecommended();
-                else if (activeTab === 'nearby' && hasNextNearby && !fetchingNextNearby) fetchNextNearby();
-                else if (activeTab === 'daily' && hasNextDaily && !fetchingNextDaily) fetchNextDaily();
+        ) : displayData.length > 0 ? (
+            <Swiper
+              key={activeTab} // Force remount on tab change to reset swiper
+              cards={displayData}
+              renderCard={(item, index) => {
+                if (!item) return null;
+                return renderItem({ item, index });
               }}
-              onEndReachedThreshold={0.5}
-              refreshControl={
-                <RefreshControl
-                  refreshing={false}
-                  onRefresh={() => {
-                    refetchAdminSettings().then(() => {
-                      if (activeTab === 'recommended') refetchRecommended();
-                      else if (activeTab === 'nearby') refetchNearby();
-                      else if (activeTab === 'daily') refetchDaily();
-                    });
-                  }}
-                  tintColor={colors.primary}
-                  colors={[colors.primary]}
-                />
-              }
-              ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <EmptyState
-                  preset={activeTab === 'nearby' ? 'noNearby' : 'noMatches'}
-                />
-              </View>
-            }
-            ListFooterComponent={renderListFooter}
-          />
+              onSwipedRight={(cardIndex) => {
+                const item = displayData[cardIndex];
+                if (item) handleInterested(item);
+              }}
+              onSwipedLeft={(cardIndex) => {
+                const item = displayData[cardIndex];
+                if (item) handleDecline(item);
+              }}
+              onSwipedAll={() => {
+                if (activeTab === 'all_matches' && hasNextAllMatches && !fetchingNextAllMatches) fetchNextAllMatches();
+                else if (activeTab === 'daily' && hasNextDailyUpdates && !fetchingNextDailyUpdates) fetchNextDailyUpdates();
+              }}
+              cardIndex={0}
+              backgroundColor={'transparent'}
+              stackSize={3}
+              showSecondCard={true}
+              animateOverlayLabelsOpacity
+              animateCardOpacity
+              disableBottomSwipe
+              disableTopSwipe
+              cardVerticalMargin={0}
+              cardHorizontalMargin={0}
+              overlayLabels={{
+                left: {
+                  title: 'SKIP',
+                  style: {
+                    label: { backgroundColor: colors.error, color: 'white', fontSize: 24 },
+                    wrapper: { flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'flex-start', marginTop: 30, marginLeft: -30, elevation: 10, zIndex: 10 }
+                  }
+                },
+                right: {
+                  title: 'INTERESTED',
+                  style: {
+                    label: { backgroundColor: colors.success, color: 'white', fontSize: 24 },
+                    wrapper: { flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start', marginTop: 30, marginLeft: 30, elevation: 10, zIndex: 10 }
+                  }
+                }
+              }}
+              containerStyle={{ flex: 1 }}
+            />
+        ) : (
+          <View style={styles.emptyContainer}>
+            <EmptyState
+              preset={activeTab === 'daily' ? 'noDaily' : 'noMatches'}
+            />
+          </View>
         )}
       </View>
 
@@ -624,7 +576,22 @@ const styles = StyleSheet.create({
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
-    padding: 16,
+    alignItems: 'center',
+    marginTop: 40,
+  },
+  countContainer: {
+    paddingHorizontal: layout.screenPaddingHorizontal,
+    paddingVertical: 8,
+    alignItems: 'flex-end',
+  },
+  countText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  countValue: {
+    color: colors.primary,
+    fontWeight: '700',
   },
   skeletonContainer: {
     flex: 1,
@@ -639,12 +606,13 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   cardWrapper: {
-    marginBottom: 24,
+    flex: 1,
     borderRadius: borderRadius['2xl'],
     ...shadows.card,
   },
   card: {
-    height: 480,
+    flex: 1,
+    height: 520,
     backgroundColor: colors.surfaceElevated,
     position: 'relative',
     borderRadius: borderRadius['2xl'],

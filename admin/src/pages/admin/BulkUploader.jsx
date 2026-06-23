@@ -29,7 +29,7 @@ const BulkUploader = () => {
     if (!Array.isArray(jsonArray)) throw new Error('JSON data must be an array of user objects.');
     if (jsonArray.length === 0) throw new Error('JSON array is empty.');
 
-    const requiredFields = ['email', 'password', 'display_name', 'gender'];
+    const requiredFields = ['email', 'password', 'name', 'gender'];
     for (let i = 0; i < jsonArray.length; i++) {
       const user = jsonArray[i];
       for (const field of requiredFields) {
@@ -93,7 +93,7 @@ const BulkUploader = () => {
   {
     "email": "sample@example.com",
     "password": "TempPassword123!",
-    "display_name": "Arun Kumar",
+    "name": "Arun Kumar",
     "gender": "male",
     "date_of_birth": "1994-08-20",
     "phone": "9876543210",
@@ -104,7 +104,7 @@ const BulkUploader = () => {
     "caste": "Mudaliar",
     "subcaste": "Arcot",
     "dosham": "no",
-    "education": "B.E. / B.Tech.",
+    "highest_qualification": "B.E. / B.Tech.",
     "education_detail": "Computer Science",
     "occupation": "Software Engineer",
     "occupation_detail": "Backend Developer",
@@ -114,13 +114,14 @@ const BulkUploader = () => {
     "family_status": "upper_middle_class",
     "father_occupation": "Government Employee",
     "mother_occupation": "Homemaker",
-    "brothers_count": 1,
+    "number_of_brothers": 1,
     "brothers_married": 1,
-    "sisters_count": 0,
+    "number_of_sisters": 0,
     "sisters_married": 0,
     "city": "Chennai",
     "district": "Chennai",
     "state": "Tamil Nadu",
+    "country": "India",
     "about_me": "Friendly and family-oriented.",
     "food_habit": "vegetarian",
     "smoking": "no",
@@ -129,27 +130,27 @@ const BulkUploader = () => {
     "interests": ["Cricket", "Music"],
     "hobbies": ["Reading"],
     "horoscope": {
-      "star": "Ashwini",
-      "raasi": "Mesham",
+      "nakshatra": "Ashwini",
+      "rasi": "Mesham",
       "lagnam": "Simmam",
       "gothram": "Bharadwaja",
       "dasa_balance": "Venus 3y"
     },
     "preferences": {
-      "age_min": 24,
-      "age_max": 30,
-      "height_min": 150,
-      "height_max": 170,
-      "religion": ["Hindu"],
-      "caste": ["Mudaliar"],
-      "education": ["B.E. / B.Tech.", "M.E."],
-      "occupation": ["Software Engineer"],
-      "marital_status": ["never_married"],
-      "food_habit": ["vegetarian"],
-      "star": ["Ashwini", "Bharani"]
+      "pref_age_min": 24,
+      "pref_age_max": 30,
+      "pref_height_min": 150,
+      "pref_height_max": 170,
+      "pref_religion": ["Hindu"],
+      "pref_caste": ["Mudaliar"],
+      "pref_education": ["B.E. / B.Tech.", "M.E."],
+      "pref_occupation": ["Software Engineer"],
+      "pref_marital_status": ["never_married"],
+      "pref_food_habit": ["vegetarian"],
+      "pref_location": ["Chennai"]
     },
-    "plan_type": "gold",
-    "photos": ["https://your-cdn.com/photo1.jpg", "https://your-cdn.com/photo2.jpg"]
+    "tier": "gold",
+    "profile_photos": ["https://your-cdn.com/photo1.jpg", "https://your-cdn.com/photo2.jpg"]
   }
 ]`;
 
@@ -250,7 +251,7 @@ const BulkUploader = () => {
             </div>
             <textarea
               className="w-full h-64 p-4 border border-neutral-200 rounded-xl font-mono text-sm bg-neutral-50 focus:bg-white focus:outline-none focus:border-primary-400 focus:ring-4 focus:ring-primary-100 transition-all"
-              placeholder={'[\n  {\n    "email": "user@example.com",\n    "password": "SecurePass123",\n    "display_name": "John Doe",\n    "gender": "male"\n  }\n]'}
+              placeholder={'[\n  {\n    "email": "user@example.com",\n    "password": "SecurePass123",\n    "name": "John Doe",\n    "gender": "male"\n  }\n]'}
               value={pastedJson}
               onChange={(e) => setPastedJson(e.target.value)}
             />
@@ -319,7 +320,7 @@ const BulkUploader = () => {
           <div>
             <h3 className="font-bold text-neutral-900 mb-1">Expected JSON Format</h3>
             <p className="text-xs text-neutral-500">
-              Required fields: <span className="font-medium text-neutral-700">email, password, display_name, gender</span>
+              Required fields: <span className="font-medium text-neutral-700">email, password, name, gender</span>
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={copySample} icon={Copy}>Copy</Button>

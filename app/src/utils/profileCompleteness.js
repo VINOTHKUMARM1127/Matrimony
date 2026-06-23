@@ -52,7 +52,7 @@ const SECTIONS = [
   },
   {
     key: 'preferences', label: 'Partner Preferences', weight: 10,
-    fields: [['age_min', 'Min Age'], ['age_max', 'Max Age']],
+    fields: [['pref_age_min', 'Min Age'], ['pref_age_max', 'Max Age']],
     source: 'preferences',
   },
 ];

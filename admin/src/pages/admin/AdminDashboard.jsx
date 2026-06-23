@@ -21,12 +21,34 @@ const AdminDashboard = () => {
           adminApi.fetchSubscriptionPlans(),
         ]);
 
-        const premiumCount = users.filter((u) => u.is_premium).length;
+        const today = new Date().toISOString().split('T')[0];
+        let premiumCount = 0;
+        let silverCount = 0;
+        let goldCount = 0;
+        let platinumCount = 0;
+        let dailyReg = 0;
+
+        users.forEach((u) => {
+          if (u.created_at && u.created_at.startsWith(today)) {
+            dailyReg++;
+          }
+          const activeMembership = (u.user_memberships || []).find(m => m.status === 'active' && m.tier !== 'free');
+          if (activeMembership) {
+            premiumCount++;
+            if (activeMembership.tier === 'silver') silverCount++;
+            else if (activeMembership.tier === 'gold') goldCount++;
+            else if (activeMembership.tier === 'platinum') platinumCount++;
+          }
+        });
 
         setStats({
           totalUsers: users.length,
           premiumUsers: premiumCount,
           freeUsers: users.length - premiumCount,
+          silverUsers: silverCount,
+          goldUsers: goldCount,
+          platinumUsers: platinumCount,
+          dailyRegistrations: dailyReg,
         });
 
         if (plans && plans.length > 0) {
@@ -61,6 +83,7 @@ const AdminDashboard = () => {
       icon: Users,
       iconBg: 'bg-primary-100 text-primary-600',
       accent: 'from-primary-500/10',
+      sub: `${stats.dailyRegistrations} joined today`,
     },
     {
       label: 'Premium Members',
@@ -68,7 +91,7 @@ const AdminDashboard = () => {
       icon: Crown,
       iconBg: 'bg-gold-100 text-gold-600',
       accent: 'from-gold-500/10',
-      sub: `${premiumRate}% conversion`,
+      sub: `S:${stats.silverUsers} | G:${stats.goldUsers} | P:${stats.platinumUsers}`,
     },
     {
       label: 'Free Members',
@@ -76,6 +99,7 @@ const AdminDashboard = () => {
       icon: UserCircle,
       iconBg: 'bg-neutral-200 text-neutral-600',
       accent: 'from-neutral-400/10',
+      sub: `${premiumRate}% conversion rate`,
     },
     {
       label: 'Total Revenue',
@@ -96,8 +120,8 @@ const AdminDashboard = () => {
 
   const renderLimitCard = (plan) => {
     if (!plan) return null;
-    const meta = tierMeta[plan.tier] || tierMeta.free;
-    const isFree = plan.tier === 'free';
+    const meta = tierMeta[plan.name] || tierMeta.free;
+    const isFree = plan.name === 'free';
     return (
       <Card hover className="overflow-hidden h-full flex flex-col">
         <div className={`px-5 py-4 flex items-center justify-between border-b border-neutral-100`}>
@@ -109,31 +133,39 @@ const AdminDashboard = () => {
             {isFree ? 'Free' : `₹${Number(plan.price_inr || 0).toLocaleString('en-IN')}`}
           </span>
         </div>
-        <div className="grid grid-cols-3 divide-x divide-neutral-100">
+        <div className="grid grid-cols-2 divide-x divide-neutral-100">
           {[
-            { k: 'Recommended', initial: plan.initial_recommended_profiles, daily: plan.daily_recommended_increment },
-            { k: 'Nearby', initial: plan.initial_nearby_profiles, daily: plan.daily_nearby_increment },
-            { k: 'Daily', initial: plan.initial_daily_profiles, daily: plan.daily_profiles_increment },
+            { k: 'Contact Credits', val: plan.contact_credits },
+            { k: 'Interest Credits', val: plan.interest_credits },
           ].map((m) => (
-            <div key={m.k} className="px-2 py-4 text-center">
-              <p className={`text-xl font-extrabold ${meta.text}`}>{m.initial ?? 0}</p>
-              <p className="text-[10px] text-neutral-400 font-medium mt-0.5 mb-2">{m.k} (Initial)</p>
-
-              <div className="border-t border-neutral-50 pt-2 mx-1">
-                <p className={`text-sm font-bold text-success-600`}>+{m.daily ?? 0}</p>
-                <p className="text-[9px] text-neutral-400 font-medium mt-0.5">Daily Inc.</p>
-              </div>
+            <div key={m.k} className="px-2 py-3 text-center">
+              <p className={`text-xl font-extrabold ${meta.text}`}>{m.val ?? 0}</p>
+              <p className="text-[10px] text-neutral-400 font-medium mt-0.5">{m.k}</p>
             </div>
           ))}
         </div>
+        <div className="grid grid-cols-2 divide-x divide-neutral-100 border-t border-neutral-100">
+          <div className="px-2 py-3 text-center">
+            <p className="text-sm font-bold text-neutral-700">
+              {plan.initial_recommended_profiles ?? 0} <span className="text-neutral-400 font-normal">/</span> {plan.initial_nearby_profiles ?? 0}
+            </p>
+            <p className="text-[10px] text-neutral-400 font-medium mt-0.5">Initial (All / New)</p>
+          </div>
+          <div className="px-2 py-3 text-center">
+            <p className="text-sm font-bold text-neutral-700">
+              +{plan.daily_recommended_increment ?? 0} <span className="text-neutral-400 font-normal">/</span> +{plan.daily_nearby_increment ?? 0}
+            </p>
+            <p className="text-[10px] text-neutral-400 font-medium mt-0.5">Daily (All / New)</p>
+          </div>
+        </div>
         <div className="mt-auto grid grid-cols-2 divide-x divide-neutral-100 border-t border-neutral-100 bg-neutral-50/40">
           <div className="px-3 py-2.5 text-center">
-            <p className="text-sm font-bold text-emerald-700">{plan.contacts_limit ?? 0}</p>
-            <p className="text-[9px] text-neutral-400 font-medium">Contact credits</p>
+            <p className="text-sm font-bold text-emerald-700">{plan.validity_days ?? 0} days</p>
+            <p className="text-[9px] text-neutral-400 font-medium">Validity</p>
           </div>
           <div className="px-3 py-2.5 text-center">
-            <p className="text-sm font-bold text-emerald-700">{plan.interests_limit ?? 0}</p>
-            <p className="text-[9px] text-neutral-400 font-medium">Interest credits</p>
+            <p className="text-sm font-bold text-emerald-700">₹{Number(plan.price_inr || 0).toLocaleString('en-IN')}</p>
+            <p className="text-[9px] text-neutral-400 font-medium">Price</p>
           </div>
         </div>
       </Card>
@@ -206,7 +238,7 @@ const AdminDashboard = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {limits && limits.map((plan) => (
-            <div key={plan.tier}>
+            <div key={plan.name}>
               {renderLimitCard(plan)}
             </div>
           ))}

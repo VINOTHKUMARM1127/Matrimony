@@ -17,10 +17,11 @@ const HoroscopeScreen = ({ navigation }) => {
   const horoscope = useProfileStore((s) => s.horoscope);
   const { saveHoroscope, isLoading } = useProfileStore();
 
-  const [star, setStar] = useState(horoscope?.star || '');
-  const [raasi, setRaasi] = useState(horoscope?.raasi || '');
+  const [star, setStar] = useState(horoscope?.nakshatra || '');
+  const [raasi, setRaasi] = useState(horoscope?.rasi || '');
   const [lagnam, setLagnam] = useState(horoscope?.lagnam || '');
   const [gothram, setGothram] = useState(horoscope?.gothram || '');
+  const [dosham, setDosham] = useState(horoscope?.dosham || '');
   const [dasaBalance, setDasaBalance] = useState(horoscope?.dasa_balance || '');
 
   const handleNext = useCallback(async () => {
@@ -32,17 +33,18 @@ const HoroscopeScreen = ({ navigation }) => {
     try {
       await saveHoroscope({
         user_id: user.id,
-        star: star,
-        raasi: raasi,
+        nakshatra: star,
+        rasi: raasi,
         lagnam: lagnam || null,
         gothram: gothram.trim() || null,
+        dosham: dosham || null,
         dasa_balance: dasaBalance.trim() || null,
       });
       navigation.navigate('Lifestyle');
     } catch (error) {
       console.error('Save error:', error);
     }
-  }, [star, raasi, lagnam, gothram, dasaBalance, user, saveHoroscope, navigation]);
+  }, [star, raasi, lagnam, gothram, dosham, dasaBalance, user, saveHoroscope, navigation]);
 
   return (
     <View style={styles.container}>
@@ -92,6 +94,14 @@ const HoroscopeScreen = ({ navigation }) => {
           value={gothram}
           onChangeText={setGothram}
           placeholder="Enter your gothram"
+        />
+
+        <OptionSelector
+          label="Dosham / Chevvai"
+          options={DOSHAM_OPTIONS}
+          value={dosham}
+          onChange={setDosham}
+          columns={3}
         />
 
         <Input

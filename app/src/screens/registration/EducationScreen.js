@@ -17,12 +17,12 @@ const EducationScreen = ({ navigation }) => {
   const profile = useProfileStore((s) => s.profile);
   const { saveProfile, isLoading } = useProfileStore();
 
-  const [education, setEducation] = useState(profile?.education || '');
-  const [educationDetail, setEducationDetail] = useState(profile?.education_detail || '');
+  const [education, setEducation] = useState(profile?.highest_qualification || '');
+  const [educationDetail, setEducationDetail] = useState('');
   const [occupation, setOccupation] = useState(profile?.occupation || '');
-  const [occupationDetail, setOccupationDetail] = useState(profile?.occupation_detail || '');
+  const [occupationDetail, setOccupationDetail] = useState('');
   const [income, setIncome] = useState(profile?.annual_income || '');
-  const [company, setCompany] = useState(profile?.company_name || '');
+  const [company, setCompany] = useState('');
   const [errors, setErrors] = useState({});
 
   const validate = useCallback(() => {
@@ -42,12 +42,9 @@ const EducationScreen = ({ navigation }) => {
       const isNotWorking = occupation === 'Not Working';
       await saveProfile({
         id: user.id,
-        education,
-        education_detail: educationDetail.trim() || null,
+        highest_qualification: education,
         occupation,
-        occupation_detail: isNotWorking ? null : (occupationDetail.trim() || null),
         annual_income: isNotWorking ? null : (income || null),
-        company_name: isNotWorking ? null : (company.trim() || null),
       });
       navigation.navigate('Family');
     } catch (error) {

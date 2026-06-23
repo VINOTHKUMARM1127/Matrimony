@@ -12,6 +12,7 @@ import OptionSelector from '../../components/registration/OptionSelector';
 import SearchablePicker from '../../components/common/SearchablePicker';
 import useProfileStore from '../../store/useProfileStore';
 import useAuthStore from '../../store/useAuthStore';
+import useToastStore from '../../store/useToastStore';
 import { RELIGIONS, CASTES, HEIGHT_OPTIONS } from '../../utils/constants';
 
 const EditPreferencesScreen = ({ navigation }) => {
@@ -19,6 +20,7 @@ const EditPreferencesScreen = ({ navigation }) => {
   const profile = useProfileStore((s) => s.profile);
   const preferences = useProfileStore((s) => s.partnerPreferences);
   const savePartnerPreferences = useProfileStore((s) => s.savePartnerPreferences);
+  const showToast = useToastStore((state) => state.showToast);
 
   // Intelligent age preferences: defaults based on user's own age (min 18, max user's age)
   const [ageMin, setAgeMin] = useState(() => {
@@ -86,12 +88,11 @@ const EditPreferencesScreen = ({ navigation }) => {
         height_max: heightMax ? parseInt(heightMax, 10) : null,
       });
       setIsSaving(false);
-      Alert.alert('Success', 'Partner preferences updated successfully!', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
+      showToast('success', 'Success', 'Partner preferences updated successfully!');
+      navigation.goBack();
     } catch (err) {
       setIsSaving(false);
-      Alert.alert('Error', err.message || 'Failed to save preferences');
+      showToast('error', 'Error', err.message || 'Failed to save preferences');
     }
   };
 
