@@ -49,8 +49,9 @@ const attachPhotos = async (data, userId) => {
  * Get all matches based on backend distribution pool
  */
 export const getAllMatches = async (userId, limit = 20, offset = 0) => {
-  const { data, error } = await supabase.rpc('get_all_matches', {
+  const { data, error } = await supabase.rpc('get_profiles_from_pool', {
     p_user_id: userId,
+    p_section: 'all_matches',
     p_limit: limit,
     p_offset: offset,
   });
@@ -67,14 +68,34 @@ export const getAllMatches = async (userId, limit = 20, offset = 0) => {
  * Get daily match updates based on backend distribution pool
  */
 export const getDailyUpdates = async (userId, dailyLimit = 5, offset = 0) => {
-  const { data, error } = await supabase.rpc('get_daily_updates', {
+  const { data, error } = await supabase.rpc('get_profiles_from_pool', {
     p_user_id: userId,
+    p_section: 'daily_updates',
     p_limit: dailyLimit,
     p_offset: offset,
   });
 
   if (error) {
     console.warn('RPC Error fetching daily updates:', error);
+    return [];
+  }
+
+  return await attachPhotos(data, userId);
+};
+
+/**
+ * Get nearby profiles based on backend distribution pool
+ */
+export const getNearbyProfiles = async (userId, limit = 20, offset = 0) => {
+  const { data, error } = await supabase.rpc('get_profiles_from_pool', {
+    p_user_id: userId,
+    p_section: 'nearby',
+    p_limit: limit,
+    p_offset: offset,
+  });
+
+  if (error) {
+    console.warn('RPC Error fetching nearby profiles:', error);
     return [];
   }
 

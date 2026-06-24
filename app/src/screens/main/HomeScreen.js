@@ -65,6 +65,20 @@ const HomeScreen = ({ navigation }) => {
     enabled: !!user?.id,
   });
 
+  const { data: distData } = useQuery({
+    queryKey: ['user_profile_distribution', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('user_profile_distribution')
+        .select('total_recommended_unlocked, total_nearby_unlocked, tier')
+        .eq('user_id', user.id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
   const isFreeUser = !profile?.is_premium;
 
   const getTierDisplay = () => {
@@ -235,6 +249,15 @@ const HomeScreen = ({ navigation }) => {
                 </Text>
               </View>
             </View>
+
+            {distData && (
+              <View style={{ marginBottom: 16, alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+                  You have access to <Text style={{ fontWeight: 'bold', color: colors.primary }}>{distData.total_recommended_unlocked}</Text> matches 
+                  and <Text style={{ fontWeight: 'bold', color: colors.primary }}>{distData.total_nearby_unlocked}</Text> nearby profiles.
+                </Text>
+              </View>
+            )}
             
             <TouchableOpacity
               style={styles.dashboardActionBtn}

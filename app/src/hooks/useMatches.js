@@ -65,6 +65,27 @@ export const useMatches = () => {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Nearby Matches query (Infinite)
+  const {
+    data: nearbyMatchesData,
+    isLoading: loadingNearbyMatches,
+    fetchNextPage: fetchNextNearbyMatches,
+    hasNextPage: hasNextNearbyMatches,
+    isFetchingNextPage: fetchingNextNearbyMatches,
+    refetch: refetchNearbyMatches,
+  } = useInfiniteQuery({
+    queryKey: ['nearbyMatches', user?.id],
+    queryFn: ({ pageParam = 0 }) => matchesApi.getNearbyProfiles(user?.id, PAGE_SIZE, pageParam),
+    getNextPageParam: (lastPage, allPages) => {
+      const totalFetched = allPages.reduce((acc, page) => acc + page.length, 0);
+      if (lastPage.length < PAGE_SIZE) return undefined;
+      return totalFetched;
+    },
+    enabled: !!user?.id,
+    initialPageParam: 0,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const deduplicate = (arr) => {
     const seen = new Set();
     return arr.filter(item => {
@@ -75,23 +96,31 @@ export const useMatches = () => {
     });
   };
 
-  const allMatches = React.useMemo(() => deduplicate(allMatchesData?.pages?.flat() || []), [allMatchesData]);
-  const dailyUpdates = React.useMemo(() => deduplicate(dailyUpdatesData?.pages?.flat() || []), [dailyUpdatesData]);
+  const recommended = React.useMemo(() => deduplicate(allMatchesData?.pages?.flat() || []), [allMatchesData]);
+  const dailyMatches = React.useMemo(() => deduplicate(dailyUpdatesData?.pages?.flat() || []), [dailyUpdatesData]);
+  const nearbyMatches = React.useMemo(() => deduplicate(nearbyMatchesData?.pages?.flat() || []), [nearbyMatchesData]);
 
   return {
-    allMatches,
-    loadingAllMatches,
-    fetchNextAllMatches,
-    hasNextAllMatches,
-    fetchingNextAllMatches,
-    refetchAllMatches,
+    recommended,
+    loadingRecommended: loadingAllMatches,
+    fetchNextRecommended: fetchNextAllMatches,
+    hasNextRecommended: hasNextAllMatches,
+    fetchingNextRecommended: fetchingNextAllMatches,
+    refetchRecommended: refetchAllMatches,
 
-    dailyUpdates,
-    loadingDailyUpdates,
-    fetchNextDailyUpdates,
-    hasNextDailyUpdates,
-    fetchingNextDailyUpdates,
-    refetchDailyUpdates,
+    dailyMatches,
+    loadingDaily: loadingDailyUpdates,
+    fetchNextDaily: fetchNextDailyUpdates,
+    hasNextDaily: hasNextDailyUpdates,
+    fetchingNextDaily: fetchingNextDailyUpdates,
+    refetchDaily: refetchDailyUpdates,
+
+    nearbyMatches,
+    loadingNearby: loadingNearbyMatches,
+    fetchNextNearby: fetchNextNearbyMatches,
+    hasNextNearby: hasNextNearbyMatches,
+    fetchingNextNearby: fetchingNextNearbyMatches,
+    refetchNearby: refetchNearbyMatches,
   };
 };
 

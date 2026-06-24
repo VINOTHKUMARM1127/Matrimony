@@ -498,42 +498,46 @@ const UserModal = ({ user, onClose, onRefresh }) => {
 
                   {/* Profile Distribution Limits */}
                   <div className="border-t border-neutral-100 pt-5">
-                    <h3 className="font-semibold text-neutral-900 mb-3 flex items-center gap-2 text-sm">
-                      <TrendingUp size={17} className="text-violet-500" /> Profile Distribution Limits
-                    </h3>
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className="font-semibold text-neutral-900 flex items-center gap-2 text-sm">
+                        <TrendingUp size={17} className="text-violet-500" /> Profile Distribution Limits
+                      </h3>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          if (!window.confirm('Force push daily distribution to this user?')) return;
+                          setIsLoading(true);
+                          try {
+                            await adminApi.manualPushToUsers('user', user.id, userPlan?.daily_recommended_increment || 0, 0);
+                            alert('Pushed successfully!');
+                            onRefresh();
+                          } catch (err) {
+                            alert('Failed to push: ' + err.message);
+                          } finally {
+                            setIsLoading(false);
+                          }
+                        }}
+                        disabled={isLoading || !userPlan}
+                      >
+                        Push Daily Allocation
+                      </Button>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="bg-violet-50 rounded-2xl p-4 border border-violet-100">
-                        <p className="text-xs text-violet-600 mb-2 font-semibold uppercase tracking-wider">Recommended</p>
+                        <p className="text-xs text-violet-600 mb-2 font-semibold uppercase tracking-wider">Recommended Pool</p>
                         <div className="space-y-1">
                           <div className="flex justify-between items-center text-xs">
-                            <span className="text-violet-500">Initial:</span>
+                            <span className="text-violet-500">Initial Allocation:</span>
                             <span className="font-medium text-violet-700">{userPlan?.initial_recommended_profiles || 0}</span>
                           </div>
                           <div className="flex justify-between items-center text-xs">
-                            <span className="text-violet-500">Daily Inc:</span>
+                            <span className="text-violet-500">Daily Increment:</span>
                             <span className="font-medium text-violet-700">+{userPlan?.daily_recommended_increment || 0}</span>
                           </div>
                           <div className="pt-2 mt-2 border-t border-violet-100/50 flex justify-between items-center">
                             <span className="text-[11px] font-semibold text-violet-600 uppercase">Total Unlocked:</span>
-                            <span className="font-extrabold text-violet-900 text-lg">{distState ? (distState.recommended_profiles_shown ?? distState.total_recommended_unlocked) : (userPlan?.initial_recommended_profiles || 0)}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="bg-blue-50 rounded-2xl p-4 border border-blue-100">
-                        <p className="text-xs text-blue-600 mb-2 font-semibold uppercase tracking-wider">Nearby</p>
-                        <div className="space-y-1">
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="text-blue-500">Initial:</span>
-                            <span className="font-medium text-blue-700">{userPlan?.initial_nearby_profiles || 0}</span>
-                          </div>
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="text-blue-500">Daily Inc:</span>
-                            <span className="font-medium text-blue-700">+{userPlan?.daily_nearby_increment || 0}</span>
-                          </div>
-                          <div className="pt-2 mt-2 border-t border-blue-100/50 flex justify-between items-center">
-                            <span className="text-[11px] font-semibold text-blue-600 uppercase">Total Unlocked:</span>
-                            <span className="font-extrabold text-blue-900 text-lg">{distState ? (distState.nearby_profiles_shown ?? distState.total_nearby_unlocked) : (userPlan?.initial_nearby_profiles || 0)}</span>
+                            <span className="font-extrabold text-violet-900 text-lg">{distState ? distState.total_recommended_unlocked : (userPlan?.initial_recommended_profiles || 0)}</span>
                           </div>
                         </div>
                       </div>

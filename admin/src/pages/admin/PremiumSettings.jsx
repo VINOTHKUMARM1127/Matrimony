@@ -248,12 +248,8 @@ const PremiumSettings = () => {
                     <p className="text-[11px] text-neutral-500 mb-3">One-time allocation per tier</p>
                     <div className="space-y-3">
                       <div>
-                        <label className={labelClass}>All Matches Profiles</label>
+                        <label className={labelClass}>Recommended Profiles</label>
                         <input type="number" value={s.initial_recommended_profiles || 0} onChange={(e) => handleChange(tier.id, 'initial_recommended_profiles', parseInt(e.target.value) || 0)} className={fieldClass} />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Daily Updates Profiles</label>
-                        <input type="number" value={s.initial_daily_profiles || 0} onChange={(e) => handleChange(tier.id, 'initial_daily_profiles', parseInt(e.target.value) || 0)} className={fieldClass} />
                       </div>
                     </div>
                   </div>
@@ -266,12 +262,8 @@ const PremiumSettings = () => {
                     <p className="text-[11px] text-neutral-500 mb-3">Added automatically every day</p>
                     <div className="space-y-3">
                       <div>
-                        <label className={labelClass}>Daily All Matches +</label>
+                        <label className={labelClass}>Daily Increment +</label>
                         <input type="number" value={s.daily_recommended_increment || 0} onChange={(e) => handleChange(tier.id, 'daily_recommended_increment', parseInt(e.target.value) || 0)} disabled={isFree} className={`${fieldClass} disabled:opacity-50`} />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Daily Daily Updates +</label>
-                        <input type="number" value={s.daily_profiles_increment || 0} onChange={(e) => handleChange(tier.id, 'daily_profiles_increment', parseInt(e.target.value) || 0)} disabled={isFree} className={`${fieldClass} disabled:opacity-50`} />
                       </div>
                     </div>
                   </div>
@@ -312,12 +304,8 @@ const PremiumSettings = () => {
             ) : (
               <ul className="space-y-2 text-sm">
                 <li className="flex justify-between">
-                  <span className="text-neutral-600">All Matches Profiles</span>
+                  <span className="text-neutral-600">Recommended Profiles</span>
                   <span className="font-bold text-emerald-600">+{targetPlan.initial_recommended_profiles || 0}</span>
-                </li>
-                <li className="flex justify-between">
-                  <span className="text-neutral-600">Daily Updates Profiles</span>
-                  <span className="font-bold text-emerald-600">+{targetPlan.initial_daily_profiles || 0}</span>
                 </li>
                 <li className="flex justify-between pt-2 border-t border-neutral-50">
                   <span className="text-neutral-600">Contact Credits</span>

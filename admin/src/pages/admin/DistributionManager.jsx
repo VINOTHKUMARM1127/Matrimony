@@ -30,8 +30,11 @@ const DistributionManager = () => {
   const [editValues, setEditValues] = useState({});
   const [isSaving, setIsSaving] = useState(false);
 
+  const [health, setHealth] = useState({ active_users: 0, total_unlocked: 0 });
+
   useEffect(() => {
     loadPlans();
+    loadHealth();
   }, []);
 
   const loadPlans = async () => {
@@ -45,6 +48,24 @@ const DistributionManager = () => {
     }
   };
 
+  const loadHealth = async () => {
+    try {
+      const { count: activeUsers } = await adminApi.supabase
+        .from('user_memberships')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active')
+        .neq('tier', 'free');
+        
+      const { count: totalUnlocked } = await adminApi.supabase
+        .from('user_profile_pool')
+        .select('*', { count: 'exact', head: true });
+        
+      setHealth({ active_users: activeUsers || 0, total_unlocked: totalUnlocked || 0 });
+    } catch (err) {
+      console.error('Failed to load health stats:', err);
+    }
+  };
+
   const handleRunDistribution = async () => {
     if (!window.confirm('This will run the daily distribution for all active premium users. Continue?')) return;
     setIsRunning(true);
@@ -52,6 +73,7 @@ const DistributionManager = () => {
       const result = await adminApi.triggerDailyDistribution();
       setLastRunResult(result);
       window.alert(`Distribution complete! ${result?.users_updated || 0} users updated.`);
+      loadHealth(); // Refresh health stats
     } catch (err) {
       window.alert('Failed: ' + (err.message || 'Unknown error'));
     } finally {
@@ -88,9 +110,7 @@ const DistributionManager = () => {
     setEditingPlan(plan.name);
     setEditValues({
       initial_recommended_profiles: plan.initial_recommended_profiles || 0,
-      initial_daily_profiles: plan.initial_daily_profiles || 0,
       daily_recommended_increment: plan.daily_recommended_increment || 0,
-      daily_profiles_increment: plan.daily_profiles_increment || 0,
     });
   };
 
@@ -99,12 +119,7 @@ const DistributionManager = () => {
     try {
       await adminApi.updateSubscriptionPlan(tierName, {
         initial_recommended_profiles: editValues.initial_recommended_profiles,
-        initial_daily_profiles: editValues.initial_daily_profiles,
         daily_recommended_increment: editValues.daily_recommended_increment,
-        daily_profiles_increment: editValues.daily_profiles_increment,
-        // Neutralize nearby fields since they are removed
-        initial_nearby_profiles: 0,
-        daily_nearby_increment: 0,
       });
       await loadPlans();
       setEditingPlan(null);
@@ -153,6 +168,18 @@ const DistributionManager = () => {
         </div>
       )}
 
+      {/* Health Widgets */}
+      <div className="grid grid-cols-2 gap-4 mb-8">
+        <div className="p-5 bg-white rounded-xl shadow-sm border border-neutral-200">
+          <h3 className="text-sm font-medium text-neutral-500 mb-1">Active Premium Users</h3>
+          <p className="text-2xl font-bold text-neutral-900">{health.active_users}</p>
+        </div>
+        <div className="p-5 bg-white rounded-xl shadow-sm border border-neutral-200">
+          <h3 className="text-sm font-medium text-neutral-500 mb-1">Total Unlocked Profiles in Pool</h3>
+          <p className="text-2xl font-bold text-primary-600">{health.total_unlocked}</p>
+        </div>
+      </div>
+
       {/* Initial & Daily Distribution Configuration */}
       <Card className="mb-8 overflow-hidden border border-neutral-200">
         <div className="px-6 py-4 border-b border-neutral-100 bg-neutral-50/80">
@@ -170,10 +197,8 @@ const DistributionManager = () => {
               <thead>
                 <tr className="text-left text-neutral-500 border-b border-neutral-200">
                   <th className="pb-3 font-semibold">Premium Plan</th>
-                  <th className="pb-3 font-semibold">Initial All Matches</th>
-                  <th className="pb-3 font-semibold">Initial Daily Updates</th>
-                  <th className="pb-3 font-semibold">Daily All Matches</th>
-                  <th className="pb-3 font-semibold">Daily Daily Updates</th>
+                  <th className="pb-3 font-semibold">Initial Recommended</th>
+                  <th className="pb-3 font-semibold">Daily Increment</th>
                   <th className="pb-3 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
@@ -196,13 +221,7 @@ const DistributionManager = () => {
                             <input type="number" min="0" value={editValues.initial_recommended_profiles} onChange={e => setEditValues({...editValues, initial_recommended_profiles: parseInt(e.target.value)||0})} className="w-20 px-3 py-1.5 border border-neutral-300 rounded-lg text-sm" />
                           </td>
                           <td className="py-4 pr-4">
-                            <input type="number" min="0" value={editValues.initial_daily_profiles} onChange={e => setEditValues({...editValues, initial_daily_profiles: parseInt(e.target.value)||0})} className="w-20 px-3 py-1.5 border border-neutral-300 rounded-lg text-sm" />
-                          </td>
-                          <td className="py-4 pr-4">
                             <input type="number" min="0" value={editValues.daily_recommended_increment} onChange={e => setEditValues({...editValues, daily_recommended_increment: parseInt(e.target.value)||0})} className="w-20 px-3 py-1.5 border border-neutral-300 rounded-lg text-sm" />
-                          </td>
-                          <td className="py-4 pr-4">
-                            <input type="number" min="0" value={editValues.daily_profiles_increment} onChange={e => setEditValues({...editValues, daily_profiles_increment: parseInt(e.target.value)||0})} className="w-20 px-3 py-1.5 border border-neutral-300 rounded-lg text-sm" />
                           </td>
                           <td className="py-4 text-right flex justify-end gap-2 items-center h-[72px]">
                             <button onClick={() => saveEdits(plan.name)} disabled={isSaving} className="p-1.5 bg-success-50 text-success-600 rounded-lg hover:bg-success-100"><Check size={18} /></button>
@@ -212,9 +231,7 @@ const DistributionManager = () => {
                       ) : (
                         <>
                           <td className="py-4 font-mono text-neutral-800">{plan.initial_recommended_profiles || 0}</td>
-                          <td className="py-4 font-mono text-neutral-800">{plan.initial_daily_profiles || 0}</td>
                           <td className="py-4 font-mono text-primary-600">+{plan.daily_recommended_increment || 0}</td>
-                          <td className="py-4 font-mono text-primary-600">+{plan.daily_profiles_increment || 0}</td>
                           <td className="py-4 text-right">
                             <button onClick={() => startEditing(plan)} className="text-sm font-medium text-primary-600 hover:text-primary-800">Edit</button>
                           </td>

@@ -386,8 +386,9 @@ const MatchesScreen = ({ navigation }) => {
     return null;
   };
 
-  const renderLockCard = () => {
-    if (isPremium || displayData.length === 0) return null;
+  const renderLockCard = (forceShow = false) => {
+    if (isPremium) return null;
+    if (!forceShow && displayData.length === 0) return null;
 
     return (
       <View style={styles.lockCard}>
@@ -507,9 +508,13 @@ const MatchesScreen = ({ navigation }) => {
             />
         ) : (
           <View style={styles.emptyContainer}>
-            <EmptyState
-              preset={activeTab === 'daily' ? 'noDaily' : 'noMatches'}
-            />
+            {!isPremium && activeTab === 'daily' ? (
+              renderLockCard(true)
+            ) : (
+              <EmptyState
+                preset={activeTab === 'daily' ? 'noDaily' : 'noMatches'}
+              />
+            )}
           </View>
         )}
       </View>

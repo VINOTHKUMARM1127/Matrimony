@@ -51,27 +51,37 @@ export const fetchUserLimits = async (userId) => {
 
 /**
  * Fetch purchasable premium plans from subscription_plans.
- * Falls back to tier_settings if subscription_plans doesn't exist yet.
  */
 export const fetchPremiumPlans = async () => {
   const { data, error } = await supabase
-    .from('membership_plans')
-    .select('id, name, price_inr, validity_days, contact_credits, interest_credits, is_active')
+    .from('subscription_plans')
+    .select(`
+      id, tier, plan_name, price_inr, validity_days,
+      contacts_limit, interests_limit,
+      initial_recommended_profiles,
+      daily_recommended_increment,
+      is_active
+    `)
     .eq('is_active', true)
-    .neq('name', 'Free') // Assuming we don't show Free in premium screen
+    .neq('tier', 'free') // Assuming we don't show Free in premium screen
     .order('price_inr', { ascending: true });
 
-  if (error) throw error;
+  if (error) {
+    console.error('Error fetching subscription_plans:', error);
+    return [];
+  }
 
   return (data || []).map((d) => {
     // Generate UI attributes based on plan name
-    const planName = d.name.toLowerCase();
+    const planName = (d.plan_name || d.tier).toLowerCase();
     let color = '#D4AF37'; // Default Gold
     let popular = false;
     let features = [
-      `${d.contact_credits} Contact Credits`,
-      `${d.interest_credits} Interest Credits`,
+      `${d.contacts_limit} Contact Credits`,
+      `${d.interests_limit} Interest Credits`,
       `Valid for ${d.validity_days} Days`,
+      `See ${d.initial_recommended_profiles} profiles instantly`,
+      `+ ${d.daily_recommended_increment} new profiles every day`
     ];
 
     if (planName.includes('silver')) {
@@ -86,16 +96,19 @@ export const fetchPremiumPlans = async () => {
     }
 
     return {
-      id: d.id,
-      name: d.name,
+      id: d.id || d.tier,
+      tier: d.tier,
+      name: d.plan_name,
       price: d.price_inr,
       durationMonths: Math.round(d.validity_days / 30),
       duration: `${d.validity_days} Days`,
       features,
       color,
       popular,
-      contactsLimit: d.contact_credits,
-      interestsLimit: d.interest_credits,
+      contactsLimit: d.contacts_limit,
+      interestsLimit: d.interests_limit,
+      initial_recommended_profiles: d.initial_recommended_profiles,
+      daily_recommended_increment: d.daily_recommended_increment
     };
   });
 };
