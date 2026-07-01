@@ -253,19 +253,16 @@ const MatchesScreen = ({ navigation }) => {
   const isLoading = activeTab === 'daily' ? loadingDailyUpdates
                   : loadingAllMatches;
 
-  // Inject a "New Profiles Added Today" divider before the first profile flagged
-  // is_new_today (set by the backend feed_allocation). Profiles are returned in
-  // stable allocation order (older first, newly-distributed appended), so the
-  // divider cleanly separates the two. If the backend doesn't send the flag yet
-  // (hotfix not applied), no divider is shown — graceful degradation.
+  // Inject a "New Profiles Added Today" divider.
+  // New items are at the TOP (priority_score DESC). Find where the new block ends.
   const displayData = useMemo(() => {
     const list = rawData || [];
-    const firstNewIdx = list.findIndex((p) => p?.is_new_today);
-    if (firstNewIdx <= 0) return list; // none new, or all new (nothing to separate)
+    const lastNewIdx = list.findLastIndex((p) => p?.is_new_today);
+    if (lastNewIdx < 0 || lastNewIdx === list.length - 1) return list; // none new, or all new (nothing to separate)
     return [
-      ...list.slice(0, firstNewIdx),
+      ...list.slice(0, lastNewIdx + 1),
       { __divider: true, id: '__new_today_divider__' },
-      ...list.slice(firstNewIdx),
+      ...list.slice(lastNewIdx + 1),
     ];
   }, [rawData]);
 

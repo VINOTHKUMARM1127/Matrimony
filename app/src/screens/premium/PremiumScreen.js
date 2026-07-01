@@ -55,11 +55,11 @@ const PremiumScreen = ({ navigation }) => {
       queryClient.refetchQueries({ queryKey: ['activeSubscription', user.id] }),
     ]);
 
-    // 2) Now invalidate the feeds — they re-key to the new caps and refetch fresh.
+    // 2) Now explicitly refetch the feeds — they re-key to the new caps and fetch fresh.
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['recommended'] }),
-      queryClient.invalidateQueries({ queryKey: ['nearbyMatches'] }),
-      queryClient.invalidateQueries({ queryKey: ['dailyMatches'] }),
+      queryClient.refetchQueries({ queryKey: ['recommended'] }),
+      queryClient.refetchQueries({ queryKey: ['nearbyMatches'] }),
+      queryClient.refetchQueries({ queryKey: ['dailyMatches'] }),
       queryClient.invalidateQueries({ queryKey: ['subscriptionHistory', user.id] }),
     ]);
   };

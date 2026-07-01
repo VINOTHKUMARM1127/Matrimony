@@ -917,6 +917,7 @@ export const updateSubscriptionPlan = async (tier, planData) => {
     p_features: planData.features ?? null,
     p_color_code: planData.color_code ?? null,
     p_is_popular: typeof planData.is_popular === 'boolean' ? planData.is_popular : null,
+    p_horoscope_views_limit: toInt(planData.horoscope_views_limit),
   });
 
   if (error) throw error;
@@ -982,5 +983,14 @@ export const manualPushToUsers = async (targetType, targetVal, allMatchesCount, 
   });
   if (error) throw new Error(error.message || 'Failed to push manually');
   return data;
+};
+
+export const fetchPoolHealth = async () => {
+  const { data, error } = await supabase.rpc('get_pool_health_empty_users');
+  if (error) {
+    console.error('Failed to fetch pool health:', error);
+    return 0;
+  }
+  return data || 0;
 };
 

@@ -56,14 +56,18 @@ export const fetchPremiumPlans = async () => {
   const { data, error } = await supabase
     .from('subscription_plans')
     .select(`
-      id, tier, plan_name, price_inr, validity_days,
-      contacts_limit, interests_limit,
+      tier,
+      plan_name,
+      price_inr,
+      duration_months,
+      contacts_limit,
+      interests_limit,
       initial_recommended_profiles,
       daily_recommended_increment,
-      is_active
+      features,
+      color_code,
+      is_popular
     `)
-    .eq('is_active', true)
-    .neq('tier', 'free') // Assuming we don't show Free in premium screen
     .order('price_inr', { ascending: true });
 
   if (error) {
@@ -71,44 +75,52 @@ export const fetchPremiumPlans = async () => {
     return [];
   }
 
-  return (data || []).map((d) => {
-    // Generate UI attributes based on plan name
-    const planName = (d.plan_name || d.tier).toLowerCase();
-    let color = '#D4AF37'; // Default Gold
-    let popular = false;
-    let features = [
-      `${d.contacts_limit} Contact Credits`,
-      `${d.interests_limit} Interest Credits`,
-      `Valid for ${d.validity_days} Days`,
-      `See ${d.initial_recommended_profiles} profiles instantly`,
-      `+ ${d.daily_recommended_increment} new profiles every day`
-    ];
+  return (data || [])
+    .filter(d => d.tier !== 'free') // Assuming we don't show Free in premium screen
+    .map((d) => {
+      // Generate UI attributes based on plan name
+      const planName = (d.plan_name || d.tier).toLowerCase();
+      
+      const validityDays = (d.duration_months ?? 1) * 30;
+      
+      let color = d.color_code || '#D4AF37'; // Default Gold
+      let popular = d.is_popular || false;
+      let features = d.features || [
+        `${d.contacts_limit} Contact Credits`,
+        `${d.interests_limit} Interest Credits`,
+        `Valid for ${validityDays} Days`,
+        `See ${d.initial_recommended_profiles} profiles instantly`,
+        `+ ${d.daily_recommended_increment} new profiles every day`
+      ];
 
-    if (planName.includes('silver')) {
-      color = '#C0C0C0';
-    } else if (planName.includes('gold')) {
-      color = '#D4AF37';
-      popular = true;
-      features.push('Priority Support');
-    } else if (planName.includes('platinum') || planName.includes('diamond')) {
-      color = '#E5E4E2';
-      features.push('Priority Support', 'Dedicated Manager');
-    }
+      // Fallback colors if not in DB
+      if (!d.color_code) {
+        if (planName.includes('silver')) {
+          color = '#C0C0C0';
+        } else if (planName.includes('gold')) {
+          color = '#D4AF37';
+          popular = true;
+        } else if (planName.includes('platinum') || planName.includes('diamond')) {
+          color = '#E5E4E2';
+        }
+      }
 
-    return {
-      id: d.id || d.tier,
-      tier: d.tier,
-      name: d.plan_name,
-      price: d.price_inr,
-      durationMonths: Math.round(d.validity_days / 30),
-      duration: `${d.validity_days} Days`,
-      features,
-      color,
-      popular,
-      contactsLimit: d.contacts_limit,
-      interestsLimit: d.interests_limit,
-      initial_recommended_profiles: d.initial_recommended_profiles,
-      daily_recommended_increment: d.daily_recommended_increment
-    };
-  });
+      return {
+        id: d.tier,
+        tier: d.tier,
+        name: d.plan_name,
+        price: d.price_inr,
+        durationMonths: d.duration_months,
+        duration: `${validityDays} Days`,
+        validityDays,
+        features,
+        color,
+        popular,
+        contactsLimit: d.contacts_limit,
+        interestsLimit: d.interests_limit,
+        initial_recommended_profiles: d.initial_recommended_profiles,
+        daily_recommended_increment: d.daily_recommended_increment,
+        ...d
+      };
+    });
 };
