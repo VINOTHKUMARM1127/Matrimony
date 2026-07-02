@@ -28,7 +28,8 @@ import useProfileStore from '../../store/useProfileStore';
 import useAuthStore from '../../store/useAuthStore';
 import useToastStore from '../../store/useToastStore';
 import { uploadProfilePhoto, deleteProfilePhoto, setPrimaryProfilePhoto } from '../../api/profiles';
-import { HEIGHT_OPTIONS, FOOD_HABITS, MARITAL_STATUS, STARS, RAASIS } from '../../utils/constants';
+import { HEIGHT_OPTIONS, FOOD_HABITS, MARITAL_STATUS } from '../../utils/constants';
+import { getCities, getOccupations, getNakshatra, getRasi, getLagnam, getGothram } from '../../api/masterData';
 
 const TABS = [
   { id: 'personal', label: 'Personal' },
@@ -58,8 +59,24 @@ const EditProfileScreen = ({ route, navigation }) => {
   // Personal Fields
   const [displayName, setDisplayName] = useState(profile?.name || '');
   const [aboutMe, setAboutMe] = useState(profile?.about_me || '');
-  const [city, setCity] = useState(profile?.city || '');
-  const [occupation, setOccupation] = useState(profile?.occupation || '');
+  const [cityId, setCityId] = useState(profile?.city_id || '');
+  const [occupationId, setOccupationId] = useState(profile?.occupation_id || '');
+
+  const [cities, setCities] = useState([]);
+  const [occupations, setOccupations] = useState([]);
+  const [stars, setStars] = useState([]);
+  const [raasis, setRaasis] = useState([]);
+  const [lagnams, setLagnams] = useState([]);
+  const [gothrams, setGothrams] = useState([]);
+
+  useEffect(() => {
+    getCities(34).then(data => setCities(data.map(d => ({ label: d.name, value: d.id })))); // Assume TN state_id=34 for now, or just get all
+    getOccupations().then(data => setOccupations(data.map(d => ({ label: d.name, value: d.id }))));
+    getNakshatra().then(data => setStars(data.map(d => ({ label: d.name, value: d.id }))));
+    getRasi().then(data => setRaasis(data.map(d => ({ label: d.name, value: d.id }))));
+    getLagnam().then(data => setLagnams(data.map(d => ({ label: d.name, value: d.id }))));
+    getGothram().then(data => setGothrams(data.map(d => ({ label: d.name, value: d.id }))));
+  }, []);
   const [heightCm, setHeightCm] = useState(profile?.height_cm ? String(profile.height_cm) : '');
   const [maritalStatus, setMaritalStatus] = useState(profile?.marital_status || '');
 
@@ -73,19 +90,20 @@ const EditProfileScreen = ({ route, navigation }) => {
   const [foodHabit, setFoodHabit] = useState(profile?.food_habit || '');
 
   // Horoscope Fields
-  const [star, setStar] = useState(horoscope?.nakshatra || '');
-  const [raasi, setRaasi] = useState(horoscope?.rasi || '');
-  const [lagnam, setLagnam] = useState(horoscope?.lagnam || '');
-  const [gothram, setGothram] = useState(horoscope?.gothram || '');
-  const [dasaBalance, setDasaBalance] = useState(horoscope?.dasa_balance || '');
+  const [starId, setStarId] = useState(horoscope?.nakshatra_id || '');
+  const [raasiId, setRaasiId] = useState(horoscope?.rasi_id || '');
+  const [lagnamId, setLagnamId] = useState(horoscope?.lagnam_id || '');
+  const [gothramId, setGothramId] = useState(horoscope?.gothram_id || '');
+  const [gothramText, setGothramText] = useState(horoscope?.gothram_text || '');
+  const [dasaBalance, setDasaBalance] = useState(horoscope?.notes || '');
 
   // Synchronize local states with store data when loaded asynchronously
   useEffect(() => {
     if (profile) {
-      setDisplayName(profile.name || '');
+      setDisplayName(profile.full_name || '');
       setAboutMe(profile.about_me || '');
-      setCity(profile.city || '');
-      setOccupation(profile.occupation || '');
+      setCityId(profile.city_id || '');
+      setOccupationId(profile.occupation_id || '');
       setHeightCm(profile.height_cm ? String(profile.height_cm) : '');
       setMaritalStatus(profile.marital_status || '');
       setFamilyType(profile.family_type || '');
@@ -98,11 +116,12 @@ const EditProfileScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     if (horoscope) {
-      setStar(horoscope.nakshatra || '');
-      setRaasi(horoscope.rasi || '');
-      setLagnam(horoscope.lagnam || '');
-      setGothram(horoscope.gothram || '');
-      setDasaBalance(horoscope.dasa_balance || '');
+      setStarId(horoscope.nakshatra_id || '');
+      setRaasiId(horoscope.rasi_id || '');
+      setLagnamId(horoscope.lagnam_id || '');
+      setGothramId(horoscope.gothram_id || '');
+      setGothramText(horoscope.gothram_text || '');
+      setDasaBalance(horoscope.notes || '');
     }
   }, [horoscope]);
 
@@ -115,10 +134,10 @@ const EditProfileScreen = ({ route, navigation }) => {
     try {
       setIsSaving(true);
       await updateProfile(user.id, {
-        name: displayName,
+        full_name: displayName,
         about_me: aboutMe,
-        city,
-        occupation,
+        city_id: cityId || null,
+        occupation_id: occupationId || null,
         height_cm: heightCm ? parseInt(heightCm, 10) : null,
         marital_status: maritalStatus,
         family_type: familyType,
@@ -130,11 +149,12 @@ const EditProfileScreen = ({ route, navigation }) => {
 
       await saveHoroscope({
         user_id: user.id,
-        nakshatra: star || null,
-        rasi: raasi || null,
-        lagnam: lagnam || null,
-        gothram: gothram.trim() || null,
-        dasa_balance: dasaBalance.trim() || null,
+        nakshatra_id: starId || null,
+        rasi_id: raasiId || null,
+        lagnam_id: lagnamId || null,
+        gothram_id: gothramId || null,
+        gothram_text: gothramText.trim() || null,
+        notes: dasaBalance.trim() || null,
       });
       setIsSaving(false);
       showToast('success', 'Success', 'Profile updated successfully!');
@@ -236,10 +256,11 @@ const EditProfileScreen = ({ route, navigation }) => {
       />
       <View style={styles.row}>
         <View style={styles.flex1}>
-          <Input
+          <SearchablePicker
             label="City"
-            value={city}
-            onChangeText={setCity}
+            options={cities}
+            value={cityId}
+            onChange={setCityId}
             placeholder="e.g. Chennai"
           />
         </View>
@@ -254,10 +275,11 @@ const EditProfileScreen = ({ route, navigation }) => {
           />
         </View>
       </View>
-      <Input
+      <SearchablePicker
         label="Occupation"
-        value={occupation}
-        onChangeText={setOccupation}
+        options={occupations}
+        value={occupationId}
+        onChange={setOccupationId}
         placeholder="e.g. Software Engineer"
       />
       <SearchablePicker
@@ -336,32 +358,41 @@ const EditProfileScreen = ({ route, navigation }) => {
       <SearchablePicker
         label="Star / Nakshatra"
         placeholder="Select Star"
-        options={STARS}
-        value={star}
-        onChange={setStar}
+        options={stars}
+        value={starId}
+        onChange={setStarId}
       />
       <SearchablePicker
         label="Raasi / Moon Sign"
         placeholder="Select Raasi"
-        options={RAASIS}
-        value={raasi}
-        onChange={setRaasi}
+        options={raasis}
+        value={raasiId}
+        onChange={setRaasiId}
       />
       <SearchablePicker
         label="Lagnam"
         placeholder="Select Lagnam"
-        options={RAASIS}
-        value={lagnam}
-        onChange={setLagnam}
+        options={lagnams}
+        value={lagnamId}
+        onChange={setLagnamId}
       />
-      <Input
+      <SearchablePicker
         label="Gothram"
-        value={gothram}
-        onChangeText={setGothram}
-        placeholder="Enter your gothram"
+        placeholder="Select Gothram"
+        options={gothrams}
+        value={gothramId}
+        onChange={setGothramId}
       />
+      {(!gothramId || gothrams.find(g => g.value === gothramId)?.label === 'Other') && (
+        <Input
+          label="Specify Gothram"
+          value={gothramText}
+          onChangeText={setGothramText}
+          placeholder="Enter your gothram"
+        />
+      )}
       <Input
-        label="Dasa Balance"
+        label="Dasa Balance (Notes)"
         value={dasaBalance}
         onChangeText={setDasaBalance}
         placeholder="e.g. Rahu 2 years"

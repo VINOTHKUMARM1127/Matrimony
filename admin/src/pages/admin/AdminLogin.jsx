@@ -20,11 +20,15 @@ const AdminLogin = () => {
     setIsLoading(true);
 
     try {
-      const isAdmin = await adminApi.checkIsAdmin(email);
+      await signIn(email, password);
+      
+      const isAdmin = await adminApi.checkIsAdmin();
       if (!isAdmin) {
+        // Sign out if not admin
+        const { signOut } = useAuthStore.getState();
+        await signOut();
         throw new Error('Access denied. Admin privileges required.');
       }
-      await signIn(email, password);
       navigate('/dashboard');
     } catch (err) {
       setError(err.message || 'Login failed');

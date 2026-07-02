@@ -1,84 +1,83 @@
 /**
- * Shared profile field mapping — the single source of truth for which columns
- * live on which table. Used by Bulk Upload AND the Manage-User editor so the two
- * never drift apart. Every key here matches the unified wedring_schema.sql and the
- * 8-step mobile registration flow.
+ * Wedring Matrimony — Shared Profile Field Mapping
+ * 
+ * Maps flat input objects (e.g. from Bulk Upload or User Editor) into the exact
+ * column names expected by the new Supabase schema.
+ * 
+ * SCHEMA:
+ * - profiles
+ * - user_family
+ * - user_horoscope
+ * - user_lifestyle
+ * - partner_preferences
  */
 
 // Scalar columns on public.profiles
 export const PROFILE_SCALAR_FIELDS = [
-  'name', 'gender', 'date_of_birth', 'height_cm', 'weight_kg', 'physical_status',
-  'marital_status', 'religion', 'caste', 'about_me',
-  'country', 'state', 'district', 'city',
-  'highest_qualification', 'occupation', 'annual_income',
-  'food_habit', 'drinking_habit', 'smoking_habit',
+  'full_name', 'gender', 'dob', 'height_cm', 'weight_kg', 
+  'marital_status', 'physical_status', 'about_me',
+  'religion_id', 'caste_id', 'sub_caste_id', 'sub_caste_text',
+  'education_level_id', 'degree', 'college_name', 'occupation_id', 
+  'is_working', 'annual_income',
+  'country_id', 'state_id', 'district_id', 'city_id',
 ];
 
-// Array columns on public.profiles
-export const PROFILE_ARRAY_FIELDS = ['languages_known', 'interests', 'hobbies'];
+export const PROFILE_INT_FIELDS = [
+  'height_cm', 'weight_kg', 'religion_id', 'caste_id', 'sub_caste_id',
+  'education_level_id', 'occupation_id', 'country_id', 'state_id', 'district_id', 'city_id'
+];
 
-// Integer columns on public.profiles (coerced)
-export const PROFILE_INT_FIELDS = ['height_cm', 'weight_kg'];
+export const PROFILE_FLOAT_FIELDS = ['annual_income'];
+export const PROFILE_BOOL_FIELDS = ['is_working'];
 
-// horoscope_details columns
-export const HOROSCOPE_FIELDS = ['rasi', 'nakshatra', 'lagnam', 'gothram', 'dosham', 'horoscope_notes'];
+// user_lifestyle columns
+export const LIFESTYLE_SCALAR_FIELDS = ['food_habit', 'drinking_habit', 'smoking_habit'];
+export const LIFESTYLE_ARRAY_FIELDS = ['languages', 'interests', 'hobbies'];
+
+// user_horoscope columns
+export const HOROSCOPE_INT_FIELDS = ['rasi_id', 'nakshatra_id', 'lagnam_id', 'gothram_id'];
+export const HOROSCOPE_TEXT_FIELDS = ['rasi_text', 'nakshatra_text', 'lagnam_text', 'gothram_text', 'dosham', 'notes'];
 
 // partner_preferences columns
-export const PREFERENCE_SCALAR_FIELDS = ['pref_age_min', 'pref_age_max', 'pref_height_min', 'pref_height_max', 'pref_food_habit'];
-export const PREFERENCE_ARRAY_FIELDS = ['pref_religion', 'pref_caste', 'pref_education', 'pref_occupation', 'pref_marital_status', 'pref_location'];
+export const PREFERENCE_INT_FIELDS = ['min_age', 'max_age', 'min_height_cm', 'max_height_cm', 'religion_id', 'caste_id', 'education_level_id', 'occupation_id', 'location_city_id'];
+export const PREFERENCE_TEXT_FIELDS = ['food_habit', 'marital_status'];
 
-// family_details columns
-export const FAMILY_FIELDS = [
-  'father_name', 'mother_name', 'family_type', 'family_status', 'family_values',
-  'number_of_brothers', 'number_of_sisters',
+// user_family columns
+export const FAMILY_TEXT_FIELDS = [
+  'father_name', 'mother_name', 'family_type', 'family_status', 'family_values'
 ];
+export const FAMILY_INT_FIELDS = ['brothers_count', 'sisters_count'];
 
 const toInt = (v) => (v === '' || v === null || v === undefined ? null : (parseInt(v, 10) || 0));
+const toFloat = (v) => (v === '' || v === null || v === undefined ? null : parseFloat(v));
+const toBool = (v) => (v === '' || v === null || v === undefined ? null : Boolean(v));
 const toArray = (v) => {
   if (v === null || v === undefined || v === '') return undefined;
   if (Array.isArray(v)) return v;
-  // Allow comma-separated strings in bulk JSON for convenience.
   return String(v).split(',').map((s) => s.trim()).filter(Boolean);
 };
 
-/**
- * Build the public.profiles update/insert payload from a flat input object.
- * Only includes keys actually present on the input (so partial edits are safe).
- */
 export const buildProfilePayload = (input, { includeUndefined = false } = {}) => {
   const out = {};
   for (const k of PROFILE_SCALAR_FIELDS) {
     if (k in input) {
-      out[k] = PROFILE_INT_FIELDS.includes(k) ? toInt(input[k]) : (input[k] === '' ? null : input[k]);
+      if (PROFILE_INT_FIELDS.includes(k)) out[k] = toInt(input[k]);
+      else if (PROFILE_FLOAT_FIELDS.includes(k)) out[k] = toFloat(input[k]);
+      else if (PROFILE_BOOL_FIELDS.includes(k)) out[k] = toBool(input[k]);
+      else out[k] = input[k] === '' ? null : input[k];
     } else if (includeUndefined) {
       out[k] = null;
-    }
-  }
-  for (const k of PROFILE_ARRAY_FIELDS) {
-    if (k in input) {
-      const arr = toArray(input[k]);
-      if (arr !== undefined) out[k] = arr;
     }
   }
   return out;
 };
 
-/** Build horoscope_details payload; returns null if no horoscope keys present. */
-export const buildHoroscopePayload = (input) => {
+export const buildLifestylePayload = (input) => {
   const out = {};
-  for (const k of HOROSCOPE_FIELDS) {
+  for (const k of LIFESTYLE_SCALAR_FIELDS) {
     if (k in input && input[k] !== '' && input[k] !== null && input[k] !== undefined) out[k] = input[k];
   }
-  return Object.keys(out).length ? out : null;
-};
-
-/** Build partner_preferences payload; returns null if no preference keys present. */
-export const buildPreferencePayload = (input) => {
-  const out = {};
-  for (const k of PREFERENCE_SCALAR_FIELDS) {
-    if (k in input && input[k] !== '' && input[k] !== null && input[k] !== undefined) out[k] = toInt(input[k]);
-  }
-  for (const k of PREFERENCE_ARRAY_FIELDS) {
+  for (const k of LIFESTYLE_ARRAY_FIELDS) {
     if (k in input) {
       const arr = toArray(input[k]);
       if (arr !== undefined) out[k] = arr;
@@ -87,13 +86,35 @@ export const buildPreferencePayload = (input) => {
   return Object.keys(out).length ? out : null;
 };
 
-/** Build family_details payload; returns null if no family keys present. */
+export const buildHoroscopePayload = (input) => {
+  const out = {};
+  for (const k of HOROSCOPE_INT_FIELDS) {
+    if (k in input && input[k] !== '' && input[k] !== null && input[k] !== undefined) out[k] = toInt(input[k]);
+  }
+  for (const k of HOROSCOPE_TEXT_FIELDS) {
+    if (k in input && input[k] !== '' && input[k] !== null && input[k] !== undefined) out[k] = input[k];
+  }
+  return Object.keys(out).length ? out : null;
+};
+
+export const buildPreferencePayload = (input) => {
+  const out = {};
+  for (const k of PREFERENCE_INT_FIELDS) {
+    if (k in input && input[k] !== '' && input[k] !== null && input[k] !== undefined) out[k] = toInt(input[k]);
+  }
+  for (const k of PREFERENCE_TEXT_FIELDS) {
+    if (k in input && input[k] !== '' && input[k] !== null && input[k] !== undefined) out[k] = input[k];
+  }
+  return Object.keys(out).length ? out : null;
+};
+
 export const buildFamilyPayload = (input) => {
   const out = {};
-  for (const k of FAMILY_FIELDS) {
-    if (k in input && input[k] !== '' && input[k] !== null && input[k] !== undefined) {
-      out[k] = ['number_of_brothers', 'number_of_sisters'].includes(k) ? toInt(input[k]) : input[k];
-    }
+  for (const k of FAMILY_INT_FIELDS) {
+    if (k in input && input[k] !== '' && input[k] !== null && input[k] !== undefined) out[k] = toInt(input[k]);
+  }
+  for (const k of FAMILY_TEXT_FIELDS) {
+    if (k in input && input[k] !== '' && input[k] !== null && input[k] !== undefined) out[k] = input[k];
   }
   return Object.keys(out).length ? out : null;
 };

@@ -62,7 +62,7 @@ const BasicInfoScreen = ({ navigation }) => {
         id: user.id,
         name: name.trim(),
         gender,
-        date_of_birth: dateOfBirth,
+        dob: dateOfBirth,
         height_cm: height ? parseInt(height) : null,
         physical_status: physicalStatus || null,
         marital_status: maritalStatus,

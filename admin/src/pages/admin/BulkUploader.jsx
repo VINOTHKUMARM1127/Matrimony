@@ -29,7 +29,7 @@ const BulkUploader = () => {
     if (!Array.isArray(jsonArray)) throw new Error('JSON data must be an array of user objects.');
     if (jsonArray.length === 0) throw new Error('JSON array is empty.');
 
-    const requiredFields = ['email', 'password', 'name', 'gender'];
+    const requiredFields = ['email', 'password', 'full_name', 'gender'];
     for (let i = 0; i < jsonArray.length; i++) {
       const user = jsonArray[i];
       for (const field of requiredFields) {
@@ -93,9 +93,9 @@ const BulkUploader = () => {
   {
     "email": "sample@example.com",
     "password": "TempPassword123!",
-    "name": "Arun Kumar",
+    "full_name": "Arun Kumar",
     "gender": "male",
-    "date_of_birth": "1994-08-20",
+    "dob": "1994-08-20",
     "phone": "9876543210",
     "height_cm": 175,
     "marital_status": "never_married",
@@ -320,7 +320,7 @@ const BulkUploader = () => {
           <div>
             <h3 className="font-bold text-neutral-900 mb-1">Expected JSON Format</h3>
             <p className="text-xs text-neutral-500">
-              Required fields: <span className="font-medium text-neutral-700">email, password, name, gender</span>
+              Required fields: <span className="font-medium text-neutral-700">email, password, full_name, gender</span>
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={copySample} icon={Copy}>Copy</Button>

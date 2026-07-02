@@ -178,12 +178,12 @@ const ChatScreen = ({ route, navigation }) => {
         <View style={styles.headerInfo}>
           <Avatar
             source={otherUser?.photos?.find((p) => p.is_primary)?.storage_path || null}
-            name={otherUser?.display_name || 'User'}
+            name={otherUser?.full_name || 'User'}
             size="small"
           />
           <View style={styles.headerTextContainer}>
             <Text style={styles.headerName} numberOfLines={1}>
-              {otherUser?.display_name || 'Chat'}
+              {otherUser?.full_name || 'Chat'}
             </Text>
             <Text style={styles.headerSubtitle}>
               {otherUser?.city || 'Verified Member'}

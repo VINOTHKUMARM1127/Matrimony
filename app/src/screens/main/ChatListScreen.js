@@ -58,7 +58,7 @@ const ChatListScreen = ({ navigation }) => {
       >
         <Avatar
           source={photo}
-          name={otherUser?.display_name || ''}
+          name={otherUser?.full_name || ''}
           size="medium"
           showOnline
           isOnline={false}
@@ -66,7 +66,7 @@ const ChatListScreen = ({ navigation }) => {
         <View style={styles.chatInfo}>
           <View style={styles.chatHeader}>
             <Text style={styles.chatName} numberOfLines={1}>
-              {otherUser?.display_name || 'User'}
+              {otherUser?.full_name || 'User'}
             </Text>
             <Text style={styles.chatTime}>{formatTime(item.last_message_at)}</Text>
           </View>

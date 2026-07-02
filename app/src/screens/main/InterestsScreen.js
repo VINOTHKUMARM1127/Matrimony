@@ -166,7 +166,7 @@ const InterestsScreen = ({ navigation }) => {
   const renderReceivedItem = ({ item }) => {
     const sender = item.sender;
     if (!sender) return null;
-    const age = calculateAge(sender.date_of_birth);
+    const age = calculateAge(sender.dob);
     const photoUri = getPrimaryPhoto(sender);
 
     return (
@@ -176,11 +176,11 @@ const InterestsScreen = ({ navigation }) => {
         activeOpacity={0.9}
       >
         <View style={styles.cardContent}>
-          <Avatar source={photoUri} name={sender.display_name || ''} size={64} />
+          <Avatar source={photoUri} name={sender.full_name || ''} size={64} />
           <View style={styles.cardDetails}>
             <View style={styles.nameRow}>
               <Text style={styles.name} numberOfLines={1}>
-                {sender.display_name}{age ? `, ${age}` : ''}
+                {sender.full_name}{age ? `, ${age}` : ''}
               </Text>
               {sender.is_verified && (
                 <View style={styles.verifiedBadge}>
@@ -235,7 +235,7 @@ const InterestsScreen = ({ navigation }) => {
           <View style={styles.lockedAvatarContainer}>
             <View style={styles.lockedAvatar}>
               <Text style={styles.lockedAvatarText}>
-                {sender.display_name?.charAt(0)?.toUpperCase() || '?'}
+                {sender.full_name?.charAt(0)?.toUpperCase() || '?'}
               </Text>
             </View>
             <View style={styles.lockedAvatarOverlay} />
@@ -243,7 +243,7 @@ const InterestsScreen = ({ navigation }) => {
           <View style={styles.cardDetails}>
             <View style={styles.nameRow}>
               <Text style={styles.lockedName} numberOfLines={1}>
-                {maskName(sender.display_name)}
+                {maskName(sender.full_name)}
               </Text>
               <View style={styles.lockedBadge}>
                 <Text style={styles.lockedBadgeText}>🔒</Text>
@@ -282,7 +282,7 @@ const InterestsScreen = ({ navigation }) => {
   const renderSentItem = ({ item }) => {
     const receiver = item.receiver;
     if (!receiver) return null;
-    const age = calculateAge(receiver.date_of_birth);
+    const age = calculateAge(receiver.dob);
     const photoUri = getPrimaryPhoto(receiver);
 
     let statusColor = colors.warning;
@@ -309,11 +309,11 @@ const InterestsScreen = ({ navigation }) => {
           onPress={() => handleProfilePress(receiver.id)}
           activeOpacity={0.9}
         >
-          <Avatar source={photoUri} name={receiver.display_name || ''} size={64} />
+          <Avatar source={photoUri} name={receiver.full_name || ''} size={64} />
           <View style={styles.cardDetails}>
             <View style={styles.nameRow}>
               <Text style={styles.name} numberOfLines={1}>
-                {receiver.display_name}{age ? `, ${age}` : ''}
+                {receiver.full_name}{age ? `, ${age}` : ''}
               </Text>
               <View style={[styles.statusPill, { backgroundColor: statusBg }]}>
                 <Text style={[styles.statusPillText, { color: statusColor }]}>{statusLabel}</Text>

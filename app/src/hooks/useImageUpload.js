@@ -21,19 +21,18 @@ export const useImageUpload = () => {
   const [error, setError] = useState(null);
 
   // Helper to insert photo record in DB
-  const savePhotoToDb = async ({ storagePath, thumbnailPath }) => {
+  const savePhotoToDb = async ({ r2Key, thumbnailKey }) => {
     // If it's the first photo, make it primary
     const isPrimary = profilePhotos.length === 0;
 
     const { data, error } = await supabase
-      .from('photos')
+      .from('profile_photos')
       .insert({
         user_id: user.id,
-        storage_path: storagePath,
-        thumbnail_path: thumbnailPath,
+        r2_key: r2Key,
+        thumbnail_key: thumbnailKey,
         is_primary: isPrimary,
-        display_order: profilePhotos.length,
-        is_approved: true, // Auto approve for testing
+        order_index: profilePhotos.length,
       })
       .select()
       .single();
@@ -53,8 +52,8 @@ export const useImageUpload = () => {
       
       // Save to database
       const photoRecord = await savePhotoToDb({
-        storagePath: uploadRes.storagePath,
-        thumbnailPath: uploadRes.thumbnailPath,
+        r2Key: uploadRes.mainPath,
+        thumbnailKey: uploadRes.thumbPath,
       });
 
       return photoRecord;
@@ -74,26 +73,7 @@ export const useImageUpload = () => {
   const deleteMutation = useMutation({
     mutationFn: async (photo) => {
       setError(null);
-      
-      // Extract file path from URL (for storage removal)
-      const mainPath = photo.storage_path.split('/storage/v1/object/public/profile-photos/')[1];
-      const thumbPath = photo.thumbnail_path?.split('/storage/v1/object/public/profile-photos/')[1];
-
-      // Delete from storage
-      if (mainPath) {
-        await imageService.deleteImage(mainPath);
-      }
-      if (thumbPath) {
-        await imageService.deleteImage(thumbPath);
-      }
-
-      // Delete from database
-      const { error } = await supabase
-        .from('photos')
-        .delete()
-        .eq('id', photo.id);
-
-      if (error) throw error;
+      await imageService.deleteImage(photo.id);
       return photo.id;
     },
     onSuccess: (photoId) => {
@@ -112,13 +92,13 @@ export const useImageUpload = () => {
 
       // Set all other photos primary status to false
       await supabase
-        .from('photos')
+        .from('profile_photos')
         .update({ is_primary: false })
         .eq('user_id', user.id);
 
       // Set this photo primary status to true
       const { data, error } = await supabase
-        .from('photos')
+        .from('profile_photos')
         .update({ is_primary: true })
         .eq('id', photoId)
         .select()

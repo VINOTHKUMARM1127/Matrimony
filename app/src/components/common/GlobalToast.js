@@ -3,9 +3,9 @@ import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions } from '
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckCircle2, AlertCircle, Info, XCircle, X } from 'lucide-react-native';
 import useToastStore from '../../store/useToastStore';
-import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import { shadows } from '../../theme/shadows';
+import colors from '../../theme/colors';
+import typography from '../../theme/typography';
+import shadows from '../../theme/shadows';
 
 const { width } = Dimensions.get('window');
 

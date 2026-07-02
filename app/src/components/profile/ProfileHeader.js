@@ -13,8 +13,8 @@ const ProfileHeader = ({ profile }) => {
   if (!profile) return null;
 
   const age = (() => {
-    if (!profile.date_of_birth) return '';
-    const dob = new Date(profile.date_of_birth);
+    if (!profile.dob) return '';
+    const dob = new Date(profile.dob);
     const today = new Date();
     let a = today.getFullYear() - dob.getFullYear();
     const m = today.getMonth() - dob.getMonth();

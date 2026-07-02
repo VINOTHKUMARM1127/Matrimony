@@ -72,7 +72,7 @@ const NewTodayDivider = React.memo(() => (
 const ProfileMatchCard = React.memo(({
   item, index, isPremium, onPress, onInterested, onDecline, onPremiumAlert,
 }) => {
-  const age = calculateAge(item.date_of_birth);
+  const age = calculateAge(item.dob);
   const photoUri = getPrimaryPhotoFor(item);
   // Stable score: prefer the backend compatibility_score; deterministic fallback
   // derived from the id so it never changes between renders.

@@ -1,17 +1,24 @@
 /**
  * Wedring Matrimony — Interests API
  * Send, receive, accept/decline interest requests
+ *
+ * SCHEMA NOTES:
+ * - `interests` table: status enum is 'sent' | 'accepted' | 'rejected' (NOT 'pending'/'declined')
+ * - Sending interests uses `fn_send_interest` RPC (deducts interest credit automatically)
+ * - Accepting/rejecting uses `fn_respond_interest` RPC
+ * - Passing uses `fn_mark_not_interested` RPC
+ * - No `users` table — join directly to `profiles` and `profile_photos`
  */
 import supabase from './supabaseClient';
+import { getR2PhotoUrl } from './profiles';
 
 /**
  * Send interest to a user securely via backend RPC
+ * Deducts interest credit automatically.
  */
-export const sendInterest = async (senderId, receiverId, message = '') => {
-  const { data, error } = await supabase.rpc('send_interest_with_quota', {
-    p_sender_id: senderId,
+export const sendInterest = async (senderId, receiverId) => {
+  const { data, error } = await supabase.rpc('fn_send_interest', {
     p_receiver_id: receiverId,
-    p_message: message || null
   });
 
   if (error) throw error;
@@ -21,14 +28,14 @@ export const sendInterest = async (senderId, receiverId, message = '') => {
 /**
  * Get received interests
  */
-export const getReceivedInterests = async (userId, status = 'pending') => {
+export const getReceivedInterests = async (userId, status = 'sent') => {
   const { data, error } = await supabase
     .from('interests')
     .select(`
       *,
-      sender:users!interests_sender_id_fkey (
-        profiles (id, name, date_of_birth, city, highest_qualification, occupation),
-        profile_photos (id, photo_url, is_primary)
+      sender:profiles!interests_sender_id_fkey (
+        id, full_name, dob, gender,
+        profile_photos (id, r2_key, thumbnail_key, is_primary)
       )
     `)
     .eq('receiver_id', userId)
@@ -36,7 +43,19 @@ export const getReceivedInterests = async (userId, status = 'pending') => {
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return data || [];
+
+  // Attach photo URLs
+  return (data || []).map(interest => ({
+    ...interest,
+    sender: interest.sender ? {
+      ...interest.sender,
+      profile_photos: (interest.sender.profile_photos || []).map(p => ({
+        ...p,
+        photo_url: getR2PhotoUrl(p.r2_key),
+        thumbnail_url: getR2PhotoUrl(p.thumbnail_key),
+      })),
+    } : null,
+  }));
 };
 
 /**
@@ -47,44 +66,51 @@ export const getSentInterests = async (userId) => {
     .from('interests')
     .select(`
       *,
-      receiver:users!interests_receiver_id_fkey (
-        profiles (id, name, date_of_birth, city, highest_qualification, occupation),
-        profile_photos (id, photo_url, is_primary)
+      receiver:profiles!interests_receiver_id_fkey (
+        id, full_name, dob, gender,
+        profile_photos (id, r2_key, thumbnail_key, is_primary)
       )
     `)
     .eq('sender_id', userId)
-    .neq('status', 'declined')
+    .neq('status', 'rejected')
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return data || [];
+
+  return (data || []).map(interest => ({
+    ...interest,
+    receiver: interest.receiver ? {
+      ...interest.receiver,
+      profile_photos: (interest.receiver.profile_photos || []).map(p => ({
+        ...p,
+        photo_url: getR2PhotoUrl(p.r2_key),
+        thumbnail_url: getR2PhotoUrl(p.thumbnail_key),
+      })),
+    } : null,
+  }));
 };
 
 /**
- * Accept interest
+ * Accept interest via RPC
  */
 export const acceptInterest = async (interestId) => {
-  const { data, error } = await supabase
-    .from('interests')
-    .update({ status: 'accepted', updated_at: new Date().toISOString() })
-    .eq('id', interestId)
-    .select()
-    .single();
+  const { data, error } = await supabase.rpc('fn_respond_interest', {
+    p_interest_id: interestId,
+    p_response: 'accepted',
+  });
 
   if (error) throw error;
   return data;
 };
 
 /**
- * Decline interest
+ * Decline interest via RPC
  */
 export const declineInterest = async (interestId) => {
-  const { data, error } = await supabase
-    .from('interests')
-    .update({ status: 'declined', updated_at: new Date().toISOString() })
-    .eq('id', interestId)
-    .select()
-    .single();
+  const { data, error } = await supabase.rpc('fn_respond_interest', {
+    p_interest_id: interestId,
+    p_response: 'rejected',
+  });
 
   if (error) throw error;
   return data;
@@ -108,14 +134,11 @@ export const checkInterestStatus = async (senderId, receiverId) => {
  * Pass on a profile (Not Interested)
  */
 export const passProfile = async (senderId, receiverId) => {
-  const { data, error } = await supabase.rpc('pass_profile', {
-    p_sender_id: senderId,
-    p_receiver_id: receiverId
+  const { data, error } = await supabase.rpc('fn_mark_not_interested', {
+    p_target_user_id: receiverId,
   });
 
-  if (error) {
-    throw error;
-  }
+  if (error) throw error;
   return data;
 };
 
@@ -127,29 +150,36 @@ export const getPassedProfiles = async (userId) => {
     .from('not_interested')
     .select(`
       *,
-      target:users!not_interested_target_user_id_fkey (
-        profiles (id, name, date_of_birth, city, highest_qualification, occupation),
-        profile_photos (id, photo_url, is_primary)
+      target:profiles!not_interested_target_user_id_fkey (
+        id, full_name, dob, gender,
+        profile_photos (id, r2_key, thumbnail_key, is_primary)
       )
     `)
     .eq('user_id', userId)
-    .eq('is_restored', false)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return data || [];
+
+  return (data || []).map(item => ({
+    ...item,
+    target: item.target ? {
+      ...item.target,
+      profile_photos: (item.target.profile_photos || []).map(p => ({
+        ...p,
+        photo_url: getR2PhotoUrl(p.r2_key),
+        thumbnail_url: getR2PhotoUrl(p.thumbnail_key),
+      })),
+    } : null,
+  }));
 };
 
 /**
  * Restore a passed profile
  */
-export const restorePassedProfile = async (notInterestedId) => {
-  const { data, error } = await supabase
-    .from('not_interested')
-    .update({ is_restored: true, restored_at: new Date().toISOString() })
-    .eq('id', notInterestedId)
-    .select()
-    .single();
+export const restorePassedProfile = async (targetUserId) => {
+  const { data, error } = await supabase.rpc('fn_undo_not_interested', {
+    p_target_user_id: targetUserId,
+  });
 
   if (error) throw error;
   return data;
@@ -179,12 +209,15 @@ export const getUserInteractions = async (userId) => {
 };
 
 /**
- * View contact details with quota check
+ * View contact details with credit deduction
+ * @param {string} viewerId
+ * @param {string} targetId
+ * @param {string} type - 'phone' | 'horoscope'
  */
-export const viewContact = async (viewerId, targetId) => {
-  const { data, error } = await supabase.rpc('view_contact_with_quota', {
-    p_viewer_id: viewerId,
-    p_target_id: targetId,
+export const viewContact = async (viewerId, targetId, type = 'phone') => {
+  const { data, error } = await supabase.rpc('fn_view_contact_credit', {
+    p_viewed_user_id: targetId,
+    p_type: type,
   });
 
   if (error) throw error;

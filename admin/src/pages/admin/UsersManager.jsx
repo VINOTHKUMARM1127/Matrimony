@@ -43,7 +43,7 @@ const UsersManager = () => {
       const lower = searchTerm.toLowerCase();
       result = result.filter(
         (u) =>
-          u.name?.toLowerCase().includes(lower) ||
+          u.full_name?.toLowerCase().includes(lower) ||
           u.email?.toLowerCase().includes(lower)
       );
     }
@@ -55,22 +55,22 @@ const UsersManager = () => {
     if (filterTier) {
       if (filterTier === 'free') {
         result = result.filter((u) => {
-          const activeMembership = (u.user_memberships || []).find(m => m.status === 'active');
-          return !activeMembership || activeMembership.tier === 'free';
+          const activeMembership = (u.user_subscriptions || []).find(m => m.is_active);
+          return !activeMembership || activeMembership?.membership_plans?.tier === 'free';
         });
       } else {
         result = result.filter((u) => {
-          const activeMembership = (u.user_memberships || []).find(m => m.status === 'active');
-          return activeMembership?.tier === filterTier;
+          const activeMembership = (u.user_subscriptions || []).find(m => m.is_active);
+          return activeMembership?.membership_plans?.tier === filterTier;
         });
       }
     }
 
     if (filterStatus) {
       if (filterStatus === 'complete') {
-        result = result.filter((u) => u.profile_completion > 50);
+        result = result.filter((u) => u.profile_completion_percent > 50);
       } else if (filterStatus === 'incomplete') {
-        result = result.filter((u) => !u.profile_completion || u.profile_completion <= 50);
+        result = result.filter((u) => !u.profile_completion_percent || u.profile_completion_percent <= 50);
       }
     }
 
@@ -155,8 +155,8 @@ const UsersManager = () => {
   };
 
   const tierChip = (u) => {
-    const activeMembership = (u.user_memberships || []).find(m => m.status === 'active');
-    const tier = activeMembership?.tier || 'free';
+    const activeMembership = (u.user_subscriptions || []).find(m => m.is_active);
+    const tier = activeMembership?.membership_plans?.tier || 'free';
     if (tier !== 'free') {
       const map = {
         silver: 'bg-slate-100 text-slate-700 ring-slate-200',
@@ -180,11 +180,11 @@ const UsersManager = () => {
   const avatarFor = (u) => {
     const photo = u.profile_photos?.find((p) => p.is_primary) || u.profile_photos?.[0];
     if (photo?.photo_url) {
-      return <img src={photo.photo_url} alt="" className="w-full h-full object-cover" />;
+      return <img src={imageApi.getR2PublicUrl(photo.r2_key)} alt="" className="w-full h-full object-cover" />;
     }
     return (
       <span className="text-sm font-bold text-primary-600">
-        {(u.name || '?').charAt(0).toUpperCase()}
+        {(u.full_name || '?').charAt(0).toUpperCase()}
       </span>
     );
   };
@@ -194,18 +194,7 @@ const UsersManager = () => {
 
   return (
     <div className="flex flex-col">
-      {!import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY && (
-        <div className="bg-error-50 border border-error-200 text-error-800 p-4 rounded-2xl mb-6 shadow-sm">
-          <p className="flex items-center gap-2 mb-1 font-bold">
-            <Shield className="text-error-500" size={18} />
-            Missing Service Role Key
-          </p>
-          <p className="text-error-700 text-sm">
-            Add <code className="bg-error-100 px-1.5 py-0.5 rounded text-error-800 font-mono text-xs">VITE_SUPABASE_SERVICE_ROLE_KEY</code> to your{' '}
-            <code className="font-mono text-xs">admin/.env</code> file. Without it, the panel cannot fetch emails, reset passwords, or delete users. Restart the dev server after adding it.
-          </p>
-        </div>
-      )}
+
 
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
@@ -354,7 +343,7 @@ const UsersManager = () => {
                         </div>
                         <div className="min-w-0">
                           <p className="font-semibold text-neutral-900 group-hover:text-primary-600 transition-colors truncate">
-                            {u.name || 'No Name'}
+                            {u.full_name || 'No Name'}
                           </p>
                           <p className="text-xs text-neutral-500 truncate">{u.email || '—'}</p>
                           {u.phone && <p className="text-xs text-neutral-400">{u.phone}</p>}
@@ -364,13 +353,13 @@ const UsersManager = () => {
                     <td className="px-6 py-4 capitalize text-sm text-neutral-600">{u.gender || '—'}</td>
                     <td className="px-6 py-4">{tierChip(u)}</td>
                     <td className="px-6 py-4">
-                      {u.profile_completion > 50 ? (
+                      {u.profile_completion_percent > 50 ? (
                         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-success-700">
-                          <span className="w-1.5 h-1.5 rounded-full bg-success-500" /> {u.profile_completion}%
+                          <span className="w-1.5 h-1.5 rounded-full bg-success-500" /> {u.profile_completion_percent}%
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-400">
-                          <span className="w-1.5 h-1.5 rounded-full bg-neutral-300" /> {u.profile_completion || 0}%
+                          <span className="w-1.5 h-1.5 rounded-full bg-neutral-300" /> {u.profile_completion_percent || 0}%
                         </span>
                       )}
                     </td>

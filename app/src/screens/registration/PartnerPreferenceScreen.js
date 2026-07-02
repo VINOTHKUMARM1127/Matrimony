@@ -1,7 +1,7 @@
 /**
  * Wedring Matrimony — Partner Preference Registration (Step 8 - Final)
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import { colors } from '../../theme';
 import Input from '../../components/common/Input';
@@ -9,9 +9,10 @@ import Button from '../../components/common/Button';
 import OptionSelector from '../../components/registration/OptionSelector';
 import StepIndicator from '../../components/registration/StepIndicator';
 import {
-  RELIGIONS, EDUCATION_LEVELS, OCCUPATIONS, FOOD_HABITS,
-  MARITAL_STATUS, CASTES, HEIGHT_OPTIONS,
+  FOOD_HABITS,
+  MARITAL_STATUS, HEIGHT_OPTIONS,
 } from '../../utils/constants';
+import { getReligions, getCastes, getEducationLevels, getOccupations } from '../../api/masterData';
 import SearchablePicker from '../../components/common/SearchablePicker';
 import useProfileStore from '../../store/useProfileStore';
 import useAuthStore from '../../store/useAuthStore';
@@ -22,32 +23,37 @@ const PartnerPreferenceScreen = ({ navigation }) => {
   const profile = useProfileStore((s) => s.profile);
   const { savePartnerPreferences, updateProfile, isLoading } = useProfileStore();
 
-  // Intelligent age preferences: defaults based on user's own age (min 18, max user's age)
+  const [religions, setReligions] = useState([]);
+  const [castes, setCastes] = useState([]);
+  const [educationLevels, setEducationLevels] = useState([]);
+  const [occupations, setOccupations] = useState([]);
+
+  useEffect(() => {
+    getReligions().then(data => setReligions(data.map(r => ({ label: r.name, value: r.id }))));
+    getEducationLevels().then(data => setEducationLevels(data.map(e => ({ label: e.name, value: e.id }))));
+    getOccupations().then(data => setOccupations(data.map(o => ({ label: o.name, value: o.id }))));
+  }, []);
+
   const [ageMin, setAgeMin] = useState(() => {
-    if (profile?.date_of_birth) {
-      const birth = new Date(profile.date_of_birth);
+    if (profile?.dob) {
+      const birth = new Date(profile.dob);
       const today = new Date();
       let age = today.getFullYear() - birth.getFullYear();
-      const m = today.getMonth() - birth.getMonth();
-      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
       return String(Math.max(18, age - 3));
     }
     return '21';
   });
 
   const [ageMax, setAgeMax] = useState(() => {
-    if (profile?.date_of_birth) {
-      const birth = new Date(profile.date_of_birth);
+    if (profile?.dob) {
+      const birth = new Date(profile.dob);
       const today = new Date();
       let age = today.getFullYear() - birth.getFullYear();
-      const m = today.getMonth() - birth.getMonth();
-      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
       return String(age);
     }
     return '35';
   });
 
-  // Intelligent height preferences: max defaults to user's height, min to height - 15cm
   const [heightMin, setHeightMin] = useState(() => {
     if (profile?.height_cm) {
       return String(Math.max(140, profile.height_cm - 15));
@@ -61,56 +67,41 @@ const PartnerPreferenceScreen = ({ navigation }) => {
     }
     return '210';
   });
-  const [maritalStatus, setMaritalStatus] = useState([]);
-  const [religion, setReligion] = useState([]);
-  
-  // Default to user's own caste, otherwise select Caste No Bar
-  const [caste, setCaste] = useState(() => profile?.caste ? [profile.caste] : ['Caste No Bar']);
-  
-  const [education, setEducation] = useState([]);
-  const [occupation, setOccupation] = useState([]);
-  const [foodHabit, setFoodHabit] = useState([]);
 
-  // Exclusive selection: choosing "No Education Bar" clears other fields and vice-versa
-  const handleEducationChange = useCallback((newValues) => {
-    const noPref = 'No Education Bar';
-    const hasNoPref = newValues.includes(noPref);
-    const hadNoPref = education.includes(noPref);
-
-    if (hasNoPref) {
-      if (hadNoPref) {
-        setEducation(newValues.filter((v) => v !== noPref));
-      } else {
-        setEducation([noPref]);
-      }
+  const [maritalStatus, setMaritalStatus] = useState('');
+  const [religionId, setReligionId] = useState(profile?.religion_id || '');
+  const [casteId, setCasteId] = useState('');
+  
+  useEffect(() => {
+    if (religionId) {
+      getCastes(religionId).then(data => setCastes(data.map(c => ({ label: c.name, value: c.id }))));
     } else {
-      setEducation(newValues.filter((v) => v !== noPref));
+      setCastes([]);
     }
-  }, [education]);
+  }, [religionId]);
 
-  const casteOptions = React.useMemo(() => {
-    return CASTES[profile?.religion] || CASTES['Hindu'] || [];
-  }, [profile]);
+  const [educationId, setEducationId] = useState('');
+  const [occupationId, setOccupationId] = useState('');
+  const [foodHabit, setFoodHabit] = useState('');
 
   const handleComplete = useCallback(async () => {
     try {
       const prefPayload = {
         user_id: user.id,
-        pref_age_min: parseInt(ageMin) || 18,
-        pref_age_max: parseInt(ageMax) || 60,
-        pref_height_min: heightMin ? parseInt(heightMin) : null,
-        pref_height_max: heightMax ? parseInt(heightMax) : null,
-        pref_marital_status: maritalStatus.length > 0 ? maritalStatus : null,
-        pref_religion: religion.length > 0 ? religion : null,
-        pref_caste: caste.length > 0 ? caste : null,
-        pref_education: education.length > 0 ? education : null,
-        pref_occupation: occupation.length > 0 ? occupation : null,
-        pref_food_habit: foodHabit.length > 0 ? foodHabit : null,
+        min_age: parseInt(ageMin) || 18,
+        max_age: parseInt(ageMax) || 60,
+        min_height_cm: heightMin ? parseInt(heightMin) : null,
+        max_height_cm: heightMax ? parseInt(heightMax) : null,
+        marital_status: maritalStatus || null,
+        religion_id: religionId || null,
+        caste_id: casteId || null,
+        education_level_id: educationId || null,
+        occupation_id: occupationId || null,
+        food_habit: foodHabit || null,
       };
+      
       await savePartnerPreferences(prefPayload);
 
-      // Compute a real completion % from the full profile + relations
-      // (single source of truth — no hardcoded 100).
       const { profile, horoscope, photos } = useProfileStore.getState();
       const { percent } = computeCompleteness(profile || {}, {
         horoscope,
@@ -119,7 +110,7 @@ const PartnerPreferenceScreen = ({ navigation }) => {
       });
 
       await updateProfile(user.id, {
-        profile_completion: percent,
+        profile_completion_percent: percent,
       });
 
       Alert.alert(
@@ -127,12 +118,11 @@ const PartnerPreferenceScreen = ({ navigation }) => {
         `Your profile is ${percent}% complete. Start exploring matches!`,
         [{ text: 'Let\'s Go!', onPress: () => {} }]
       );
-      // Navigation will be handled by AppNavigator based on profile completion
     } catch (error) {
       console.error('Save error:', error);
       Alert.alert('Error', error.message || 'Failed to save preferences. Please try again.');
     }
-  }, [ageMin, ageMax, heightMin, heightMax, maritalStatus, religion, caste, education, occupation, foodHabit, user, savePartnerPreferences, updateProfile]);
+  }, [ageMin, ageMax, heightMin, heightMax, maritalStatus, religionId, casteId, educationId, occupationId, foodHabit, user, savePartnerPreferences, updateProfile]);
 
   return (
     <View style={styles.container}>
@@ -191,58 +181,53 @@ const PartnerPreferenceScreen = ({ navigation }) => {
         </View>
 
         <OptionSelector
-          label="Marital Status"
+          label="Preferred Marital Status"
           options={MARITAL_STATUS}
           value={maritalStatus}
           onChange={setMaritalStatus}
-          multiple
           columns={2}
         />
 
         <OptionSelector
-          label="Religion"
-          options={RELIGIONS}
-          value={religion}
-          onChange={setReligion}
-          multiple
+          label="Preferred Religion"
+          options={religions}
+          value={religionId}
+          onChange={(val) => { setReligionId(val); setCasteId(''); }}
           columns={2}
         />
 
-        <SearchablePicker
-          label="Preferred Caste"
-          placeholder="Select preferred caste(s)"
-          searchPlaceholder="Search caste..."
-          options={casteOptions}
-          value={caste}
-          onChange={setCaste}
-          multiple
-          noPreferenceValue="Caste No Bar"
-        />
+        {castes.length > 0 && (
+          <SearchablePicker
+            label="Preferred Caste"
+            placeholder="Select preferred caste"
+            searchPlaceholder="Search caste..."
+            options={castes}
+            value={casteId}
+            onChange={setCasteId}
+          />
+        )}
 
         <OptionSelector
-          label="Education"
-          options={EDUCATION_LEVELS.slice(0, 13)}
-          value={education}
-          onChange={handleEducationChange}
-          multiple
+          label="Preferred Education"
+          options={educationLevels.slice(0, 13)}
+          value={educationId}
+          onChange={setEducationId}
           columns={3}
         />
 
         <OptionSelector
-          label="Occupation"
-          options={OCCUPATIONS.slice(0, 10)}
-          value={occupation}
-          onChange={setOccupation}
-          multiple
+          label="Preferred Occupation"
+          options={occupations.slice(0, 10)}
+          value={occupationId}
+          onChange={setOccupationId}
           columns={2}
         />
 
         <OptionSelector
-          label="Food Habit"
+          label="Preferred Food Habit"
           options={FOOD_HABITS}
           value={foodHabit}
           onChange={setFoodHabit}
-          multiple
           columns={3}
         />
 

@@ -1,93 +1,76 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import supabase from './supabaseClient';
 
-let _s3Client = null;
+const R2_PUBLIC_URL = import.meta.env.VITE_R2_PUBLIC_URL || '';
 
-const getS3Client = () => {
-  if (_s3Client) return _s3Client;
+export const getR2PublicUrl = (r2Key) => {
+  if (!r2Key) return null;
+  if (r2Key.startsWith('http')) return r2Key;
+  return `${R2_PUBLIC_URL}/${r2Key}`;
+};
 
-  const r2AccountId = import.meta.env.VITE_R2_ACCOUNT_ID;
-  const r2AccessKeyId = import.meta.env.VITE_R2_ACCESS_KEY_ID;
-  const r2SecretAccessKey = import.meta.env.VITE_R2_SECRET_ACCESS_KEY;
-
-  if (!r2AccountId || !r2AccessKeyId || !r2SecretAccessKey) {
-    throw new Error('Cloudflare R2 credentials are missing in .env');
+export const getR2KeyFromUrl = (publicUrl) => {
+  if (!publicUrl) return '';
+  if (R2_PUBLIC_URL && publicUrl.startsWith(R2_PUBLIC_URL)) {
+    return publicUrl.replace(`${R2_PUBLIC_URL}/`, '');
   }
-
-  _s3Client = new S3Client({
-    region: 'auto',
-    endpoint: `https://${r2AccountId}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: r2AccessKeyId,
-      secretAccessKey: r2SecretAccessKey,
-    },
-    forcePathStyle: true,
-  });
-  return _s3Client;
+  try {
+    const url = new URL(publicUrl);
+    const pathParts = url.pathname.split('/').filter(Boolean);
+    if (pathParts.length >= 2) {
+      return `${pathParts[pathParts.length - 2]}/${pathParts[pathParts.length - 1]}`;
+    }
+  } catch (e) {}
+  return publicUrl;
 };
 
 /**
- * Upload an image File object to Cloudflare R2
+ * Upload an image File object to Cloudflare R2 using Edge Function
  */
 export const uploadPhotoToR2 = async (userId, file) => {
-  const ext = file.name.split('.').pop() || 'jpg';
-  const fileName = `${userId}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  const bucketName = import.meta.env.VITE_R2_BUCKET_NAME || 'matrimony';
+  // 1. Get presigned upload URL from Edge Function
+  const { data: presignedData, error: presignedError } = await supabase.functions.invoke(
+    'r2-presigned-upload',
+    { body: { content_type: file.type || 'image/jpeg', user_id_override: userId } }
+  );
 
-  const client = getS3Client();
+  if (presignedError) throw presignedError;
+  if (!presignedData?.upload_url || !presignedData?.r2_key) {
+    throw new Error('Failed to get presigned upload URL');
+  }
 
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = new Uint8Array(arrayBuffer);
-
-  const command = new PutObjectCommand({
-    Bucket: bucketName,
-    Key: fileName,
-    Body: buffer,
-    ContentType: file.type || 'image/jpeg',
+  // 2. Upload binary directly to R2 via presigned URL
+  const uploadResponse = await fetch(presignedData.upload_url, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type || 'image/jpeg' },
+    body: file, // file is a Blob/File, fetch can handle it directly
   });
 
-  await client.send(command);
-
-  const r2PublicDomain = import.meta.env.VITE_R2_PUBLIC_URL || '';
-  const publicUrl = `${r2PublicDomain}/${fileName}`;
+  if (!uploadResponse.ok) {
+    throw new Error(`R2 upload failed: ${uploadResponse.status}`);
+  }
 
   return {
-    path: fileName,
-    publicUrl: publicUrl,
+    path: presignedData.r2_key,
+    publicUrl: getR2PublicUrl(presignedData.r2_key),
   };
 };
 
 /**
- * Delete an image from Cloudflare R2 using its public URL
+ * Delete an image from Cloudflare R2 using its R2 key
  */
-export const deletePhotoFromR2 = async (publicUrl) => {
-  if (!publicUrl) return;
+export const deletePhotoFromR2 = async (r2Key) => {
+  if (!r2Key) return;
+  
+  // Try to extract key if a full URL was passed
+  const key = getR2KeyFromUrl(r2Key);
 
-  const r2PublicDomain = import.meta.env.VITE_R2_PUBLIC_URL || '';
-  let key = publicUrl;
+  const { error } = await supabase.functions.invoke(
+    'r2-delete-photo',
+    { body: { r2_key: key } }
+  );
 
-  // Extract the key from the public URL
-  if (r2PublicDomain && publicUrl.startsWith(r2PublicDomain)) {
-    key = publicUrl.replace(`${r2PublicDomain}/`, '');
-  } else {
-    // Fallback: try to extract 'userId/filename' assuming 2 parts at the end
-    try {
-      const url = new URL(publicUrl);
-      const pathParts = url.pathname.split('/');
-      if (pathParts.length >= 2) {
-        key = `${pathParts[pathParts.length - 2]}/${pathParts[pathParts.length - 1]}`;
-      }
-    } catch (e) {
-      console.warn('Could not parse URL for R2 deletion:', publicUrl);
-    }
+  if (error) {
+    console.warn('Failed to delete photo via Edge Function:', error.message);
+    throw error;
   }
-
-  const bucketName = import.meta.env.VITE_R2_BUCKET_NAME || 'matrimony';
-  const client = getS3Client();
-
-  const command = new DeleteObjectCommand({
-    Bucket: bucketName,
-    Key: key,
-  });
-
-  await client.send(command);
 };

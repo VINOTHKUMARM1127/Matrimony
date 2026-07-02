@@ -1,14 +1,15 @@
 /**
  * Wedring Matrimony — Education & Career Registration (Step 3)
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { colors } from '../../theme';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import OptionSelector from '../../components/registration/OptionSelector';
 import StepIndicator from '../../components/registration/StepIndicator';
-import { EDUCATION_LEVELS, OCCUPATIONS, INCOME_RANGES } from '../../utils/constants';
+import { INCOME_RANGES } from '../../utils/constants';
+import { getEducationLevels, getOccupations } from '../../api/masterData';
 import useProfileStore from '../../store/useProfileStore';
 import useAuthStore from '../../store/useAuthStore';
 
@@ -17,40 +18,54 @@ const EducationScreen = ({ navigation }) => {
   const profile = useProfileStore((s) => s.profile);
   const { saveProfile, isLoading } = useProfileStore();
 
-  const [education, setEducation] = useState(profile?.highest_qualification || '');
+  const [educationLevels, setEducationLevels] = useState([]);
+  const [occupations, setOccupations] = useState([]);
+
+  const [educationId, setEducationId] = useState(profile?.education_level_id || '');
   const [educationDetail, setEducationDetail] = useState('');
-  const [occupation, setOccupation] = useState(profile?.occupation || '');
+  const [occupationId, setOccupationId] = useState(profile?.occupation_id || '');
   const [occupationDetail, setOccupationDetail] = useState('');
   const [income, setIncome] = useState(profile?.annual_income || '');
   const [company, setCompany] = useState('');
   const [errors, setErrors] = useState({});
 
+  useEffect(() => {
+    getEducationLevels().then(data => {
+      setEducationLevels(data.map(e => ({ label: e.name, value: e.id })));
+    });
+    getOccupations().then(data => {
+      setOccupations(data.map(o => ({ label: o.name, value: o.id })));
+    });
+  }, []);
+
   const validate = useCallback(() => {
     const newErrors = {};
-    if (!education) newErrors.education = 'Please select your education';
-    if (!occupation) newErrors.occupation = 'Please select your occupation';
-    if (occupation !== 'Not Working' && !income) {
+    if (!educationId) newErrors.educationId = 'Please select your education';
+    if (!occupationId) newErrors.occupationId = 'Please select your occupation';
+    
+    const isNotWorking = occupations.find(o => o.value === occupationId)?.label === 'Not Working';
+    if (!isNotWorking && !income) {
       newErrors.income = 'Please select your annual income';
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [education, occupation, income]);
+  }, [educationId, occupationId, income, occupations]);
 
   const handleNext = useCallback(async () => {
     if (!validate()) return;
     try {
-      const isNotWorking = occupation === 'Not Working';
+      const isNotWorking = occupations.find(o => o.value === occupationId)?.label === 'Not Working';
       await saveProfile({
         id: user.id,
-        highest_qualification: education,
-        occupation,
+        education_level_id: educationId,
+        occupation_id: occupationId,
         annual_income: isNotWorking ? null : (income || null),
       });
       navigation.navigate('Family');
     } catch (error) {
       console.error('Save error:', error);
     }
-  }, [validate, education, educationDetail, occupation, occupationDetail, income, company, user, saveProfile, navigation]);
+  }, [validate, educationId, occupationId, income, occupations, user, saveProfile, navigation]);
 
   return (
     <View style={styles.container}>
@@ -66,12 +81,12 @@ const EducationScreen = ({ navigation }) => {
 
         <OptionSelector
           label="Education"
-          options={EDUCATION_LEVELS}
-          value={education}
-          onChange={setEducation}
+          options={educationLevels}
+          value={educationId}
+          onChange={setEducationId}
           columns={3}
           required
-          error={errors.education}
+          error={errors.educationId}
         />
 
         <Input
@@ -83,11 +98,12 @@ const EducationScreen = ({ navigation }) => {
 
         <OptionSelector
           label="Occupation"
-          options={OCCUPATIONS}
-          value={occupation}
+          options={occupations}
+          value={occupationId}
           onChange={(val) => {
-            setOccupation(val);
-            if (val === 'Not Working') {
+            setOccupationId(val);
+            const isNotWorking = occupations.find(o => o.value === val)?.label === 'Not Working';
+            if (isNotWorking) {
               setOccupationDetail('');
               setCompany('');
               setIncome('');
@@ -95,10 +111,10 @@ const EducationScreen = ({ navigation }) => {
           }}
           columns={2}
           required
-          error={errors.occupation}
+          error={errors.occupationId}
         />
 
-        {occupation !== 'Not Working' && occupation !== '' && (
+        {occupations.find(o => o.value === occupationId)?.label !== 'Not Working' && occupationId !== '' && (
           <>
             <Input
               label="Job Details (Optional)"

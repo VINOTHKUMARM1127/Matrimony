@@ -1,6 +1,14 @@
 /**
  * Wedring Matrimony — Profile Store (Zustand)
  * User profile state management
+ *
+ * SCHEMA NOTES:
+ * - `profiles` table: full_name, dob, religion_id, caste_id, etc.
+ * - `user_horoscope` table (NOT horoscope_details)
+ * - `user_family` table (NOT family_details)
+ * - `user_lifestyle` table (separate from profiles)
+ * - `user_subscriptions` table (NOT user_memberships)
+ * - `profile_completion_percent` (NOT profile_completion)
  */
 import { create } from 'zustand';
 import * as profilesApi from '../api/profiles';
@@ -10,9 +18,11 @@ const useProfileStore = create((set, get) => ({
   profile: null,
   partnerPreferences: null,
   horoscope: null,
+  lifestyle: null,
   photos: [],
-  user_memberships: [],
+  user_subscriptions: [],
   familyDetails: null,
+  registrationMeta: null,
   isProfileLoaded: false,
   isProfileComplete: false,
   registrationStep: 0,
@@ -22,7 +32,7 @@ const useProfileStore = create((set, get) => ({
   // Actions
   setProfile: (profile) => set({
     profile,
-    isProfileComplete: (profile?.profile_completion || 0) > 0,
+    isProfileComplete: (profile?.profile_completion_percent || 0) > 0,
     isProfileLoaded: true,
   }),
 
@@ -38,11 +48,13 @@ const useProfileStore = create((set, get) => ({
       set({
         profile: data,
         partnerPreferences: data?.partner_preferences,
-        horoscope: data?.horoscope_details,
+        horoscope: data?.user_horoscope,
+        lifestyle: data?.user_lifestyle,
         photos: data?.profile_photos || [],
-        user_memberships: data?.user_memberships || [],
-        familyDetails: data?.family_details,
-        isProfileComplete: (data?.profile_completion || 0) > 0,
+        user_subscriptions: data?.user_subscriptions || [],
+        familyDetails: data?.user_family,
+        registrationMeta: data?.registration_meta,
+        isProfileComplete: (data?.profile_completion_percent || 0) > 0,
         isProfileLoaded: true,
         isLoading: false,
       });
@@ -78,12 +90,14 @@ const useProfileStore = create((set, get) => ({
 
       // Strip relational fields that aren't actual columns on the public.profiles table
       const {
-        horoscope_details,
+        user_horoscope,
         partner_preferences,
         profile_photos,
-        profile_created_for,
-        user_memberships, // Strip this out to prevent Postgres error
-        family_details,
+        user_subscriptions,
+        user_family,
+        user_lifestyle,
+        registration_meta,
+        profile_contact,
         ...profileDbFields
       } = mergedData;
 
@@ -93,7 +107,7 @@ const useProfileStore = create((set, get) => ({
 
       set((state) => ({
         profile: { ...state.profile, ...mergedData, ...data },
-        isProfileComplete: (data?.profile_completion || 0) > 0,
+        isProfileComplete: (data?.profile_completion_percent || 0) > 0,
         isLoading: false,
       }));
       return data;
@@ -113,7 +127,7 @@ const useProfileStore = create((set, get) => ({
       const data = await profilesApi.updateProfile(userId, updates);
       set((state) => ({
         profile: { ...state.profile, ...data },
-        isProfileComplete: (data?.profile_completion || 0) > 0,
+        isProfileComplete: (data?.profile_completion_percent || 0) > 0,
         isLoading: false,
       }));
       return data;
@@ -171,6 +185,21 @@ const useProfileStore = create((set, get) => ({
   },
 
   /**
+   * Save lifestyle details
+   */
+  saveLifestyle: async (lifestyleData) => {
+    try {
+      set({ isLoading: true, error: null });
+      const data = await profilesApi.upsertUserLifestyle(lifestyleData);
+      set({ lifestyle: data, isLoading: false });
+      return data;
+    } catch (error) {
+      set({ isLoading: false, error: error.message });
+      throw error;
+    }
+  },
+
+  /**
    * Add photo to local state
    */
   addPhoto: (photo) => set((state) => ({
@@ -220,9 +249,11 @@ const useProfileStore = create((set, get) => ({
     profile: null,
     partnerPreferences: null,
     horoscope: null,
+    lifestyle: null,
     photos: [],
-    user_memberships: [],
+    user_subscriptions: [],
     familyDetails: null,
+    registrationMeta: null,
     isProfileLoaded: false,
     isProfileComplete: false,
     registrationStep: 0,

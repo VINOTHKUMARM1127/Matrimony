@@ -8,7 +8,8 @@ import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import OptionSelector from '../../components/registration/OptionSelector';
 import StepIndicator from '../../components/registration/StepIndicator';
-import { FAMILY_TYPES, FAMILY_STATUS, FAMILY_VALUES, TN_DISTRICTS } from '../../utils/constants';
+import { getCountries, getStates, getDistricts, getCities } from '../../api/masterData';
+import { FAMILY_TYPES, FAMILY_STATUS, FAMILY_VALUES } from '../../utils/constants';
 import useProfileStore from '../../store/useProfileStore';
 import useAuthStore from '../../store/useAuthStore';
 
@@ -28,14 +29,39 @@ const FamilyScreen = ({ navigation }) => {
   const [sisters, setSisters] = useState(familyDetails?.number_of_sisters?.toString() || '0');
 
   // Location + About Me (stored in profiles table)
-  const [city, setCity] = useState(profile?.city || '');
-  const [district, setDistrict] = useState(profile?.district || '');
-  const [state, setState] = useState(profile?.state || 'Tamil Nadu');
+  const [countryId, setCountryId] = useState(profile?.country_id || '');
+  const [stateId, setStateId] = useState(profile?.state_id || '');
+  const [districtId, setDistrictId] = useState(profile?.district_id || '');
+  const [cityId, setCityId] = useState(profile?.city_id || '');
   const [aboutMe, setAboutMe] = useState(profile?.about_me || '');
 
+  const [countries, setCountries] = useState([]);
+  const [statesList, setStatesList] = useState([]);
+  const [districtsList, setDistrictsList] = useState([]);
+  const [citiesList, setCitiesList] = useState([]);
+
+  useEffect(() => {
+    getCountries().then(data => setCountries(data.map(c => ({ label: c.name, value: c.id }))));
+  }, []);
+
+  useEffect(() => {
+    if (countryId) getStates(countryId).then(data => setStatesList(data.map(s => ({ label: s.name, value: s.id }))));
+    else setStatesList([]);
+  }, [countryId]);
+
+  useEffect(() => {
+    if (stateId) getDistricts(stateId).then(data => setDistrictsList(data.map(d => ({ label: d.name, value: d.id }))));
+    else setDistrictsList([]);
+  }, [stateId]);
+
+  useEffect(() => {
+    if (districtId) getCities(districtId).then(data => setCitiesList(data.map(c => ({ label: c.name, value: c.id }))));
+    else setCitiesList([]);
+  }, [districtId]);
+
   const handleNext = useCallback(async () => {
-    if (!city.trim() || !district) {
-      Alert.alert('Required Fields', 'Please enter your City and select your District to continue.');
+    if (!countryId || !stateId || !districtId || !cityId) {
+      Alert.alert('Required Fields', 'Please select your full location (Country, State, District, City) to continue.');
       return;
     }
 
@@ -55,10 +81,10 @@ const FamilyScreen = ({ navigation }) => {
       // Save location + about me to profiles table
       await saveProfile({
         id: user.id,
-        city: city.trim() || null,
-        district: district || null,
-        state: state || null,
-        country: 'India',
+        country_id: countryId,
+        state_id: stateId,
+        district_id: districtId,
+        city_id: cityId,
         about_me: aboutMe.trim() || null,
       });
 
@@ -66,9 +92,7 @@ const FamilyScreen = ({ navigation }) => {
     } catch (error) {
       console.error('Save error:', error);
     }
-  }, [fatherName, motherName, familyType, familyStatus, familyValues, brothers, sisters, city, district, state, aboutMe, user, saveProfile, saveFamilyDetails, navigation]);
-
-  const districtOptions = TN_DISTRICTS.map((d) => ({ label: d, value: d }));
+  }, [fatherName, motherName, familyType, familyStatus, familyValues, brothers, sisters, countryId, stateId, districtId, cityId, aboutMe, user, saveProfile, saveFamilyDetails, navigation]);
 
   return (
     <View style={styles.container}>
@@ -141,20 +165,55 @@ const FamilyScreen = ({ navigation }) => {
 
         <Text style={styles.sectionTitle}>📍 Location</Text>
 
-        <Input
-          label="City *"
-          value={city}
-          onChangeText={setCity}
-          placeholder="Enter your city"
+        <OptionSelector
+          label="Country *"
+          options={countries}
+          value={countryId}
+          onChange={(val) => {
+            setCountryId(val);
+            setStateId('');
+            setDistrictId('');
+            setCityId('');
+          }}
+          columns={2}
         />
 
-        <OptionSelector
-          label="District *"
-          options={districtOptions}
-          value={district}
-          onChange={setDistrict}
-          columns={3}
-        />
+        {countryId !== '' && (
+          <OptionSelector
+            label="State *"
+            options={statesList}
+            value={stateId}
+            onChange={(val) => {
+              setStateId(val);
+              setDistrictId('');
+              setCityId('');
+            }}
+            columns={2}
+          />
+        )}
+
+        {stateId !== '' && (
+          <OptionSelector
+            label="District *"
+            options={districtsList}
+            value={districtId}
+            onChange={(val) => {
+              setDistrictId(val);
+              setCityId('');
+            }}
+            columns={2}
+          />
+        )}
+
+        {districtId !== '' && (
+          <OptionSelector
+            label="City *"
+            options={citiesList}
+            value={cityId}
+            onChange={setCityId}
+            columns={2}
+          />
+        )}
 
         <Input
           label="About Me"

@@ -1,7 +1,7 @@
 /**
  * Wedring Matrimony — Religion & Caste Registration (Step 2)
  */
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { colors } from '../../theme';
 import Input from '../../components/common/Input';
@@ -9,7 +9,7 @@ import Button from '../../components/common/Button';
 import OptionSelector from '../../components/registration/OptionSelector';
 import StepIndicator from '../../components/registration/StepIndicator';
 import SearchablePicker from '../../components/common/SearchablePicker';
-import { RELIGIONS, CASTES } from '../../utils/constants';
+import { getReligions, getCastes } from '../../api/masterData';
 import useProfileStore from '../../store/useProfileStore';
 import useAuthStore from '../../store/useAuthStore';
 
@@ -18,51 +18,46 @@ const ReligionCasteScreen = ({ navigation }) => {
   const profile = useProfileStore((s) => s.profile);
   const { saveProfile, isLoading } = useProfileStore();
 
-  const [religion, setReligion] = useState(profile?.religion || '');
+  const [religions, setReligions] = useState([]);
+  const [castes, setCastes] = useState([]);
   
-  const initialIsCustomCaste = useMemo(() => {
-    if (!profile?.caste) return false;
-    const options = CASTES[profile.religion] || [];
-    return !options.some(opt => opt.value === profile.caste);
-  }, [profile]);
-
-  const [caste, setCaste] = useState(() => {
-    if (initialIsCustomCaste) return 'Other';
-    return profile?.caste || '';
-  });
-
-  const [customCaste, setCustomCaste] = useState(() => {
-    if (initialIsCustomCaste) return profile.caste;
-    return '';
-  });
-
-  const [subcaste, setSubcaste] = useState(profile?.subcaste || '');
-
+  const [religionId, setReligionId] = useState(profile?.religion_id || '');
+  const [casteId, setCasteId] = useState(profile?.caste_id || '');
+  const [subcasteText, setSubcasteText] = useState(profile?.sub_caste_text || '');
   const [errors, setErrors] = useState({});
 
-  const casteOptions = useMemo(() => {
-    return CASTES[religion] || [];
-  }, [religion]);
+  useEffect(() => {
+    getReligions().then(data => {
+      setReligions(data.map(r => ({ label: r.name, value: r.id })));
+    });
+  }, []);
+
+  useEffect(() => {
+    if (religionId) {
+      getCastes(religionId).then(data => {
+        setCastes(data.map(c => ({ label: c.name, value: c.id })));
+      });
+    } else {
+      setCastes([]);
+    }
+  }, [religionId]);
 
   const validate = useCallback(() => {
     const newErrors = {};
-    if (!religion) newErrors.religion = 'Please select your religion';
-    if (caste === 'Other' && !customCaste.trim()) {
-      newErrors.customCaste = 'Please specify your caste';
-    }
+    if (!religionId) newErrors.religionId = 'Please select your religion';
+    if (!casteId && castes.length > 0) newErrors.casteId = 'Please select your caste';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [religion, caste, customCaste]);
+  }, [religionId, casteId, castes]);
 
   const handleNext = useCallback(async () => {
     if (!validate()) return;
     try {
-      const finalCaste = caste === 'Other' ? customCaste.trim() : caste;
       await saveProfile({
         id: user.id,
-        religion,
-        caste: finalCaste || null,
-        subcaste: subcaste.trim() || null,
+        religion_id: religionId,
+        caste_id: casteId || null,
+        sub_caste_text: subcasteText.trim() || null,
 
       });
       navigation.navigate('Education');
@@ -85,40 +80,29 @@ const ReligionCasteScreen = ({ navigation }) => {
 
         <OptionSelector
           label="Religion"
-          options={RELIGIONS}
-          value={religion}
-          onChange={(val) => { setReligion(val); setCaste(''); setCustomCaste(''); }}
+          options={religions}
+          value={religionId}
+          onChange={(val) => { setReligionId(val); setCasteId(''); }}
           columns={2}
           required
-          error={errors.religion}
+          error={errors.religionId}
         />
 
-        {casteOptions.length > 0 && (
+        {castes.length > 0 && (
           <SearchablePicker
             label="Caste"
-            options={casteOptions}
-            value={caste}
-            onChange={(val) => { setCaste(val); if (val !== 'Other') setCustomCaste(''); }}
+            options={castes}
+            value={casteId}
+            onChange={(val) => { setCasteId(val); }}
             placeholder="Select your caste"
             searchPlaceholder="Search caste..."
           />
         )}
 
-        {caste === 'Other' && (
-          <Input
-            label="Specify Caste"
-            value={customCaste}
-            onChangeText={setCustomCaste}
-            placeholder="Type your caste"
-            error={errors.customCaste}
-            required
-          />
-        )}
-
         <Input
           label="Sub-caste (Optional)"
-          value={subcaste}
-          onChangeText={setSubcaste}
+          value={subcasteText}
+          onChangeText={setSubcasteText}
           placeholder="Enter your sub-caste"
         />
 

@@ -50,22 +50,19 @@ const DistributionManager = () => {
 
   const loadHealth = async () => {
     try {
-      const { count: activeUsers } = await adminApi.supabase
-        .from('user_memberships')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'active')
-        .neq('tier', 'free');
+      const { data: stats } = await adminApi.supabase
+        .from('admin_stats_view')
+        .select('*')
+        .maybeSingle();
         
       const { count: totalUnlocked } = await adminApi.supabase
-        .from('user_profile_pool')
+        .from('distributed_profiles')
         .select('*', { count: 'exact', head: true });
         
-      const emptyUsersCount = await adminApi.fetchPoolHealth();
-        
       setHealth({ 
-        active_users: activeUsers || 0, 
+        active_users: stats?.active_users_30d || 0, 
         total_unlocked: totalUnlocked || 0,
-        empty_users: emptyUsersCount || 0
+        empty_users: 0
       });
     } catch (err) {
       console.error('Failed to load health stats:', err);
@@ -76,9 +73,9 @@ const DistributionManager = () => {
     if (!window.confirm('This will run the daily distribution for all active premium users. Continue?')) return;
     setIsRunning(true);
     try {
-      const result = await adminApi.triggerDailyDistribution();
-      setLastRunResult(result);
-      window.alert(`Distribution complete! ${result?.users_updated || 0} users updated.`);
+      await adminApi.triggerDailyDistribution();
+      setLastRunResult({ completedAt: new Date().toLocaleTimeString() });
+      window.alert(`Daily distribution run completed.`);
       loadHealth(); // Refresh health stats
     } catch (err) {
       window.alert('Failed: ' + (err.message || 'Unknown error'));
@@ -102,7 +99,7 @@ const DistributionManager = () => {
     setIsPushing(true);
     try {
       const result = await adminApi.manualPushToUsers(pushType, targetVal, pushAllMatches, pushDailyUpdates);
-      window.alert(`Successfully pushed! Processed ${result.users_processed} users.`);
+      window.alert(`Successfully pushed — ${result} profiles distributed.`);
       setPushAllMatches(0);
       setPushDailyUpdates(0);
     } catch (err) {
@@ -173,25 +170,20 @@ const DistributionManager = () => {
         <div className="mb-6 bg-success-50 border border-success-200 rounded-xl px-5 py-3 flex items-center gap-3">
           <RefreshCw size={16} className="text-success-600" />
           <span className="text-sm text-success-800 font-medium">
-            Last run: {lastRunResult.users_updated} users updated on {new Date().toLocaleTimeString()}
+            Last run: completed on {lastRunResult.completedAt}
           </span>
         </div>
       )}
 
       {/* Health Widgets */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         <div className="p-5 bg-white rounded-xl shadow-sm border border-neutral-200">
-          <h3 className="text-sm font-medium text-neutral-500 mb-1">Active Premium Users</h3>
+          <h3 className="text-sm font-medium text-neutral-500 mb-1">Active Premium Users (30d)</h3>
           <p className="text-2xl font-bold text-neutral-900">{health.active_users}</p>
         </div>
         <div className="p-5 bg-white rounded-xl shadow-sm border border-neutral-200">
           <h3 className="text-sm font-medium text-neutral-500 mb-1">Total Unlocked Profiles in Pool</h3>
           <p className="text-2xl font-bold text-primary-600">{health.total_unlocked}</p>
-        </div>
-        <div className="p-5 bg-white rounded-xl shadow-sm border border-error-200 bg-error-50/30">
-          <h3 className="text-sm font-medium text-error-600 mb-1">Active Users with 0 Profiles</h3>
-          <p className="text-2xl font-bold text-error-700">{health.empty_users}</p>
-          <p className="text-[10px] text-error-500 mt-1">If &gt; 0, daily cron or signup triggers may be failing.</p>
         </div>
       </div>
 

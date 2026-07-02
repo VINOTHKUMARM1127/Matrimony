@@ -61,7 +61,7 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const primaryPhoto = photos?.find((p) => p.is_primary)?.storage_path;
-  const completionPercent = profile?.profile_completion || 0;
+  const completionPercent = profile?.profile_completion_percent || 0;
 
   const calculateAge = (dob) => {
     if (!dob) return '';
@@ -218,7 +218,7 @@ const ProfileScreen = ({ navigation }) => {
             </View>
             <Text style={styles.heroName}>
               {profile?.name || 'Your Name'}
-              {profile?.date_of_birth ? `, ${calculateAge(profile.date_of_birth)}` : ''}
+              {profile?.dob ? `, ${calculateAge(profile.dob)}` : ''}
             </Text>
             <Text style={styles.heroId}>{profile?.profile_id || 'TM000000'}</Text>
             <View style={styles.heroBadges}>

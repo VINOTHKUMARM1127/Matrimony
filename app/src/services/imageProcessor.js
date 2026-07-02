@@ -100,82 +100,55 @@ export const generateThumbnail = async (uri) => {
   return manipulated;
 };
 
+import { getR2PublicUrl } from '../api/r2Client';
 import { decode } from 'base64-arraybuffer';
-import { getR2Client, PutObjectCommand, DeleteObjectCommand } from '../api/r2Client';
-
-// All R2 access routes through the shared, RN-correct client
-// (forcePathStyle + checksum-safe). See src/api/r2Client.js.
-const getS3Client = getR2Client;
 
 /**
- * Upload image to Cloudflare R2
+ * Upload image to Cloudflare R2 via Edge Function
  */
 export const uploadImage = async (uri, userId, bucket = STORAGE_BUCKETS.PROFILE_PHOTOS) => {
-  const fileName = `${userId}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.webp`;
-  
-  const r2AccountId = process.env.EXPO_PUBLIC_R2_ACCOUNT_ID;
-  const r2AccessKeyId = process.env.EXPO_PUBLIC_R2_ACCESS_KEY_ID;
-  const r2SecretAccessKey = process.env.EXPO_PUBLIC_R2_SECRET_ACCESS_KEY;
-  const hasR2Creds = r2AccountId && r2AccessKeyId && r2SecretAccessKey;
+  // 1. Get presigned URL
+  const { data, error } = await supabase.functions.invoke('r2-presigned-upload', {
+    body: { content_type: 'image/webp', thumbnail: uri.includes('thumb') }
+  });
 
-  // Fallback if Cloudflare R2 credentials are not set in development
-  if (!hasR2Creds && (__DEV__ || process.env.EXPO_PUBLIC_APP_ENV === 'development')) {
-    console.warn('Cloudflare R2 credentials are not set. Using dev mock upload.');
-    const randomId = Math.floor(Math.random() * 1000);
-    return {
-      path: fileName,
-      publicUrl: `https://picsum.photos/id/${randomId % 100}/400/400`,
-    };
+  if (error || !data?.upload_url) {
+    throw new Error(error?.message || data?.error || 'Failed to get upload URL');
   }
 
-  // Convert to base64 then array buffer
+  // 2. Read bytes and upload
   const fileInstance = new (require('expo-file-system').File)(uri);
   const base64 = await fileInstance.base64();
   const arrayBuffer = decode(base64);
-
-  const bucketName = process.env.EXPO_PUBLIC_R2_BUCKET_NAME || bucket;
   const buffer = new Uint8Array(arrayBuffer);
-  
-  const command = new PutObjectCommand({
-    Bucket: bucketName,
-    Key: fileName,
-    Body: buffer,
-    ContentType: 'image/webp',
+
+  const uploadRes = await fetch(data.upload_url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'image/webp' },
+    body: buffer
   });
 
-  const client = getS3Client();
-  await client.send(command);
-
-  const r2PublicDomain = process.env.EXPO_PUBLIC_R2_PUBLIC_URL || '';
-  const publicUrl = `${r2PublicDomain}/${fileName}`;
+  if (!uploadRes.ok) {
+    throw new Error('Failed to upload image to storage');
+  }
 
   return {
-    path: fileName,
-    publicUrl: publicUrl,
+    path: data.r2_key,
+    publicUrl: getR2PublicUrl(data.r2_key),
   };
 };
 
 /**
  * Delete image from storage
  */
-export const deleteImage = async (path, bucket = STORAGE_BUCKETS.PROFILE_PHOTOS) => {
-  const r2AccountId = process.env.EXPO_PUBLIC_R2_ACCOUNT_ID;
-  const r2AccessKeyId = process.env.EXPO_PUBLIC_R2_ACCESS_KEY_ID;
-  const r2SecretAccessKey = process.env.EXPO_PUBLIC_R2_SECRET_ACCESS_KEY;
-  const hasR2Creds = r2AccountId && r2AccessKeyId && r2SecretAccessKey;
-
-  if (!hasR2Creds && (__DEV__ || process.env.EXPO_PUBLIC_APP_ENV === 'development')) {
-    console.warn('Cloudflare R2 credentials are not set. Skipping mock delete.');
-    return;
-  }
-
-  const bucketName = process.env.EXPO_PUBLIC_R2_BUCKET_NAME || bucket;
-  const command = new DeleteObjectCommand({
-    Bucket: bucketName,
-    Key: path,
+export const deleteImage = async (photoId) => {
+  const { data, error } = await supabase.functions.invoke('r2-delete-photo', {
+    body: { photo_id: photoId }
   });
-  const client = getS3Client();
-  await client.send(command);
+
+  if (error || data?.error) {
+    throw new Error(error?.message || data?.error || 'Failed to delete photo');
+  }
 };
 
 /**

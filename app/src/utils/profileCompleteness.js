@@ -15,7 +15,7 @@ const SECTIONS = [
     fields: [
       ['display_name', 'Full Name'],
       ['gender', 'Gender'],
-      ['date_of_birth', 'Date of Birth'],
+      ['dob', 'Date of Birth'],
       ['height_cm', 'Height'],
       ['marital_status', 'Marital Status'],
     ],

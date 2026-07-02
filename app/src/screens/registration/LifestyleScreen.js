@@ -16,26 +16,26 @@ import useAuthStore from '../../store/useAuthStore';
 const LifestyleScreen = ({ navigation }) => {
   const user = useAuthStore((s) => s.user);
   const profile = useProfileStore((s) => s.profile);
-  const { saveProfile, isLoading } = useProfileStore();
+  const { saveLifestyle, isLoading } = useProfileStore();
 
   const [foodHabit, setFoodHabit] = useState(profile?.food_habit || '');
-  const [languages, setLanguages] = useState(profile?.languages_known || ['Tamil']);
+  const [languages, setLanguages] = useState(profile?.languages || ['Tamil']);
   const [interests, setInterests] = useState(profile?.interests || []);
 
   const handleNext = useCallback(async () => {
     try {
-      await saveProfile({
-        id: user.id,
+      await saveLifestyle({
+        user_id: user.id,
         food_habit: foodHabit || null,
-        languages_known: languages.length > 0 ? languages : ['Tamil'],
+        languages: languages.length > 0 ? languages : ['Tamil'],
         interests: interests.length > 0 ? interests : null,
-        hobbies: interests.length > 0 ? interests : null,
+        hobbies: interests.length > 0 ? interests : null, // hobbies is another column, we map interests to both or just use hobbies
       });
       navigation.navigate('PhotoUpload');
     } catch (error) {
       console.error('Save error:', error);
     }
-  }, [foodHabit, languages, interests, user, saveProfile, navigation]);
+  }, [foodHabit, languages, interests, user, saveLifestyle, navigation]);
 
   return (
     <View style={styles.container}>

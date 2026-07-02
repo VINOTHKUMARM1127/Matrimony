@@ -47,8 +47,8 @@ const UserModal = ({ user, onClose, onRefresh }) => {
         setDistState(dist || null);
         
         const plans = await adminApi.fetchSubscriptionPlans();
-        const activeMembership = (user.user_memberships || []).find(m => m.status === 'active');
-        const currentPlan = plans.find(p => p.name === (activeMembership?.tier || 'free')) || null;
+        const activeMembership = (user.user_subscriptions || []).find(m => m.is_active);
+        const currentPlan = plans.find(p => p.name === (activeMembership?.membership_plans?.tier || 'free')) || null;
         setUserPlan(currentPlan);
 
         // Subscription history (all packs) + currently queued/paused packs.
@@ -82,7 +82,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
     try {
       // 1. Profile scalar/array columns (phone lives in auth, exclude here).
       const { phone, ...profilePayload } = form;
-      if (profilePayload.date_of_birth === '') profilePayload.date_of_birth = null;
+      if (profilePayload.dob === '') profilePayload.dob = null;
       await adminApi.updateUser(user.id, profilePayload);
 
       // 2. Horoscope (only if any field set).
@@ -134,7 +134,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
   };
 
   const handleResetPassword = async () => {
-    const pw = prompt('Enter new password for ' + (user.email || user.name) + ' (min 6 chars):');
+    const pw = prompt('Enter new password for ' + (user.email || user.full_name) + ' (min 6 chars):');
     if (!pw || pw.length < 6) {
       if (pw !== null) alert('Password must be at least 6 characters.');
       return;
@@ -211,7 +211,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
     setPhotoLoading(true);
     try {
       await adminApi.deletePhoto(photo.id);
-      await imageApi.deletePhotoFromR2(photo.photo_url);
+      await imageApi.deletePhotoFromR2(imageApi.getR2PublicUrl(photo.r2_key));
       setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
       onRefresh();
     } catch (err) {
@@ -259,10 +259,10 @@ const UserModal = ({ user, onClose, onRefresh }) => {
         <div className="px-6 py-5 border-b border-neutral-100 flex justify-between items-center bg-gradient-to-r from-primary-50/60 to-transparent">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-lg">
-              {(form.name || '?').charAt(0).toUpperCase()}
+              {(form.full_name || '?').charAt(0).toUpperCase()}
             </div>
             <div>
-              <h2 className="text-lg font-bold text-neutral-900 leading-tight">{form.name || 'User Details'}</h2>
+              <h2 className="text-lg font-bold text-neutral-900 leading-tight">{form.full_name || 'User Details'}</h2>
               <p className="text-xs text-neutral-500">Full profile editor</p>
             </div>
           </div>
@@ -295,9 +295,9 @@ const UserModal = ({ user, onClose, onRefresh }) => {
             <>
               {tab === 'Profile' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Txt label="Name" k="name" />
+                  <Txt label="Name" k="full_name" />
                   <Sel label="Gender" k="gender" options={GENDER_OPTS} />
-                  <Txt label="Date of Birth" k="date_of_birth" type="date" />
+                  <Txt label="Date of Birth" k="dob" type="date" />
                   <Txt label="Height (cm)" k="height_cm" type="number" />
                   <Txt label="Weight (kg)" k="weight_kg" type="number" />
                   <Sel label="Marital Status" k="marital_status" options={MARITAL_OPTS} />
@@ -444,7 +444,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
                         {subQueue.map((q) => (
                           <div key={q.id} className="flex justify-between items-center bg-amber-50 border border-amber-100 rounded-xl px-4 py-2.5">
                             <div className="flex items-center gap-2">
-                              <span className="font-semibold text-neutral-800 text-sm">{q.tier?.toUpperCase()}</span>
+                              <span className="font-semibold text-neutral-800 text-sm">{q.membership_plans?.tier?.toUpperCase()}</span>
                               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${q.status === 'paused' ? 'bg-blue-100 text-blue-700' : 'bg-neutral-200 text-neutral-600'}`}>
                                 {q.status === 'paused' ? 'PAUSED' : 'PENDING'}
                               </span>
@@ -475,7 +475,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
                         {subHistory.map((h) => (
                           <div key={h.id} className="flex justify-between items-center bg-neutral-50 border border-neutral-100 rounded-xl px-4 py-2.5">
                             <div>
-                              <span className="font-semibold text-neutral-800 text-sm">{h.tier?.toUpperCase()}</span>
+                              <span className="font-semibold text-neutral-800 text-sm">{h.membership_plans?.tier?.toUpperCase()}</span>
                               <span className={`ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full ${
                                 h.status === 'active' ? 'bg-emerald-100 text-emerald-700'
                                 : h.status === 'queued' ? 'bg-amber-100 text-amber-700'
@@ -552,7 +552,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
                     <div className="flex gap-3 overflow-x-auto pb-2">
                       {photos && photos.length > 0 ? photos.map((photo) => (
                         <div key={photo.id} className="relative group shrink-0 w-24 h-24 rounded-2xl overflow-hidden border border-neutral-200 shadow-sm">
-                          <img src={photo.photo_url} alt="" className="w-full h-full object-cover" />
+                          <img src={imageApi.getR2PublicUrl(photo.r2_key)} alt="" className="w-full h-full object-cover" />
                           <div className="absolute inset-0 bg-neutral-950/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                             <button onClick={() => handlePhotoDelete(photo)} disabled={photoLoading} className="bg-error-500 text-white p-2 rounded-full hover:bg-error-600 disabled:opacity-50">
                               <Trash2 size={15} />

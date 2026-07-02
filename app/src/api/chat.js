@@ -1,8 +1,15 @@
 /**
  * Wedring Matrimony — Chat API
  * Messaging and realtime chat functions
+ *
+ * SCHEMA NOTES:
+ * - `chats` table: participant_1 uuid, participant_2 uuid (canonical: p1 < p2)
+ * - `messages` table: chat_id, sender_id, content, message_type, is_read
+ * - `fn_create_or_get_chat(p_other_user_id)` RPC handles canonical ordering
+ * - Realtime enabled on `messages` table
  */
 import supabase from './supabaseClient';
+import { getR2PhotoUrl } from './profiles';
 
 /**
  * Get user's chat list
@@ -13,26 +20,36 @@ export const getChatList = async (userId) => {
     .select(`
       *,
       participant_1_profile:profiles!chats_participant_1_fkey (
-        id, display_name, city,
-        photos (id, storage_path, thumbnail_path, is_primary)
+        id, full_name,
+        profile_photos (id, r2_key, thumbnail_key, is_primary)
       ),
       participant_2_profile:profiles!chats_participant_2_fkey (
-        id, display_name, city,
-        photos (id, storage_path, thumbnail_path, is_primary)
+        id, full_name,
+        profile_photos (id, r2_key, thumbnail_key, is_primary)
       )
     `)
     .or(`participant_1.eq.${userId},participant_2.eq.${userId}`)
-    .eq('is_approved', true)
-    .order('last_message_at', { ascending: false });
+    .eq('is_active', true)
+    .order('last_message_at', { ascending: false, nullsFirst: false });
 
   if (error) throw error;
 
-  // Map to normalize the other participant
+  // Map to normalize the other participant + attach photo URLs
   return (data || []).map((chat) => {
-    const otherUser = chat.participant_1 === userId
-      ? chat.participant_2_profile
-      : chat.participant_1_profile;
-    return { ...chat, otherUser };
+    const isP1 = chat.participant_1 === userId;
+    const otherProfile = isP1 ? chat.participant_2_profile : chat.participant_1_profile;
+
+    return {
+      ...chat,
+      otherUser: otherProfile ? {
+        ...otherProfile,
+        profile_photos: (otherProfile.profile_photos || []).map(p => ({
+          ...p,
+          photo_url: getR2PhotoUrl(p.r2_key),
+          thumbnail_url: getR2PhotoUrl(p.thumbnail_key),
+        })),
+      } : null,
+    };
   });
 };
 
@@ -87,32 +104,25 @@ export const sendMessage = async (chatId, senderId, content, messageType = 'text
 
 /**
  * Create or get existing chat between two users
+ * Uses the fn_create_or_get_chat RPC which handles canonical ordering.
  */
 export const createChat = async (userId1, userId2) => {
-  // Check if chat exists
-  const { data: existing } = await supabase
-    .from('chats')
-    .select('*')
-    .or(
-      `and(participant_1.eq.${userId1},participant_2.eq.${userId2}),and(participant_1.eq.${userId2},participant_2.eq.${userId1})`
-    )
-    .maybeSingle();
-
-  if (existing) return existing;
-
-  // Create new chat
-  const { data, error } = await supabase
-    .from('chats')
-    .insert({
-      participant_1: userId1,
-      participant_2: userId2,
-      is_approved: true,
-    })
-    .select()
-    .single();
+  // Use RPC for canonical ordering
+  const { data: chatId, error } = await supabase.rpc('fn_create_or_get_chat', {
+    p_other_user_id: userId2,
+  });
 
   if (error) throw error;
-  return data;
+
+  // Fetch the full chat record
+  const { data: chat, error: fetchError } = await supabase
+    .from('chats')
+    .select('*')
+    .eq('id', chatId)
+    .single();
+
+  if (fetchError) throw fetchError;
+  return chat;
 };
 
 /**
@@ -152,9 +162,20 @@ export const subscribeToMessages = (chatId, callback) => {
  * Get unread message count
  */
 export const getUnreadCount = async (userId) => {
+  // Get all chat IDs where user is a participant
+  const { data: chats } = await supabase
+    .from('chats')
+    .select('id')
+    .or(`participant_1.eq.${userId},participant_2.eq.${userId}`);
+
+  if (!chats || chats.length === 0) return 0;
+
+  const chatIds = chats.map(c => c.id);
+
   const { count, error } = await supabase
     .from('messages')
     .select('id', { count: 'exact', head: true })
+    .in('chat_id', chatIds)
     .neq('sender_id', userId)
     .eq('is_read', false);
 

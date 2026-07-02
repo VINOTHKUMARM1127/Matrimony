@@ -4,7 +4,7 @@
  */
 import { create } from 'zustand';
 import * as authApi from '../api/auth';
-import * as fast2sms from '../api/fast2sms';
+import * as otpService from '../api/otpService';
 import supabase from '../api/supabaseClient';
 
 const useAuthStore = create((set, get) => ({
@@ -90,16 +90,16 @@ const useAuthStore = create((set, get) => ({
   },
 
   /**
-   * Send OTP to phone number via Fast2SMS
+   * Send OTP to phone number via Edge Function
    */
   sendOTP: async (phone) => {
     try {
       set({ isLoading: true, error: null, isOtpSent: false });
-      await fast2sms.sendOTP(phone);
+      await otpService.sendOTP(phone);
       set({ isLoading: false, isOtpSent: true });
       return true;
     } catch (error) {
-      console.warn('[sendOTP] Fast2SMS error:', error.message);
+      console.warn('[sendOTP] Error:', error.message);
       set({ isLoading: false, error: error.message });
       return false;
     }
@@ -150,17 +150,16 @@ const useAuthStore = create((set, get) => ({
   },
 
   /**
-   * Verify OTP code for phone via Fast2SMS (client-side verification)
+   * Verify OTP code for phone via Edge Function
    */
   verifyOTP: async (phone, otp) => {
     try {
       set({ isLoading: true, error: null });
 
-      // Step 1: Verify OTP locally against Fast2SMS store
-      fast2sms.verifyOTP(phone, otp);
+      // Step 1: Verify OTP via Edge Function
+      await otpService.verifyOTP(phone, otp);
 
       // Step 2: Create or sign-in Supabase user with this phone number
-      // In dev mode, use mock user since Supabase phone provider may not be configured
       let userData;
       try {
         const { data, error } = await supabase.auth.signInWithOtp({ phone });
@@ -269,11 +268,15 @@ const useAuthStore = create((set, get) => ({
           const useProfileStore = require('./useProfileStore').default;
           await useProfileStore.getState().saveProfile({
             id: data.user.id,
-            display_name: profileData.name,
-            profile_created_for: profileData.profileFor,
+            full_name: profileData.name,
             gender: 'male', // default required field
-            date_of_birth: '2000-01-01', // default required field
-            mother_tongue: profileData.motherTongue || 'Tamil',
+            dob: '2000-01-01', // default required field
+          });
+          // Save registration meta separately
+          const { upsertRegistrationMeta } = require('../api/profiles');
+          await upsertRegistrationMeta({
+            user_id: data.user.id,
+            creating_for: profileData.profileFor || 'self',
           });
         }
       } catch (e) {
@@ -379,17 +382,7 @@ const useAuthStore = create((set, get) => ({
       set({ isLoading: false });
       return exists;
     } catch (error) {
-      console.warn('DB checkUserExists RPC failed, using development local fallback:', error.message);
-      
-      // Development mock fallback
-      if (__DEV__ || process.env.EXPO_PUBLIC_APP_ENV === 'development') {
-        const isMockEmail = /tamiluser\d+@matrimonydemo\.com/i.test(email || '');
-        const isMockPhone = ['9876543210', '9999999999', '8888888888'].includes(phone?.replace(/[^0-9]/g, ''));
-        
-        set({ isLoading: false });
-        return isMockEmail || isMockPhone;
-      }
-      
+      console.warn('DB checkUserExists RPC failed:', error.message);
       set({ isLoading: false, error: error.message });
       return false;
     }

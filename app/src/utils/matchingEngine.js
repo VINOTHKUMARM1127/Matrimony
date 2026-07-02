@@ -41,8 +41,8 @@ export const calculateCompatibility = (
   let totalScore = 0;
 
   // 1. Age Preference (15%)
-  if (userPreferences?.age_min && userPreferences?.age_max && candidateProfile?.date_of_birth) {
-    const age = calculateAge(candidateProfile.date_of_birth);
+  if (userPreferences?.age_min && userPreferences?.age_max && candidateProfile?.dob) {
+    const age = calculateAge(candidateProfile.dob);
     const inRange = age >= userPreferences.age_min && age <= userPreferences.age_max;
     scores.agePreference = inRange ? WEIGHTS.agePreference : 0;
   } else {

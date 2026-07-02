@@ -1,96 +1,77 @@
+/**
+ * Wedring Matrimony — Settings API
+ * User limits, premium plans, and dashboard data
+ *
+ * SCHEMA NOTES:
+ * - `user_dashboard_summary` view — per-user stats for home screen
+ * - `membership_plans` table — plan definitions (NOT `subscription_plans`)
+ * - `distribution_config` table — per-tier distribution limits
+ */
 import supabase from './supabaseClient';
 
 /**
- * Fetch Admin Settings (Read-only for mobile client)
+ * Fetch user dashboard summary (quotas, tier, credits, etc.)
+ * Reads from the `user_dashboard_summary` view.
  */
-export const fetchAdminSettings = async () => {
-  const { data, error } = await supabase
-    .from('admin_settings')
-    .select('*');
-
-  if (error) throw error;
-
-  const settings = {};
-  data.forEach(item => {
-    settings[item.setting_key] = item.setting_value;
-  });
-
-  return settings;
-};
-
-/**
- * Fetch user limits via the get_user_quota RPC.
- * Returns per-user distribution limits from user_distribution_state + user_wallet.
- */
-export const fetchUserLimits = async (userId) => {
+export const fetchUserDashboard = async (userId) => {
   if (!userId) return null;
 
-  const { data, error } = await supabase.rpc('get_user_quota', { p_user_id: userId });
+  const { data, error } = await supabase
+    .from('user_dashboard_summary')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
 
   if (error) {
-    // Fallback to tier_settings if RPC not yet deployed
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('tier')
-      .eq('id', userId)
-      .single();
+    console.warn('Dashboard summary error, falling back to direct query:', error);
+    // Fallback: query user_subscriptions directly
+    const { data: sub } = await supabase
+      .from('user_subscriptions')
+      .select('*, membership_plans:plan_id (*)')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .maybeSingle();
 
-    const tier = profile?.tier || 'free';
-
-    const { data: tierData } = await supabase
-      .from('tier_settings')
-      .select('*')
-      .eq('tier', tier)
-      .single();
-
-    return tierData;
+    const tier = sub?.membership_plans?.tier || 'free';
+    return {
+      tier,
+      contact_credits_remaining: sub?.contact_credits_remaining || 0,
+      interest_credits_remaining: sub?.interest_credits_remaining || 0,
+      expires_at: sub?.expires_at || null,
+    };
   }
 
   return data;
 };
 
 /**
- * Fetch purchasable premium plans from subscription_plans.
+ * Fetch purchasable premium plans from membership_plans.
  */
 export const fetchPremiumPlans = async () => {
   const { data, error } = await supabase
-    .from('subscription_plans')
-    .select(`
-      tier,
-      plan_name,
-      price_inr,
-      duration_months,
-      contacts_limit,
-      interests_limit,
-      initial_recommended_profiles,
-      daily_recommended_increment,
-      features,
-      color_code,
-      is_popular
-    `)
-    .order('price_inr', { ascending: true });
+    .from('membership_plans')
+    .select('*')
+    .eq('is_active', true)
+    .order('price', { ascending: true });
 
   if (error) {
-    console.error('Error fetching subscription_plans:', error);
+    console.error('Error fetching membership_plans:', error);
     return [];
   }
 
   return (data || [])
-    .filter(d => d.tier !== 'free') // Assuming we don't show Free in premium screen
+    .filter(d => d.tier !== 'free')
     .map((d) => {
-      // Generate UI attributes based on plan name
-      const planName = (d.plan_name || d.tier).toLowerCase();
+      const planName = (d.name || d.tier).toLowerCase();
+      const validityDays = d.duration_days ?? 30;
       
-      const validityDays = (d.duration_months ?? 1) * 30;
-      
-      let color = d.color_code || '#D4AF37'; // Default Gold
+      let color = d.color_code || '#D4AF37';
       let popular = d.is_popular || false;
       let features = d.features || [
-        `${d.contacts_limit} Contact Credits`,
-        `${d.interests_limit} Interest Credits`,
+        `${d.contact_credits} Contact Credits`,
+        `${d.interest_credits} Interest Credits`,
         `Valid for ${validityDays} Days`,
-        `See ${d.initial_recommended_profiles} profiles instantly`,
-        `+ ${d.daily_recommended_increment} new profiles every day`
       ];
 
       // Fallback colors if not in DB
@@ -106,21 +87,32 @@ export const fetchPremiumPlans = async () => {
       }
 
       return {
-        id: d.tier,
+        id: d.id,
         tier: d.tier,
-        name: d.plan_name,
-        price: d.price_inr,
-        durationMonths: d.duration_months,
+        name: d.name,
+        price: d.price,
         duration: `${validityDays} Days`,
         validityDays,
         features,
         color,
         popular,
-        contactsLimit: d.contacts_limit,
-        interestsLimit: d.interests_limit,
-        initial_recommended_profiles: d.initial_recommended_profiles,
-        daily_recommended_increment: d.daily_recommended_increment,
-        ...d
+        contactsLimit: d.contact_credits,
+        interestsLimit: d.interest_credits,
+        ...d,
       };
     });
+};
+
+/**
+ * Fetch distribution config for a specific tier.
+ */
+export const fetchDistributionConfig = async (tier) => {
+  const { data, error } = await supabase
+    .from('distribution_config')
+    .select('*')
+    .eq('tier', tier)
+    .maybeSingle();
+
+  if (error) return null;
+  return data;
 };

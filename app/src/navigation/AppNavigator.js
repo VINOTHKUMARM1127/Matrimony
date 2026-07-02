@@ -49,12 +49,7 @@ import EditPreferencesScreen from '../screens/settings/EditPreferencesScreen';
 import LanguageScreen from '../screens/settings/LanguageScreen';
 import PrivacyScreen from '../screens/settings/PrivacyScreen';
 
-// Admin Screens
-import AdminDashboard from '../screens/admin/AdminDashboard';
-import UserManagement from '../screens/admin/UserManagement';
-import ReportManagement from '../screens/admin/ReportManagement';
-import AnalyticsScreen from '../screens/admin/AnalyticsScreen';
-
+// Admin screens were moved to the separate 'admin' React web app
 // Premium
 import PremiumScreen from '../screens/premium/PremiumScreen';
 
@@ -233,10 +228,6 @@ const AppNavigator = () => {
             <Stack.Screen name="EditPreferences" component={EditPreferencesScreen} />
             <Stack.Screen name="Language" component={LanguageScreen} />
             <Stack.Screen name="Privacy" component={PrivacyScreen} />
-            <Stack.Screen name="AdminDashboard" component={AdminDashboard} />
-            <Stack.Screen name="UserManagement" component={UserManagement} />
-            <Stack.Screen name="ReportManagement" component={ReportManagement} />
-            <Stack.Screen name="Analytics" component={AnalyticsScreen} />
             <Stack.Screen name="Matches" component={MatchesScreen} />
           </>
         )}

@@ -8,6 +8,10 @@ const AdminDashboard = () => {
     totalUsers: 0,
     premiumUsers: 0,
     freeUsers: 0,
+    silverUsers: 0,
+    goldUsers: 0,
+    platinumUsers: 0,
+    dailyRegistrations: 0,
   });
   const [revenue, setRevenue] = useState(null);
   const [limits, setLimits] = useState(null);
@@ -16,40 +20,22 @@ const AdminDashboard = () => {
   useEffect(() => {
     const loadStats = async () => {
       try {
-        const [users, plans] = await Promise.all([
-          adminApi.fetchAllUsers(),
+        const [adminStats, plans] = await Promise.all([
+          adminApi.fetchAdminStats(),
           adminApi.fetchSubscriptionPlans(),
         ]);
 
-        const today = new Date().toISOString().split('T')[0];
-        let premiumCount = 0;
-        let silverCount = 0;
-        let goldCount = 0;
-        let platinumCount = 0;
-        let dailyReg = 0;
-
-        users.forEach((u) => {
-          if (u.created_at && u.created_at.startsWith(today)) {
-            dailyReg++;
-          }
-          const activeMembership = (u.user_memberships || []).find(m => m.status === 'active' && m.tier !== 'free');
-          if (activeMembership) {
-            premiumCount++;
-            if (activeMembership.tier === 'silver') silverCount++;
-            else if (activeMembership.tier === 'gold') goldCount++;
-            else if (activeMembership.tier === 'platinum') platinumCount++;
-          }
-        });
-
-        setStats({
-          totalUsers: users.length,
-          premiumUsers: premiumCount,
-          freeUsers: users.length - premiumCount,
-          silverUsers: silverCount,
-          goldUsers: goldCount,
-          platinumUsers: platinumCount,
-          dailyRegistrations: dailyReg,
-        });
+        if (adminStats) {
+          setStats({
+            totalUsers: adminStats.total_users || 0,
+            premiumUsers: (adminStats.silver_users || 0) + (adminStats.gold_users || 0) + (adminStats.platinum_users || 0),
+            freeUsers: adminStats.free_users || 0,
+            silverUsers: adminStats.silver_users || 0,
+            goldUsers: adminStats.gold_users || 0,
+            platinumUsers: adminStats.platinum_users || 0,
+            dailyRegistrations: 0, // This is not in the view yet, maybe we can ignore or add later
+          });
+        }
 
         if (plans && plans.length > 0) {
           setLimits(plans);
@@ -107,7 +93,7 @@ const AdminDashboard = () => {
       icon: IndianRupee,
       iconBg: 'bg-success-100 text-success-600',
       accent: 'from-success-500/10',
-      sub: revenue?.today_revenue != null ? `${formatINR(revenue.today_revenue)} today` : undefined,
+      sub: revenue?.daily_revenue != null ? `${formatINR(revenue.daily_revenue)} today` : undefined,
     },
   ];
 
@@ -147,13 +133,13 @@ const AdminDashboard = () => {
         <div className="grid grid-cols-2 divide-x divide-neutral-100 border-t border-neutral-100">
           <div className="px-2 py-3 text-center">
             <p className="text-sm font-bold text-neutral-700">
-              {plan.initial_recommended_profiles ?? 0} <span className="text-neutral-400 font-normal">/</span> {plan.initial_nearby_profiles ?? 0}
+              {plan.initial_recommended_profiles ?? 0} <span className="text-neutral-400 font-normal">/</span> {plan.initial_daily_profiles ?? 0}
             </p>
             <p className="text-[10px] text-neutral-400 font-medium mt-0.5">Initial (All / New)</p>
           </div>
           <div className="px-2 py-3 text-center">
             <p className="text-sm font-bold text-neutral-700">
-              +{plan.daily_recommended_increment ?? 0} <span className="text-neutral-400 font-normal">/</span> +{plan.daily_nearby_increment ?? 0}
+              +{plan.daily_recommended_increment ?? 0} <span className="text-neutral-400 font-normal">/</span> +{plan.daily_profiles_increment ?? 0}
             </p>
             <p className="text-[10px] text-neutral-400 font-medium mt-0.5">Daily (All / New)</p>
           </div>

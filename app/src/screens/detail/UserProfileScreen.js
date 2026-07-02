@@ -132,8 +132,8 @@ const UserProfileScreen = ({ route, navigation }) => {
       myProfile,
       myProfile.partner_preferences || null,
       targetProfile,
-      myProfile.horoscope_details || null,
-      targetProfile.horoscope_details || null
+      myProfile.user_horoscope || null,
+      targetProfile.user_horoscope || null
     );
   }, [myProfile, targetProfile]);
 
@@ -519,25 +519,25 @@ const UserProfileScreen = ({ route, navigation }) => {
             </View>
           </CollapsibleSection>
 
-          {targetProfile.horoscope_details && (
+          {targetProfile.user_horoscope && (
             <CollapsibleSection title="Horoscope">
               {isHoroscopeUnlocked ? (
                 <>
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>Nakshatra (Star)</Text>
-                    <Text style={styles.infoValue}>{targetProfile.horoscope_details.star || 'N/A'}</Text>
+                    <Text style={styles.infoValue}>{targetProfile.user_horoscope.star || 'N/A'}</Text>
                   </View>
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>Raasi (Moon Sign)</Text>
-                    <Text style={styles.infoValue}>{targetProfile.horoscope_details.raasi || 'N/A'}</Text>
+                    <Text style={styles.infoValue}>{targetProfile.user_horoscope.raasi || 'N/A'}</Text>
                   </View>
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>Lagnam</Text>
-                    <Text style={styles.infoValue}>{targetProfile.horoscope_details.lagnam || 'N/A'}</Text>
+                    <Text style={styles.infoValue}>{targetProfile.user_horoscope.lagnam || 'N/A'}</Text>
                   </View>
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>Gothram</Text>
-                    <Text style={styles.infoValue}>{targetProfile.horoscope_details.gothram || 'N/A'}</Text>
+                    <Text style={styles.infoValue}>{targetProfile.user_horoscope.gothram || 'N/A'}</Text>
                   </View>
                 </>
               ) : (

@@ -8,7 +8,8 @@ import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import OptionSelector from '../../components/registration/OptionSelector';
 import StepIndicator from '../../components/registration/StepIndicator';
-import { STARS, RAASIS, DOSHAM_OPTIONS } from '../../utils/constants';
+import { DOSHAM_OPTIONS } from '../../utils/constants';
+import { getRasi, getNakshatra, getLagnam, getGothram } from '../../api/masterData';
 import useProfileStore from '../../store/useProfileStore';
 import useAuthStore from '../../store/useAuthStore';
 
@@ -17,15 +18,28 @@ const HoroscopeScreen = ({ navigation }) => {
   const horoscope = useProfileStore((s) => s.horoscope);
   const { saveHoroscope, isLoading } = useProfileStore();
 
-  const [star, setStar] = useState(horoscope?.nakshatra || '');
-  const [raasi, setRaasi] = useState(horoscope?.rasi || '');
-  const [lagnam, setLagnam] = useState(horoscope?.lagnam || '');
-  const [gothram, setGothram] = useState(horoscope?.gothram || '');
-  const [dosham, setDosham] = useState(horoscope?.dosham || '');
+  const [stars, setStars] = useState([]);
+  const [raasis, setRaasis] = useState([]);
+  const [lagnams, setLagnams] = useState([]);
+  const [gothrams, setGothrams] = useState([]);
+
+  const [starId, setStarId] = useState(horoscope?.nakshatra_id || '');
+  const [raasiId, setRaasiId] = useState(horoscope?.rasi_id || '');
+  const [lagnamId, setLagnamId] = useState(horoscope?.lagnam_id || '');
+  const [gothramId, setGothramId] = useState(horoscope?.gothram_id || '');
+  const [gothramText, setGothramText] = useState(horoscope?.gothram_text || '');
+  const [dosham, setDosham] = useState(horoscope?.dosham || 'none');
   const [dasaBalance, setDasaBalance] = useState(horoscope?.dasa_balance || '');
 
+  React.useEffect(() => {
+    getNakshatra().then(data => setStars(data.map(d => ({ label: d.name, value: d.id }))));
+    getRasi().then(data => setRaasis(data.map(d => ({ label: d.name, value: d.id }))));
+    getLagnam().then(data => setLagnams(data.map(d => ({ label: d.name, value: d.id }))));
+    getGothram().then(data => setGothrams(data.map(d => ({ label: d.name, value: d.id }))));
+  }, []);
+
   const handleNext = useCallback(async () => {
-    if (!star || !raasi) {
+    if (!starId || !raasiId) {
       alert("Star and Raasi are mandatory fields.");
       return;
     }
@@ -33,18 +47,19 @@ const HoroscopeScreen = ({ navigation }) => {
     try {
       await saveHoroscope({
         user_id: user.id,
-        nakshatra: star,
-        rasi: raasi,
-        lagnam: lagnam || null,
-        gothram: gothram.trim() || null,
-        dosham: dosham || null,
-        dasa_balance: dasaBalance.trim() || null,
+        nakshatra_id: starId,
+        rasi_id: raasiId,
+        lagnam_id: lagnamId || null,
+        gothram_id: gothramId || null,
+        gothram_text: gothramText.trim() || null,
+        dosham: dosham || 'none',
+        notes: dasaBalance.trim() || null, // renamed dasa_balance to notes in schema? Wait, schema has notes
       });
       navigation.navigate('Lifestyle');
     } catch (error) {
       console.error('Save error:', error);
     }
-  }, [star, raasi, lagnam, gothram, dosham, dasaBalance, user, saveHoroscope, navigation]);
+  }, [starId, raasiId, lagnamId, gothramId, gothramText, dosham, dasaBalance, user, saveHoroscope, navigation]);
 
   return (
     <View style={styles.container}>
@@ -67,34 +82,44 @@ const HoroscopeScreen = ({ navigation }) => {
 
         <OptionSelector
           label="Star / Nakshatra (நட்சத்திரம்) *"
-          options={STARS}
-          value={star}
-          onChange={setStar}
+          options={stars}
+          value={starId}
+          onChange={setStarId}
           columns={3}
         />
 
         <OptionSelector
           label="Raasi / Moon Sign (ராசி) *"
-          options={RAASIS}
-          value={raasi}
-          onChange={setRaasi}
+          options={raasis}
+          value={raasiId}
+          onChange={setRaasiId}
           columns={3}
         />
 
         <OptionSelector
           label="Lagnam / Ascendant"
-          options={RAASIS}
-          value={lagnam}
-          onChange={setLagnam}
+          options={lagnams}
+          value={lagnamId}
+          onChange={setLagnamId}
           columns={3}
         />
 
-        <Input
+        <OptionSelector
           label="Gothram"
-          value={gothram}
-          onChangeText={setGothram}
-          placeholder="Enter your gothram"
+          options={gothrams}
+          value={gothramId}
+          onChange={setGothramId}
+          columns={3}
         />
+
+        {(!gothramId || gothrams.find(g => g.value === gothramId)?.label === 'Other') && (
+          <Input
+            label="Specify Gothram"
+            value={gothramText}
+            onChangeText={setGothramText}
+            placeholder="Enter your gothram"
+          />
+        )}
 
         <OptionSelector
           label="Dosham / Chevvai"
@@ -105,7 +130,7 @@ const HoroscopeScreen = ({ navigation }) => {
         />
 
         <Input
-          label="Dasa Balance"
+          label="Dasa Balance (Notes)"
           value={dasaBalance}
           onChangeText={setDasaBalance}
           placeholder="e.g., Rahu 2 years"

@@ -116,9 +116,9 @@ const SettingsScreen = ({ navigation }) => {
               style={styles.profileCard}
             >
               <View style={styles.profileGlow} />
-              <Avatar source={primaryPhoto} name={profile.display_name || ''} size={56} />
+              <Avatar source={primaryPhoto} name={profile.full_name || ''} size={56} />
               <View style={styles.profileText}>
-                <Text style={styles.name} numberOfLines={1}>{profile.display_name || 'Your Name'}</Text>
+                <Text style={styles.name} numberOfLines={1}>{profile.full_name || 'Your Name'}</Text>
                 <View style={styles.statusChip}>
                   {profile.is_premium && <Icon name="crown" size={12} color="#FFFFFF" />}
                   <Text style={styles.status}>

@@ -133,7 +133,7 @@ const PaymentHistory = () => {
       const dataRows = rows.map((p) => [
         p.id,
         formatDate(p.purchased_at),
-        p.profile?.name || '-',
+        p.profile?.full_name || '-',
         p.profile?.phone || '-',
         p.tier,
         p.amount,
@@ -372,7 +372,7 @@ const PaymentHistory = () => {
                         <td className="px-4 py-3 text-neutral-600 text-xs whitespace-nowrap">{formatDate(p.purchased_at)}</td>
                         <td className="px-4 py-3">
                           <div>
-                            <p className="font-medium text-neutral-900 text-sm">{p.profile?.name || 'Unknown'}</p>
+                            <p className="font-medium text-neutral-900 text-sm">{p.profile?.full_name || 'Unknown'}</p>
                             <p className="text-[11px] text-neutral-400">{p.profile?.phone || '-'}</p>
                           </div>
                         </td>

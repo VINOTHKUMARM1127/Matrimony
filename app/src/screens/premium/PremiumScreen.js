@@ -22,9 +22,9 @@ import useAuthStore from '../../store/useAuthStore';
 import useProfileStore from '../../store/useProfileStore';
 import useToastStore from '../../store/useToastStore';
 import { RAZORPAY_KEY_ID } from '../../utils/constants';
-import { createSubscription } from '../../api/subscriptions';
+import { getActiveSubscription } from '../../api/subscriptions';
 import { fetchPremiumPlans } from '../../api/settingsApi';
-import { createRazorpayOrder, openCheckout, verifyPayment } from '../../services/razorpay';
+import { createRazorpayOrder, openCheckout } from '../../services/razorpay';
 import { useQueryClient } from '@tanstack/react-query';
 
 import supabase from '../../api/supabaseClient';
@@ -108,42 +108,33 @@ const PremiumScreen = ({ navigation }) => {
     try {
       const isExpoGo = Constants.appOwnership === 'expo';
       if (!RAZORPAY_KEY_ID || isExpoGo) {
-        // Safe developer fallback if no key is provided or running inside Expo Go
-        Alert.alert(
-          '💳 Matrimony Mock Checkout',
-          `Expo Go / Developer local sandbox.\n\nSubscribe to ${plan.name} for ₹${plan.price}?`,
-          [
-            { text: 'Cancel', style: 'cancel', onPress: () => setProcessing(false) },
-            {
-              text: 'Simulate Success ✔',
-              onPress: async () => {
-                const mockPaymentId = `pay_mock_${Date.now()}`;
-                try {
-                  await createSubscription({
-                    user_id: user.id,
-                    plan_type: plan.name.toLowerCase(),
-                    razorpay_payment_id: mockPaymentId,
-                    amount: plan.price
-                  });
-
-                  // Reload profile and invalidate all plan/quota caches
-                  await refreshAfterPurchase();
-
-                  Alert.alert(
-                    'Subscription Successful! 🎉', 
-                    `Welcome to ${plan.name}! Your account has been upgraded.`,
-                    [{ text: 'Great!', onPress: () => navigation.goBack() }]
-                  );
-                } catch (error) {
-                  console.error('Subscription error:', error);
-                  showToast('error', 'Error', 'Failed to process checkout. Please try again.');
-                } finally {
-                  setProcessing(false);
-                }
+        if (__DEV__) {
+          // Safe developer fallback if no key is provided or running inside Expo Go
+          Alert.alert(
+            '💳 Matrimony Mock Checkout',
+            `Expo Go / Developer local sandbox.\n\nSubscribe to ${plan.name} for ₹${plan.price}?`,
+            [
+              { text: 'Cancel', style: 'cancel', onPress: () => setProcessing(false) },
+              {
+                text: 'Simulate Success ✔',
+                onPress: async () => {
+                  try {
+                    // TODO: create a dedicated test-only Postgres RPC rather than client-side createSubscription
+                    showToast('info', 'Mock Mode', 'Simulated purchase requires backend RPC (not implemented)');
+                  } catch (error) {
+                    console.error('Subscription error:', error);
+                    showToast('error', 'Error', 'Failed to process checkout. Please try again.');
+                  } finally {
+                    setProcessing(false);
+                  }
+                },
               },
-            },
-          ]
-        );
+            ]
+          );
+        } else {
+          showToast('error', 'Payments Unavailable', 'Payments are temporarily unavailable.');
+          setProcessing(false);
+        }
         return;
       }
 
@@ -174,7 +165,7 @@ const PremiumScreen = ({ navigation }) => {
         prefill: {
           email: user?.email || '',
           contact: user?.phone || '',
-          name: user?.user_metadata?.display_name || '',
+          name: user?.user_metadata?.full_name || '',
         },
         theme: { color: colors.primary },
       };
@@ -185,33 +176,39 @@ const PremiumScreen = ({ navigation }) => {
         const paymentData = checkoutResult.data;
 
         try {
-          await verifyPayment({
-            razorpay_order_id: paymentData.razorpay_order_id,
-            razorpay_payment_id: paymentData.razorpay_payment_id,
-            razorpay_signature: paymentData.razorpay_signature,
-          });
-        } catch (verifyErr) {
-          console.warn('Payment signature verification bypassed:', verifyErr.message);
-        }
+          // Poll for webhook to land and activate the subscription
+          let attempts = 0;
+          const maxAttempts = 13; // ~20 seconds at 1.5s intervals
+          let subscriptionActivated = false;
 
-        try {
-          await createSubscription({
-            user_id: user.id,
-            plan_type: plan.name.toLowerCase(),
-            razorpay_payment_id: paymentData.razorpay_payment_id,
-            amount: plan.price
-          });
+          while (attempts < maxAttempts) {
+            const sub = await getActiveSubscription(user.id);
+            if (sub && sub.plan_id === plan.id) {
+              subscriptionActivated = true;
+              break;
+            }
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            attempts++;
+          }
 
-          await refreshAfterPurchase();
-
-          Alert.alert(
-            'Success! 🎉', 
-            `Welcome to ${plan.name}! Enjoy premium access.`,
-            [{ text: 'Awesome', onPress: () => navigation.goBack() }]
-          );
+          if (subscriptionActivated) {
+            await refreshAfterPurchase();
+            Alert.alert(
+              'Success! 🎉', 
+              `Welcome to ${plan.name}! Enjoy premium access.`,
+              [{ text: 'Awesome', onPress: () => navigation.goBack() }]
+            );
+          } else {
+            // Timeout hit
+            Alert.alert(
+              'Payment received',
+              'Your plan will activate within a minute. You can safely leave this screen.',
+              [{ text: 'OK', onPress: () => navigation.goBack() }]
+            );
+          }
         } catch (subErr) {
           console.error('Subscription error:', subErr);
-          showToast('error', 'Error', 'Failed to activate your subscription. Please contact support.');
+          showToast('error', 'Error', 'Failed to verify subscription activation. Please check back in a minute.');
         }
       } else {
         const errorMsg = checkoutResult.error?.message || 'Checkout process was closed.';

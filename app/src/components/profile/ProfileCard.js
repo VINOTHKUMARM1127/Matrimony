@@ -21,14 +21,14 @@ const ProfileCard = ({ profile, onPress, onInterest, onShortlist, showCompatibil
   }, [profile?.photos]);
 
   const age = useMemo(() => {
-    if (!profile?.date_of_birth) return '';
-    const dob = new Date(profile.date_of_birth);
+    if (!profile?.dob) return '';
+    const dob = new Date(profile.dob);
     const today = new Date();
     let a = today.getFullYear() - dob.getFullYear();
     const m = today.getMonth() - dob.getMonth();
     if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) a--;
     return a;
-  }, [profile?.date_of_birth]);
+  }, [profile?.dob]);
 
   const heightDisplay = useMemo(() => {
     if (!profile?.height_cm) return '';

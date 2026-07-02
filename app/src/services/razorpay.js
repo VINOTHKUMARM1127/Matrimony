@@ -1,42 +1,27 @@
 /**
  * Wedring Matrimony — Razorpay Payment Service
+ *
+ * SECURITY: Order creation now happens via the `razorpay-create-order` Edge Function.
+ * The Razorpay key secret is NEVER exposed to the client.
+ * Payment verification happens server-side via the `razorpay-webhook` Edge Function.
  */
 import { RAZORPAY_KEY_ID, APP_NAME } from '../utils/constants';
 import supabase from '../api/supabaseClient';
 
 /**
  * Create Razorpay order via Supabase Edge Function
+ * @param {string} planId — UUID of the membership_plans row
  */
-export const createRazorpayOrder = async (planType, amount, userId) => {
-  const keyId = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID;
-  const keySecret = process.env.EXPO_PUBLIC_RAZORPAY_KEY_SECRET;
+export const createRazorpayOrder = async (planId) => {
+  const { data, error } = await supabase.functions.invoke(
+    'razorpay-create-order',
+    { body: { plan_id: planId } }
+  );
 
-  if (!keyId || !keySecret) {
-    throw new Error('Razorpay keys are missing from environment variables');
-  }
+  if (error) throw error;
+  if (!data?.order_id) throw new Error('Failed to create Razorpay order');
 
-  const encodedAuth = btoa(`${keyId}:${keySecret}`);
-
-  const response = await fetch('https://api.razorpay.com/v1/orders', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Basic ${encodedAuth}`,
-    },
-    body: JSON.stringify({
-      amount: amount, // amount in paise
-      currency: 'INR',
-      receipt: `rcpt_${userId}_${Date.now()}`.substring(0, 40),
-    }),
-  });
-
-  if (!response.ok) {
-    const errorData = await response.text();
-    throw new Error(`Razorpay API Error: ${errorData}`);
-  }
-
-  const data = await response.json();
-  return data;
+  return data; // { order_id, amount, currency, key_id, payment_row_id, plan }
 };
 
 /**
@@ -64,17 +49,7 @@ export const openCheckout = async (options) => {
   }
 };
 
-/**
- * Verify payment signature (bypassed for client-side dev mock)
- */
-export const verifyPayment = async (paymentData) => {
-  // In a real app, you MUST verify the Razorpay signature on a secure server.
-  // For this local client-side implementation, we trust the checkout response.
-  return { success: true, mock_verification: true };
-};
-
 export default {
   createRazorpayOrder,
   openCheckout,
-  verifyPayment,
 };

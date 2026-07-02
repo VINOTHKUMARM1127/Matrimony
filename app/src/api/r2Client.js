@@ -1,45 +1,47 @@
 /**
- * Shared Cloudflare R2 (S3-compatible) client for React Native.
+ * Wedring Matrimony — R2 URL Utility
  *
- * Why this exists / why mobile uploads were failing with AccessDenied while the
- * admin (browser) worked with the SAME credentials:
- *
- *   1. forcePathStyle: the admin client sets `forcePathStyle: true`. Without it
- *      the SDK signs a virtual-hosted host (bucket.<acct>.r2.cloudflarestorage.com)
- *      whose SigV4 host header differs from the request R2 receives -> AccessDenied.
- *
- *   2. Request checksums: AWS SDK v3 (>= 3.729) adds a DEFAULT CRC32 request
- *      checksum. Computing/encoding it relies on web APIs (crypto.subtle / proper
- *      base64) that Hermes lacks, so the signed `x-amz-sdk-checksum` header does
- *      not match what R2 recomputes -> AccessDenied. Browsers have WebCrypto, so
- *      the admin never hit this. Forcing checksums to WHEN_REQUIRED falls back to
- *      the standard x-amz-content-sha256 path that @aws-crypto/sha256-js handles.
- *
- * This module is the single source of truth for the R2 client + bucket/url config.
+ * Constructs displayable URLs from R2 storage keys.
+ * Direct R2 uploads/deletes are NO LONGER done from the client —
+ * use the `r2-presigned-upload` and `r2-delete-photo` Edge Functions instead.
  */
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 
-let _client = null;
+const R2_PUBLIC_URL = process.env.EXPO_PUBLIC_R2_PUBLIC_URL || '';
 
-export const getR2Client = () => {
-  if (_client) return _client;
-  const accountId = process.env.EXPO_PUBLIC_R2_ACCOUNT_ID;
-  _client = new S3Client({
-    region: 'auto',
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-    forcePathStyle: true, // match admin; correct SigV4 host for R2
-    // Disable the v3 default request checksum (breaks under Hermes signing).
-    requestChecksumCalculation: 'WHEN_REQUIRED',
-    responseChecksumValidation: 'WHEN_REQUIRED',
-    credentials: {
-      accessKeyId: process.env.EXPO_PUBLIC_R2_ACCESS_KEY_ID || '',
-      secretAccessKey: process.env.EXPO_PUBLIC_R2_SECRET_ACCESS_KEY || '',
-    },
-  });
-  return _client;
+/**
+ * Construct a full public URL from an R2 key.
+ * @param {string} r2Key — e.g. "photos/uuid/file.jpg"
+ * @returns {string|null} — full public URL or null
+ */
+export const getR2PublicUrl = (r2Key) => {
+  if (!r2Key) return null;
+  // If it's already a full URL (legacy data), return as-is
+  if (r2Key.startsWith('http')) return r2Key;
+  return `${R2_PUBLIC_URL}/${r2Key}`;
+};
+
+/**
+ * Extract an R2 key from a full URL.
+ * @param {string} publicUrl — full URL
+ * @returns {string} — the R2 key portion
+ */
+export const getR2KeyFromUrl = (publicUrl) => {
+  if (!publicUrl) return '';
+  if (R2_PUBLIC_URL && publicUrl.startsWith(R2_PUBLIC_URL)) {
+    return publicUrl.replace(`${R2_PUBLIC_URL}/`, '');
+  }
+  // Fallback: try to extract 'userId/filename' from URL path
+  try {
+    const url = new URL(publicUrl);
+    const pathParts = url.pathname.split('/').filter(Boolean);
+    if (pathParts.length >= 2) {
+      return `${pathParts[pathParts.length - 2]}/${pathParts[pathParts.length - 1]}`;
+    }
+  } catch (e) {
+    // Not a valid URL
+  }
+  return publicUrl;
 };
 
 export const R2_BUCKET = () => process.env.EXPO_PUBLIC_R2_BUCKET_NAME || 'matimony';
-export const R2_PUBLIC_URL = () => process.env.EXPO_PUBLIC_R2_PUBLIC_URL || '';
-
-export { PutObjectCommand, DeleteObjectCommand };
+export const R2_PUBLIC_URL_BASE = () => R2_PUBLIC_URL;

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import { Download, FileText, Users, CreditCard, Heart, SlidersHorizontal, Loader2 } from 'lucide-react';
-import supabaseAdmin from '../../api/supabaseAdminClient';
+import supabase from '../../api/supabaseClient';
 
 const ReportsManager = () => {
   const [isExporting, setIsExporting] = useState(null);
@@ -29,7 +29,7 @@ const ReportsManager = () => {
   const exportTable = async (table, label) => {
     setIsExporting(table);
     try {
-      const { data, error } = await supabaseAdmin.from(table).select('*').limit(50000);
+      const { data, error } = await supabase.from(table).select('*').limit(50000);
       if (error) throw error;
       downloadCSV(table, data);
     } catch (err) {
@@ -42,7 +42,7 @@ const ReportsManager = () => {
   const exportUsers = async () => {
     setIsExporting('users');
     try {
-      const { data: users, error } = await supabaseAdmin
+      const { data: users, error } = await supabase
         .from('profiles')
         .select(`
           *,
@@ -59,9 +59,9 @@ const ReportsManager = () => {
         creating_for: u.users?.creating_for,
         is_verified: u.users?.is_verified,
         created_at: u.users?.created_at,
-        name: u.name,
+        name: u.full_name,
         gender: u.gender,
-        date_of_birth: u.date_of_birth,
+        dob: u.dob,
         city: u.city,
         state: u.state,
         country: u.country,
@@ -70,7 +70,7 @@ const ReportsManager = () => {
         highest_qualification: u.highest_qualification,
         occupation: u.occupation,
         is_active: u.is_active,
-        profile_completion: u.profile_completion
+        profile_completion: u.profile_completion_percent
       }));
       downloadCSV('users_detailed', flattened);
     } catch (err) {
@@ -83,7 +83,7 @@ const ReportsManager = () => {
   const exportPayments = async () => {
     setIsExporting('payments');
     try {
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from('purchase_history')
         .select(`*, profiles(name, phone)`)
         .limit(50000)
@@ -131,13 +131,13 @@ const ReportsManager = () => {
       action: exportPayments
     },
     {
-      id: 'user_memberships',
+      id: 'user_subscriptions',
       title: 'Active Memberships',
       desc: 'Export active, queued, and expired memberships for all users.',
       icon: FileText,
       color: 'text-violet-600',
       bg: 'bg-violet-50',
-      action: () => exportTable('user_memberships', 'Memberships')
+      action: () => exportTable('user_subscriptions', 'Memberships')
     },
     {
       id: 'distribution_logs',
