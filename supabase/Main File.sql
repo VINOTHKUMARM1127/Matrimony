@@ -609,7 +609,7 @@ begin
       and p.id <> p_user_id
       and not exists (
         select 1 from distributed_profiles dp
-        where dp.user_id = p_user_id and dp.profile_id = p.id
+        where dp.user_id = p_user_id and dp.profile_id = p.id and dp.section = p_section
       )
       and not exists (
         select 1 from not_interested ni

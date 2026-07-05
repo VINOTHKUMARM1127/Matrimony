@@ -17,6 +17,7 @@ const UsersManager = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedUserIds, setSelectedUserIds] = useState(new Set());
   const [deleteProgress, setDeleteProgress] = useState(null);
+  const [displayCount, setDisplayCount] = useState(20);
 
   useEffect(() => {
     loadUsers();
@@ -28,6 +29,7 @@ const UsersManager = () => {
       const data = await adminApi.fetchAllUsers();
       setUsers(data);
       setFilteredUsers(data);
+      setDisplayCount(20);
     } catch (err) {
       console.error('Error loading users:', err);
       alert('Failed to load users');
@@ -75,6 +77,7 @@ const UsersManager = () => {
     }
 
     setFilteredUsers(result);
+    setDisplayCount(20);
   }, [searchTerm, filterGender, filterTier, filterStatus, users]);
 
   const handleUpdatePlan = async (userId, planType) => {
@@ -322,7 +325,7 @@ const UsersManager = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
-                {filteredUsers.map((u) => (
+                {filteredUsers.slice(0, displayCount).map((u) => (
                   <tr
                     key={u.id}
                     className={`group transition-colors cursor-pointer ${selectedUserIds.has(u.id) ? 'bg-primary-50/60' : 'hover:bg-neutral-50'}`}
@@ -407,6 +410,14 @@ const UsersManager = () => {
                 )}
               </tbody>
             </table>
+          </div>
+        )}
+        
+        {!isLoading && displayCount < filteredUsers.length && (
+          <div className="p-4 flex justify-center border-t border-neutral-100 bg-neutral-50/50">
+            <Button variant="outline" size="sm" onClick={() => setDisplayCount((prev) => prev + 20)}>
+              Load More
+            </Button>
           </div>
         )}
       </Card>

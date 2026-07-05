@@ -52,34 +52,47 @@ const HomeScreen = ({ navigation }) => {
   } = useMatches();
 
   // Fetch active subscription & quotas securely from backend.
-  // get_user_quotas (plural) now WRAPS the wallet-backed singular RPC, so it is
-  // credit-correct and self-healing, AND additionally returns other_plans (the
-  // queued / paused previous packs) for the "Other Active Plans" widget below.
   const { data: quotas, isLoading: loadingQuotas } = useQuery({
-    queryKey: ['user_quotas', user?.id],
+    queryKey: ['user_dashboard_summary', user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_user_quotas', { p_user_id: user.id });
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!user?.id,
-  });
-
-  const { data: distData } = useQuery({
-    queryKey: ['user_profile_distribution', user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('user_profile_distribution')
-        .select('total_recommended_unlocked, total_nearby_unlocked, tier')
+      const { data: summary, error: summaryErr } = await supabase
+        .from('user_dashboard_summary')
+        .select('*')
         .eq('user_id', user.id)
-        .single();
-      if (error) throw error;
-      return data;
+        .maybeSingle();
+      if (summaryErr) throw summaryErr;
+
+      const { data: queue, error: queueErr } = await supabase
+        .from('subscription_queue')
+        .select('*, membership_plans(name, duration_days)')
+        .eq('user_id', user.id)
+        .order('position', { ascending: true });
+      if (queueErr) throw queueErr;
+
+      if (!summary) return null;
+
+      return {
+        tier: summary.tier === 'free' ? 'FREE' : summary.tier.toUpperCase(),
+        expires_at: summary.plan_expires_at,
+        contacts_remaining: summary.contact_credits_remaining,
+        interests_remaining: summary.interest_credits_remaining,
+        total_recommended_unlocked: summary.all_matches_count,
+        total_nearby_unlocked: summary.daily_updates_count,
+        other_plans: queue?.map(q => ({
+          plan: q.membership_plans?.name,
+          label: q.membership_plans?.name,
+          status: 'paused',
+          duration_months: Math.floor((q.membership_plans?.duration_days || 0) / 30),
+          remaining_days: q.membership_plans?.duration_days
+        })) || []
+      };
     },
     enabled: !!user?.id,
   });
 
-  const isFreeUser = !profile?.is_premium;
+  const distData = quotas; // Map to the same variable used in UI
+
+  const isFreeUser = quotas?.tier === 'FREE';
 
   const getTierDisplay = () => {
     // get_user_quotas returns tier as 'FREE' | 'SILVER' | 'GOLD' | 'PLATINUM'.

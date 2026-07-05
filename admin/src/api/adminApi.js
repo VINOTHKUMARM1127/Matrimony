@@ -125,10 +125,10 @@ export const fetchAllUsers = async () => {
 /**
  * Update user premium plan (creates a subscription record)
  */
-export const updateUserPlan = async (userId, planId) => {
+export const updateUserPlan = async (userId, planName) => {
   if (!supabase) throw new Error('Service Role Key required for Admin updates');
 
-  if (!planId || planId === 'free' || planId === 'non_premium') {
+  if (!planName || planName === 'free' || planName === 'non_premium') {
     const { error } = await supabase.rpc('fn_admin_reset_user_to_free', {
       p_user_id: userId,
     });
@@ -136,9 +136,20 @@ export const updateUserPlan = async (userId, planId) => {
     return;
   }
 
+  // Look up the actual plan ID from membership_plans
+  const { data: plan, error: planError } = await supabase
+    .from('membership_plans')
+    .select('id')
+    .eq('tier', planName)
+    .single();
+
+  if (planError || !plan) {
+    throw new Error('Invalid plan type selected or plan not found');
+  }
+
   const { error } = await supabase.rpc('fn_activate_or_queue_subscription', {
     p_user_id: userId,
-    p_plan_id: planId,
+    p_plan_id: plan.id,
     p_payment_id: null,
     p_amount_paid: 0,
   });
@@ -494,7 +505,7 @@ export const fetchDistributionHistory = async (limit = 50) => {
   const { data, error } = await supabase
     .from('distribution_logs')
     .select('*')
-    .order('triggered_at', { ascending: false })
+    .order('created_at', { ascending: false })
     .limit(limit);
 
   if (error) throw error;

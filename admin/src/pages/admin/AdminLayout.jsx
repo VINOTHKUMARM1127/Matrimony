@@ -21,7 +21,7 @@ const AdminLayout = () => {
       }
     };
     verifyAdmin();
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user?.id, user?.email]);
 
   const handleLogout = async () => {
     await signOut();

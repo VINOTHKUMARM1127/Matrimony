@@ -201,19 +201,19 @@ const MatchesScreen = ({ navigation }) => {
   const isPremium = profile?.is_premium || false;
 
   const { 
-    allMatches = [], 
-    loadingAllMatches, 
-    fetchNextAllMatches,
-    hasNextAllMatches,
-    fetchingNextAllMatches,
-    refetchAllMatches,
+    recommended = [], 
+    loadingRecommended, 
+    fetchNextRecommended,
+    hasNextRecommended,
+    fetchingNextRecommended,
+    refetchRecommended,
 
-    dailyUpdates = [], 
-    loadingDailyUpdates,
-    fetchNextDailyUpdates,
-    hasNextDailyUpdates,
-    fetchingNextDailyUpdates,
-    refetchDailyUpdates,
+    dailyMatches = [], 
+    loadingDaily,
+    fetchNextDaily,
+    hasNextDaily,
+    fetchingNextDaily,
+    refetchDaily,
   } = useMatches();
 
   const user = useAuthStore((s) => s.user);
@@ -222,23 +222,23 @@ const MatchesScreen = ({ navigation }) => {
   // refresh the active tab to pull newly distributed profiles.
   useFocusEffect(
     useCallback(() => {
-      if (activeTab === 'all_matches') refetchAllMatches?.();
-      else if (activeTab === 'daily') refetchDailyUpdates?.();
-    }, [activeTab, refetchAllMatches, refetchDailyUpdates])
+      if (activeTab === 'all_matches') refetchRecommended?.();
+      else if (activeTab === 'daily') refetchDaily?.();
+    }, [activeTab, refetchRecommended, refetchDaily])
   );
 
   // Auto-load the FULL per-user allocation for the active tab. The admin-configured
   // count is the per-user pool; the feed RPCs return it page-by-page.
   useEffect(() => {
-    if (activeTab === 'all_matches' && hasNextAllMatches && !fetchingNextAllMatches) {
-      fetchNextAllMatches();
-    } else if (activeTab === 'daily' && hasNextDailyUpdates && !fetchingNextDailyUpdates) {
-      fetchNextDailyUpdates();
+    if (activeTab === 'all_matches' && hasNextRecommended && !fetchingNextRecommended) {
+      fetchNextRecommended();
+    } else if (activeTab === 'daily' && hasNextDaily && !fetchingNextDaily) {
+      fetchNextDaily();
     }
   }, [
     activeTab,
-    hasNextAllMatches, fetchingNextAllMatches, fetchNextAllMatches,
-    hasNextDailyUpdates, fetchingNextDailyUpdates, fetchNextDailyUpdates,
+    hasNextRecommended, fetchingNextRecommended, fetchNextRecommended,
+    hasNextDaily, fetchingNextDaily, fetchNextDaily,
   ]);
 
   // Live plan pricing for the lock card (no hardcoded prices/names).
@@ -248,10 +248,10 @@ const MatchesScreen = ({ navigation }) => {
     staleTime: 5 * 60 * 1000,
   });
 
-  const rawData = activeTab === 'daily' ? (dailyUpdates || [])
-                : (allMatches || []);
-  const isLoading = activeTab === 'daily' ? loadingDailyUpdates
-                  : loadingAllMatches;
+  const rawData = activeTab === 'daily' ? (dailyMatches || [])
+                : (recommended || []);
+  const isLoading = activeTab === 'daily' ? loadingDaily
+                  : loadingRecommended;
 
   // Inject a "New Profiles Added Today" divider.
   // New items are at the TOP (priority_score DESC). Find where the new block ends.
@@ -349,10 +349,10 @@ const MatchesScreen = ({ navigation }) => {
   }, [handleProfilePress, handleInterested, handleDecline, showPremiumAlert, isPremium]);
 
   const renderListFooter = () => {
-    const fetchingNext = activeTab === 'daily' ? fetchingNextDailyUpdates
-                       : fetchingNextAllMatches;
-    const hasNext = activeTab === 'daily' ? hasNextDailyUpdates
-                  : hasNextAllMatches;
+    const fetchingNext = activeTab === 'daily' ? fetchingNextDaily
+                       : fetchingNextRecommended;
+    const hasNext = activeTab === 'daily' ? hasNextDaily
+                  : hasNextRecommended;
 
     // 1) Loading more — spinner + message while the next page is being fetched.
     if (fetchingNext) {
@@ -472,8 +472,8 @@ const MatchesScreen = ({ navigation }) => {
                 if (item) handleDecline(item);
               }}
               onSwipedAll={() => {
-                if (activeTab === 'all_matches' && hasNextAllMatches && !fetchingNextAllMatches) fetchNextAllMatches();
-                else if (activeTab === 'daily' && hasNextDailyUpdates && !fetchingNextDailyUpdates) fetchNextDailyUpdates();
+                if (activeTab === 'all_matches' && hasNextRecommended && !fetchingNextRecommended) fetchNextRecommended();
+                else if (activeTab === 'daily' && hasNextDaily && !fetchingNextDaily) fetchNextDaily();
               }}
               cardIndex={0}
               backgroundColor={'transparent'}

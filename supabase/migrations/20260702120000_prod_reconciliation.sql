@@ -1,5 +1,25 @@
--- ---- get_profiles_from_pool: the RPC the app expects for fetching distributed profiles
--- Returns full profile data for profiles distributed to the calling user in a given section.
+-- =====================================================================================
+-- PRODUCTION RECONCILIATION MIGRATION
+-- Applies schema alterations that were missed due to 'if not exists' statements 
+-- on already-existing tables in production.
+-- =====================================================================================
+
+-- 1. Make profile demographic fields optional to match updated frontend flow
+alter table profiles
+  alter column religion_id drop not null,
+  alter column education_level_id drop not null,
+  alter column occupation_id drop not null,
+  alter column country_id drop not null,
+  alter column state_id drop not null,
+  alter column district_id drop not null,
+  alter column city_id drop not null;
+
+-- (caste_id and sub_caste_id are already nullable by default)
+
+-- =====================================================================================
+-- 2. Officially track the distribution RPC (previously only pasted in manually)
+-- =====================================================================================
+
 create or replace function public.get_profiles_from_pool(
   p_user_id uuid,
   p_section distribution_section_enum,
@@ -86,3 +106,11 @@ end;
 $$;
 
 grant execute on function public.get_profiles_from_pool(uuid, distribution_section_enum, int, int) to authenticated;
+
+-- =====================================================================================
+-- 3. Cleanup dead cron jobs
+-- =====================================================================================
+
+-- Remove the old 'expire_premium_users' cron job which is throwing errors 
+-- due to the dropped 'is_premium' column.
+select cron.unschedule('expire_premium_users');
