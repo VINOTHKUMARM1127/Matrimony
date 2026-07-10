@@ -24,9 +24,11 @@ import PhotoGallery from '../../components/profile/PhotoGallery';
 import ProfileHeader from '../../components/profile/ProfileHeader';
 import { ProfileDetailSkeleton } from '../../components/common/SkeletonLoader';
 import SuccessOverlay from '../../components/common/SuccessOverlay';
+import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import useAuthStore from '../../store/useAuthStore';
 import useProfileStore from '../../store/useProfileStore';
 import useToastStore from '../../store/useToastStore';
+import usePremium from '../../hooks/usePremium';
 import * as profilesApi from '../../api/profiles';
 import * as interestApi from '../../api/interests';
 import { calculateCompatibility } from '../../utils/matchingEngine';
@@ -103,19 +105,7 @@ const UserProfileScreen = ({ route, navigation }) => {
   });
 
   // Fetch Tier and Quotas from dashboard summary (single source of truth)
-  const { data: summary, refetch: refetchSummary } = useQuery({
-    queryKey: ['user_dashboard_summary', currentUser?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('user_dashboard_summary')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!currentUser?.id,
-  });
+  const { data: summary, refresh: refetchSummary, isPremium: isPremiumTier } = usePremium();
 
   // Check if already viewed this target's phone
   const { data: hasViewedPhone = false, refetch: refetchHasViewed } = useQuery({
@@ -164,7 +154,6 @@ const UserProfileScreen = ({ route, navigation }) => {
   const compatibilityBreakdown = compatibilityResult?.breakdown || {};
 
   // Privacy Locks / Gates
-  const isPremiumTier = summary?.tier && summary.tier.toUpperCase() !== 'FREE';
   const isHoroscopeUnlocked = isPremiumTier || (interestStatus && interestStatus.sender_id === profileId);
 
   // Contact unlock is gated on WALLET CREDITS, not tier
@@ -308,7 +297,7 @@ const UserProfileScreen = ({ route, navigation }) => {
     let hasPhoto = (myProfile?.photos?.length || 0) > 0 || (myPhotos?.length || 0) > 0;
     if (!hasPhoto && currentUser?.id) {
       const { count } = await supabase
-        .from('photos')
+        .from('profile_photos')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', currentUser.id);
       hasPhoto = (count || 0) > 0;

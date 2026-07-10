@@ -49,7 +49,13 @@ export const getReceivedInterests = async (userId, status = 'all') => {
   const [{ data: profiles, error: profError }, { data: photosData }] = await Promise.all([
     supabase
       .from('profiles')
-      .select('id, full_name, dob, gender, occupation, education, city, religion, is_verified')
+      .select(`
+        id, full_name, dob, gender,
+        occupation:occupations(name),
+        education_level:education_levels(name),
+        city:cities(name),
+        religion:religions(name)
+      `)
       .in('id', senderIds),
     supabase
       .from('profile_photos')
@@ -62,6 +68,10 @@ export const getReceivedInterests = async (userId, status = 'all') => {
   const profileMap = {};
   for (const prof of (profiles || [])) {
     prof.profile_photos = (photosData || []).filter(p => p.user_id === prof.id);
+    prof.occupation = prof.occupation?.name || null;
+    prof.education = prof.education_level?.name || null;
+    prof.city = prof.city?.name || null;
+    prof.religion = prof.religion?.name || null;
     profileMap[prof.id] = prof;
   }
 
@@ -99,7 +109,13 @@ export const getSentInterests = async (userId) => {
   const [{ data: profiles, error: profError }, { data: photosData }] = await Promise.all([
     supabase
       .from('profiles')
-      .select('id, full_name, dob, gender, occupation, education, city, religion, is_verified')
+      .select(`
+        id, full_name, dob, gender,
+        occupation:occupations(name),
+        education_level:education_levels(name),
+        city:cities(name),
+        religion:religions(name)
+      `)
       .in('id', receiverIds),
     supabase
       .from('profile_photos')
@@ -112,6 +128,10 @@ export const getSentInterests = async (userId) => {
   const profileMap = {};
   for (const prof of (profiles || [])) {
     prof.profile_photos = (photosData || []).filter(p => p.user_id === prof.id);
+    prof.occupation = prof.occupation?.name || null;
+    prof.education = prof.education_level?.name || null;
+    prof.city = prof.city?.name || null;
+    prof.religion = prof.religion?.name || null;
     profileMap[prof.id] = prof;
   }
 
@@ -203,7 +223,13 @@ export const getPassedProfiles = async (userId) => {
   const [{ data: profiles, error: profError }, { data: photosData }] = await Promise.all([
     supabase
       .from('profiles')
-      .select('id, full_name, dob, gender, occupation, education, city, religion, is_verified')
+      .select(`
+        id, full_name, dob, gender,
+        occupation:occupations(name),
+        education_level:education_levels(name),
+        city:cities(name),
+        religion:religions(name)
+      `)
       .in('id', targetIds),
     supabase
       .from('profile_photos')
@@ -217,6 +243,10 @@ export const getPassedProfiles = async (userId) => {
   const profileMap = {};
   for (const prof of (profiles || [])) {
     prof.profile_photos = (photosData || []).filter(p => p.user_id === prof.id);
+    prof.occupation = prof.occupation?.name || null;
+    prof.education = prof.education_level?.name || null;
+    prof.city = prof.city?.name || null;
+    prof.religion = prof.religion?.name || null;
     profileMap[prof.id] = prof;
   }
 

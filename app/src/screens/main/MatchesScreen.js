@@ -34,6 +34,7 @@ import useAuthStore from '../../store/useAuthStore';
 import Button from '../../components/common/Button';
 import { sendInterest, passProfile } from '../../api/interests';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
+import usePremium from '../../hooks/usePremium';
 import { fetchPremiumPlans, fetchUserDashboard } from '../../api/settingsApi';
 import SuccessOverlay from '../../components/common/SuccessOverlay';
 import supabase from '../../api/supabaseClient';
@@ -194,12 +195,7 @@ const MatchesScreen = ({ navigation }) => {
   const myPhotos = useProfileStore((s) => s.photos);
   const user = useAuthStore((s) => s.user);
 
-  const { data: dashboard } = useQuery({
-    queryKey: ['user_dashboard_summary', user?.id],
-    queryFn: () => fetchUserDashboard(user?.id),
-    enabled: !!user?.id,
-  });
-  const isPremium = dashboard?.tier && dashboard.tier !== 'free';
+  const { isPremium } = usePremium();
 
   const { 
     recommended = [], 
@@ -344,7 +340,7 @@ const MatchesScreen = ({ navigation }) => {
     let hasPhoto = (profile?.photos?.length || 0) > 0 || (myPhotos?.length || 0) > 0;
     if (!hasPhoto) {
       const { count } = await supabase
-        .from('photos')
+        .from('profile_photos')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id);
       hasPhoto = (count || 0) > 0;

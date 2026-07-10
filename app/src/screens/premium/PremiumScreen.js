@@ -55,6 +55,7 @@ const PremiumScreen = ({ navigation }) => {
     await Promise.all([
       queryClient.refetchQueries({ queryKey: ['userLimits', user.id] }),
       queryClient.refetchQueries({ queryKey: ['user_quotas', user.id] }),
+      queryClient.refetchQueries({ queryKey: ['user_dashboard_summary', user.id] }),
       queryClient.refetchQueries({ queryKey: ['activeSubscription', user.id] }),
     ]);
 
@@ -63,6 +64,8 @@ const PremiumScreen = ({ navigation }) => {
       queryClient.refetchQueries({ queryKey: ['recommended'] }),
       queryClient.refetchQueries({ queryKey: ['nearbyMatches'] }),
       queryClient.refetchQueries({ queryKey: ['dailyMatches'] }),
+      queryClient.refetchQueries({ queryKey: ['interestsReceived'] }),
+      queryClient.refetchQueries({ queryKey: ['interestsSent'] }),
       queryClient.invalidateQueries({ queryKey: ['subscriptionHistory', user.id] }),
     ]);
   };
@@ -205,32 +208,29 @@ const PremiumScreen = ({ navigation }) => {
         const paymentData = checkoutResult.data;
 
         try {
-          let subscriptionActivated = false;
-          // 1) Try synchronous verification first
+          // 1) Trigger synchronous verification
           try {
             await verifyRazorpayPayment({
               razorpay_order_id: paymentData.razorpay_order_id,
               razorpay_payment_id: paymentData.razorpay_payment_id,
               razorpay_signature: paymentData.razorpay_signature,
             });
-            subscriptionActivated = true;
           } catch (verifyErr) {
-            console.warn('Sync verify failed, falling back to polling:', verifyErr);
+            console.warn('Sync verify failed or delayed:', verifyErr);
           }
 
-          // 2) Poll for webhook if sync verify failed
-          if (!subscriptionActivated) {
-            let attempts = 0;
-            const maxAttempts = 10; // 15 seconds at 1.5s intervals
-            while (attempts < maxAttempts) {
-              const sub = await getActiveSubscription(user.id);
-              if (sub && sub.plan_id === plan.id) {
-                subscriptionActivated = true;
-                break;
-              }
-              await new Promise(resolve => setTimeout(resolve, 1500));
-              attempts++;
+          // 2) ALWAYS poll until the DB reflects the new plan to prevent race conditions
+          let subscriptionActivated = false;
+          let attempts = 0;
+          const maxAttempts = 10; // 15 seconds at 1.5s intervals
+          while (attempts < maxAttempts) {
+            const sub = await getActiveSubscription(user.id);
+            if (sub && sub.plan_id === plan.id) {
+              subscriptionActivated = true;
+              break;
             }
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            attempts++;
           }
 
           if (subscriptionActivated) {

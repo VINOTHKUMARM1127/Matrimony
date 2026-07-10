@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as subApi from '../api/subscriptions';
 import useAuthStore from '../store/useAuthStore';
 import useProfileStore from '../store/useProfileStore';
+import usePremium from './usePremium';
 
 export const useSubscription = () => {
   const queryClient = useQueryClient();
@@ -51,9 +52,11 @@ export const useSubscription = () => {
     return subApi.checkPremiumAccess(user.id, feature);
   };
 
+  const { isPremium } = usePremium();
+
   return {
     activeSub,
-    isPremium: !!activeSub,
+    isPremium,
     loadingActiveSub,
     refetchActiveSub,
     subHistory,

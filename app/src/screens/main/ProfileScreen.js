@@ -26,8 +26,10 @@ import { MyProfileSkeleton } from '../../components/common/SkeletonLoader';
 import useAuthStore from '../../store/useAuthStore';
 import useProfileStore from '../../store/useProfileStore';
 import { uploadProfilePhoto, deactivateProfile } from '../../api/profiles';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import usePremium from '../../hooks/usePremium';
 import supabase from '../../api/supabaseClient';
+import { useFocusEffect } from '@react-navigation/native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -37,8 +39,19 @@ const ProfileScreen = ({ navigation }) => {
   const photos = useProfileStore((s) => s.photos);
   const isProfileLoading = useProfileStore((s) => s.isLoading);
   const replacePrimaryPhoto = useProfileStore((s) => s.replacePrimaryPhoto);
+  const queryClient = useQueryClient();
 
   const [isUploading, setIsUploading] = React.useState(false);
+
+  const { isPremium } = usePremium();
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user?.id) {
+        queryClient.invalidateQueries({ queryKey: ['user_dashboard_summary', user.id] });
+      }
+    }, [user?.id, queryClient])
+  );
 
   // Live quota balances from the single source of truth (get_user_quota,
   // wallet-backed — same source unlock_contact / send_interest deduct from).
@@ -58,7 +71,7 @@ const ProfileScreen = ({ navigation }) => {
     recommendedUnlocked: quotas?.recommended_limit ?? 0,
     nearbyUnlocked: quotas?.nearby_limit ?? 0,
     dailyUnlocked: quotas?.daily_limit ?? 0,
-    isPremium: quotas?.tier && quotas.tier !== 'FREE',
+    isPremium,
   };
 
   const primary = photos?.find((p) => p.is_primary) || photos?.[0];

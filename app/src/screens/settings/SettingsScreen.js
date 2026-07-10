@@ -17,17 +17,12 @@ import useProfileStore from '../../store/useProfileStore';
 import { deactivateProfile } from '../../api/profiles';
 import { useQuery } from '@tanstack/react-query';
 import { fetchUserDashboard } from '../../api/settingsApi';
+import usePremium from '../../hooks/usePremium';
 
 const SettingsScreen = ({ navigation }) => {
   const { user, signOut } = useAuthStore();
   const profile = useProfileStore((s) => s.profile);
-
-  const { data: dashboard } = useQuery({
-    queryKey: ['user_dashboard_summary', user?.id],
-    queryFn: () => fetchUserDashboard(user?.id),
-    enabled: !!user?.id,
-  });
-  const isPremium = dashboard?.tier && dashboard.tier !== 'free';
+  const { isPremium } = usePremium();
   const photos = useProfileStore((s) => s.photos);
   const primary = photos?.find((p) => p.is_primary) || photos?.[0];
   const primaryPhoto = primary?.photo_url || primary?.storage_path;

@@ -76,6 +76,13 @@ const useAuthStore = create((set, get) => ({
       const session = await Promise.race([sessionPromise, timeoutPromise]);
       
       if (session) {
+        try {
+          const useProfileStore = require('./useProfileStore').default;
+          await useProfileStore.getState().loadProfile(session.user.id);
+        } catch (e) {
+          console.warn('Profile load failed on getSession() init:', e);
+        }
+
         set({
           user: session.user,
           session,

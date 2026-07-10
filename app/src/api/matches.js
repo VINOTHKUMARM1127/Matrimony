@@ -9,6 +9,26 @@
 import supabase from './supabaseClient';
 import { getR2PhotoUrl } from './profiles';
 
+let masterDataCache = null;
+const getMasterData = async () => {
+  if (masterDataCache) return masterDataCache;
+  const [religions, occupations, educations, cities, castes] = await Promise.all([
+    supabase.from('religions').select('id, name'),
+    supabase.from('occupations').select('id, name'),
+    supabase.from('education_levels').select('id, name'),
+    supabase.from('cities').select('id, name'),
+    supabase.from('castes').select('id, name'),
+  ]);
+  masterDataCache = {
+    religions: Object.fromEntries(religions.data?.map(r => [r.id, r.name]) || []),
+    occupations: Object.fromEntries(occupations.data?.map(o => [o.id, o.name]) || []),
+    educations: Object.fromEntries(educations.data?.map(e => [e.id, e.name]) || []),
+    cities: Object.fromEntries(cities.data?.map(c => [c.id, c.name]) || []),
+    castes: Object.fromEntries(castes.data?.map(c => [c.id, c.name]) || []),
+  };
+  return masterDataCache;
+};
+
 const attachPhotos = async (data, userId) => {
   if (!data || data.length === 0) return [];
   const profileIds = data.map(p => p.id);
@@ -28,13 +48,22 @@ const attachPhotos = async (data, userId) => {
     }
   }
   try {
-    const { data: photosData } = await supabase
-      .from('profile_photos')
-      .select('user_id, id, r2_key, thumbnail_key, is_primary, order_index')
-      .in('user_id', profileIds);
+    const [{ data: photosData }, masterData] = await Promise.all([
+      supabase
+        .from('profile_photos')
+        .select('user_id, id, r2_key, thumbnail_key, is_primary, order_index')
+        .in('user_id', profileIds),
+      getMasterData()
+    ]);
       
     return data.map(p => ({
       ...p,
+      display_name: p.full_name,
+      religion: masterData.religions[p.religion_id],
+      occupation: masterData.occupations[p.occupation_id],
+      education: masterData.educations[p.education_level_id],
+      city: masterData.cities[p.city_id],
+      caste: masterData.castes[p.caste_id],
       profile_photos: photosData
         ? photosData
             .filter(photo => photo.user_id === p.id)
@@ -49,7 +78,19 @@ const attachPhotos = async (data, userId) => {
     }));
   } catch (photoErr) {
     console.warn('Failed to fetch photos for matches:', photoErr);
-    return data.map(p => ({ ...p, profile_photos: [], compatibility_score: p.compatibility_score || 50, isLocked: isFreeUser }));
+    const masterData = masterDataCache || {};
+    return data.map(p => ({ 
+      ...p, 
+      display_name: p.full_name,
+      religion: masterData.religions?.[p.religion_id],
+      occupation: masterData.occupations?.[p.occupation_id],
+      education: masterData.educations?.[p.education_level_id],
+      city: masterData.cities?.[p.city_id],
+      caste: masterData.castes?.[p.caste_id],
+      profile_photos: [], 
+      compatibility_score: p.compatibility_score || 50, 
+      isLocked: isFreeUser 
+    }));
   }
 };
 

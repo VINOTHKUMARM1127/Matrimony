@@ -3,7 +3,7 @@
  * Pill-shaped toggle tabs, real profile photos, professional action buttons.
  * Prime gating: Free users see blurred preview cards on Received tab.
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,8 +12,10 @@ import {
   TouchableOpacity,
   RefreshControl,
   ScrollView,
+  AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, typography } from '../../theme';
@@ -28,20 +30,24 @@ import useProfileStore from '../../store/useProfileStore';
 import * as interestApi from '../../api/interests';
 import { createChat } from '../../api/chat';
 import { fetchUserDashboard } from '../../api/settingsApi';
+import usePremium from '../../hooks/usePremium';
 
 const InterestsScreen = ({ navigation }) => {
   const user = useAuthStore((s) => s.user);
   
-  const { data: dashboard } = useQuery({
-    queryKey: ['user_dashboard_summary', user?.id],
-    queryFn: () => fetchUserDashboard(user?.id),
-    enabled: !!user?.id,
-  });
-  const isPremium = dashboard?.tier && dashboard.tier !== 'free';
+  const { isPremium } = usePremium();
 
   const [activeSubTab, setActiveSubTab] = useState('received');
   const [statusFilter, setStatusFilter] = useState('sent');
   const queryClient = useQueryClient();
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user?.id) {
+        queryClient.invalidateQueries({ queryKey: ['user_dashboard_summary', user.id] });
+      }
+    }, [user?.id, queryClient])
+  );
 
   // Fetch Received Interests
   const {
@@ -145,6 +151,20 @@ const InterestsScreen = ({ navigation }) => {
     else if (activeSubTab === 'sent') refetchSent();
     else refetchPassed();
   }, [activeSubTab, refetchReceived, refetchSent, refetchPassed]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (nextAppState === 'active') {
+        refetchReceived();
+        refetchSent();
+        refetchPassed();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [refetchReceived, refetchSent, refetchPassed]);
 
   const handleProfilePress = useCallback(
     (targetUserId) => {

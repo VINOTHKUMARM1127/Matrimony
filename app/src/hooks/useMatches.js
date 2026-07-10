@@ -9,6 +9,7 @@ import useAuthStore from '../store/useAuthStore';
 import useProfileStore from '../store/useProfileStore';
 import * as subApi from '../api/subscriptions';
 import { getUserInteractions } from '../api/interests';
+import usePremium from './usePremium';
 
 const PAGE_SIZE = 10;
 
@@ -16,11 +17,7 @@ export const useMatches = () => {
   const user = useAuthStore((s) => s.user);
   const profile = useProfileStore((s) => s.profile);
 
-  const { data: activeSub } = useQuery({
-    queryKey: ['activeSubscription', user?.id],
-    queryFn: () => subApi.getActiveSubscription(user?.id),
-    enabled: !!user?.id,
-  });
+  const { isPremium } = usePremium();
 
   const { data: interactionsData } = useQuery({
     queryKey: ['userInteractions', user?.id],
@@ -28,8 +25,6 @@ export const useMatches = () => {
     enabled: !!user?.id,
   });
   const interactedIds = React.useMemo(() => new Set(interactionsData || []), [interactionsData]);
-
-  const isPremium = !!activeSub;
 
   // All Matches query (Infinite)
   const {

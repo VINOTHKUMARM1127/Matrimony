@@ -14,10 +14,12 @@ import {
   Dimensions,
   RefreshControl,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import React from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { colors } from '../../theme';
 import { borderRadius, layout } from '../../theme/spacing';
 import shadows from '../../theme/shadows';
@@ -28,8 +30,8 @@ import { HomeFeedSkeleton, ProfileCardSkeleton } from '../../components/common/S
 import useAuthStore from '../../store/useAuthStore';
 import useProfileStore from '../../store/useProfileStore';
 import useMatches from '../../hooks/useMatches';
+import usePremium from '../../hooks/usePremium';
 import supabase from '../../api/supabaseClient';
-import { fetchUserDashboard } from '../../api/settingsApi';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PICK_CARD_WIDTH = 150;
@@ -54,38 +56,15 @@ const HomeScreen = ({ navigation }) => {
   } = useMatches();
 
   // Fetch active subscription & quotas securely from backend.
-  const { data: quotas, isLoading: loadingQuotas } = useQuery({
-    queryKey: ['user_dashboard_summary', user?.id],
-    queryFn: async () => {
-      // 1. Fetch dashboard summary (handles tier, credits, expiry, match counts)
-      const dashboard = await fetchUserDashboard(user.id);
+  const { data: quotas, isLoading: loadingQuotas } = usePremium();
 
-      // 2. Fetch queue
-      const { data: queue } = await supabase
-        .from('subscription_queue')
-        .select('*, membership_plans(name, duration_days)')
-        .eq('user_id', user.id)
-        .order('position', { ascending: true });
-
-      const tier = dashboard?.tier || 'free';
-
-      return {
-        ...dashboard,
-        tier: tier === 'free' ? 'FREE' : tier.toUpperCase(),
-        expires_at: dashboard?.plan_expires_at || dashboard?.expires_at,
-        total_recommended_unlocked: dashboard?.all_matches_count || 0,
-        total_nearby_unlocked: dashboard?.daily_updates_count || 0,
-        other_plans: queue?.map(q => ({
-          plan: q.membership_plans?.name,
-          label: q.membership_plans?.name,
-          status: 'paused',
-          duration_months: Math.floor((q.membership_plans?.duration_days || 0) / 30),
-          remaining_days: q.membership_plans?.duration_days
-        })) || []
-      };
-    },
-    enabled: !!user?.id,
-  });
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user?.id) {
+        queryClient.invalidateQueries({ queryKey: ['user_dashboard_summary', user.id] });
+      }
+    }, [user?.id, queryClient])
+  );
 
   const distData = quotas; // Map to the same variable used in UI
 
@@ -130,10 +109,16 @@ const HomeScreen = ({ navigation }) => {
 
   const [refreshing, setRefreshing] = useState(false);
 
+  const queryClient = useQueryClient();
+
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refetchRecommended(), refetchDaily()]);
+      await Promise.all([
+        refetchRecommended(), 
+        refetchDaily(),
+        queryClient.refetchQueries({ queryKey: ['user_dashboard_summary', user?.id] })
+      ]);
     } finally {
       setRefreshing(false);
     }
