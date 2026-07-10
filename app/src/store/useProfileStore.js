@@ -44,7 +44,11 @@ const useProfileStore = create((set, get) => ({
   loadProfile: async (userId) => {
     try {
       set({ isLoading: true, error: null });
-      const data = await profilesApi.getMyProfile(userId);
+      
+      const profilePromise = profilesApi.getMyProfile(userId);
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('loadProfile timeout')), 10000));
+      const data = await Promise.race([profilePromise, timeoutPromise]);
+      
       set({
         profile: data,
         partnerPreferences: data?.partner_preferences,

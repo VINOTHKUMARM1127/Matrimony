@@ -38,14 +38,12 @@ const useAuthStore = create((set, get) => ({
       if (!get().authListenerSubscription) {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
           // If the user is deliberately trapped in the OTP verification flow, ignore auto-login events!
-          // This forcefully prevents the app from skipping to Basic Details.
           if (get().pendingVerification) {
             return;
           }
 
           set({ isInitializing: true });
           if (session) {
-            // Pre-fetch profile prior to resolving auth state
             try {
               const useProfileStore = require('./useProfileStore').default;
               await useProfileStore.getState().loadProfile(session.user.id);
@@ -72,7 +70,11 @@ const useAuthStore = create((set, get) => ({
         set({ authListenerSubscription: subscription });
       }
 
-      const session = await authApi.getSession();
+      // Add a timeout to getSession just in case it hangs
+      const sessionPromise = authApi.getSession();
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('getSession timeout')), 10000));
+      const session = await Promise.race([sessionPromise, timeoutPromise]);
+      
       if (session) {
         set({
           user: session.user,
@@ -85,7 +87,14 @@ const useAuthStore = create((set, get) => ({
       }
     } catch (error) {
       console.error('Auth init error:', error);
-      set({ isInitializing: false, error: error.message });
+      // If session retrieval fails (e.g. cache cleared, token invalid, or network error), 
+      // safely fallback to unauthenticated state without polluting global error state.
+      set({ 
+        isInitializing: false,
+        user: null,
+        session: null,
+        isAuthenticated: false
+      });
     }
   },
 
@@ -226,7 +235,7 @@ const useAuthStore = create((set, get) => ({
   /**
    * Verify OTP code for signup email
    */
-  verifySignupOTP: async (email, otp) => {
+  verifySignupOTP: async (email, otp, phone) => {
     try {
       set({ isLoading: true, error: null });
       const data = await authApi.verifySignupOTP(email, otp);
@@ -237,6 +246,21 @@ const useAuthStore = create((set, get) => ({
         await useProfileStore.getState().loadProfile(data.user.id);
       } catch (e) {
         console.warn('Profile load failed during signup OTP verification:', e);
+      }
+
+      if (phone) {
+        try {
+          const { upsertProfileContact } = require('../api/profiles');
+          await upsertProfileContact({
+            user_id: data.user.id,
+            mobile_number: phone
+          });
+        } catch (phoneErr) {
+          if (phoneErr.code === '23505' || (phoneErr.message && phoneErr.message.toLowerCase().includes('unique'))) {
+            throw new Error('This phone number is already registered to another account.');
+          }
+          console.warn('Failed to save phone number during signup:', phoneErr);
+        }
       }
 
       set({

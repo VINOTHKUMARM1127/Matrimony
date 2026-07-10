@@ -203,23 +203,23 @@ create table if not exists profiles (
   physical_status physical_status_enum not null default 'normal',
   about_me text,
 
-  religion_id bigint not null references religions(id),
+  religion_id bigint references religions(id),
   caste_id bigint references castes(id),
   sub_caste_id bigint references sub_castes(id),
   sub_caste_text text,
 
-  education_level_id bigint not null references education_levels(id),
-  degree text not null,
+  education_level_id bigint references education_levels(id),
+  degree text,
   college_name text,
-  occupation_id bigint not null references occupations(id),
+  occupation_id bigint references occupations(id),
   is_working boolean not null default true,
   annual_income numeric(12,2),
   check (is_working = false or annual_income is not null),
 
-  country_id bigint not null references countries(id),
-  state_id bigint not null references states(id),
-  district_id bigint not null references districts(id),
-  city_id bigint not null references cities(id),
+  country_id bigint references countries(id),
+  state_id bigint references states(id),
+  district_id bigint references districts(id),
+  city_id bigint references cities(id),
 
   is_active boolean not null default true,
   is_suspended boolean not null default false,
@@ -609,7 +609,7 @@ begin
       and p.id <> p_user_id
       and not exists (
         select 1 from distributed_profiles dp
-        where dp.user_id = p_user_id and dp.profile_id = p.id
+        where dp.user_id = p_user_id and dp.profile_id = p.id and dp.section = p_section
       )
       and not exists (
         select 1 from not_interested ni
