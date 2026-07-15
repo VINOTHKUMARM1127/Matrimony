@@ -181,7 +181,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
 
       // 5. Lifestyle details.
       if (Object.values(lifestyle).some((v) => v !== '' && v != null && (!Array.isArray(v) || v.length))) {
-        await adminApi.updateUserLifestyle(user.id, lifestyle);
+        await adminApi.updateUserLifestyle(user.id, { ...lifestyle, hobbies: lifestyle.interests });
       }
 
       // 6. Quota overrides if edited.
@@ -379,7 +379,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
                   <Sel label="Family Status" k="family_status" options={FAMILY_STATUS_OPTS} src={family} set={setFam} />
                   <Txt label="Brothers" k="brothers_count" type="number" src={family} set={setFam} />
                   <Txt label="Sisters" k="sisters_count" type="number" src={family} set={setFam} />
-                  <Sel label="City" k="city_id" options={CITY_OPTS} src={form} set={setF} />
+                  <Txt label="City" k="city_text" src={form} set={setF} />
                   <Sel label="District" k="district_id" options={DIST_OPTS} src={form} set={setF} />
                   <Sel label="State" k="state_id" options={STATE_OPTS} src={form} set={setF} />
                   <Sel label="Country" k="country_id" options={COUNTRY_OPTS} src={form} set={setF} />
@@ -399,11 +399,8 @@ const UserModal = ({ user, onClose, onRefresh }) => {
               {tab === 'Lifestyle' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Sel label="Food Habit" k="food_habit" options={FOOD_OPTS} src={lifestyle} set={setLife} />
-                  <Sel label="Smoking" k="smoking_habit" options={YESNO_OPTS} src={lifestyle} set={setLife} />
-                  <Sel label="Drinking" k="drinking_habit" options={YESNO_OPTS} src={lifestyle} set={setLife} />
                   <Arr label="Languages Known" k="languages" src={lifestyle} set={setLife} />
-                  <Arr label="Interests" k="interests" src={lifestyle} set={setLife} />
-                  <Arr label="Hobbies" k="hobbies" src={lifestyle} set={setLife} />
+                  <Arr label="Interests & Hobbies" k="interests" src={lifestyle} set={setLife} />
                 </div>
               )}
 

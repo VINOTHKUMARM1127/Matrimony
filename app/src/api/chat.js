@@ -15,32 +15,81 @@ import { getR2PhotoUrl } from './profiles';
  * Get user's chat list
  */
 export const getChatList = async (userId) => {
-  const { data, error } = await supabase
+  // 1. Fetch all accepted interests where the user is either sender or receiver
+  const { data: interests, error: intError } = await supabase
+    .from('interests')
+    .select('id, sender_id, receiver_id, status, updated_at')
+    .eq('status', 'accepted')
+    .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
+
+  if (intError) throw intError;
+  if (!interests || interests.length === 0) return [];
+
+  // 2. Fetch chats for the user to get message history
+  const { data: chats, error: chatError } = await supabase
     .from('chats')
-    .select(`
-      *,
-      participant_1_profile:profiles!chats_participant_1_fkey (
-        id, full_name,
-        profile_photos (id, r2_key, thumbnail_key, is_primary)
-      ),
-      participant_2_profile:profiles!chats_participant_2_fkey (
-        id, full_name,
-        profile_photos (id, r2_key, thumbnail_key, is_primary)
-      )
-    `)
-    .or(`participant_1.eq.${userId},participant_2.eq.${userId}`)
-    .eq('is_active', true)
-    .order('last_message_at', { ascending: false, nullsFirst: false });
+    .select('id, interest_id, last_message_text, last_message_at, is_active')
+    .or(`participant_1.eq.${userId},participant_2.eq.${userId}`);
+    
+  if (chatError) throw chatError;
 
-  if (error) throw error;
+  // 3. Gather other user IDs
+  const otherUserIds = interests.map(i => i.sender_id === userId ? i.receiver_id : i.sender_id);
+  
+  if (otherUserIds.length === 0) return [];
 
-  // Map to normalize the other participant + attach photo URLs
-  return (data || []).map((chat) => {
-    const isP1 = chat.participant_1 === userId;
-    const otherProfile = isP1 ? chat.participant_2_profile : chat.participant_1_profile;
+  // 4. Fetch profiles, photos, and block status for these users manually
+  const [
+    { data: profilesData, error: profError },
+    { data: photosData },
+    { data: bRows }
+  ] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', otherUserIds),
+    supabase
+      .from('profile_photos')
+      .select('id, user_id, r2_key, thumbnail_key, is_primary')
+      .in('user_id', otherUserIds),
+    supabase
+      .from('blocked_users')
+      .select('blocker_id, blocked_id')
+      .or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`)
+  ]);
+
+  if (profError) throw profError;
+
+  const blockedRows = bRows || [];
+
+  // Map profiles and photos
+  const profileMap = {};
+  for (const prof of (profilesData || [])) {
+    prof.profile_photos = (photosData || []).filter(p => p.user_id === prof.id);
+    profileMap[prof.id] = prof;
+  }
+
+  // 5. Map and merge everything
+  const result = interests.map(interest => {
+    const isSender = interest.sender_id === userId;
+    const otherUserId = isSender ? interest.receiver_id : interest.sender_id;
+    const otherProfile = profileMap[otherUserId];
+    
+    // Find the corresponding chat
+    const chat = (chats || []).find(c => c.interest_id === interest.id);
+
+    const blockedByMe = blockedRows.some(r => r.blocker_id === userId && r.blocked_id === otherUserId);
+    const blockedByOther = blockedRows.some(r => r.blocker_id === otherUserId && r.blocked_id === userId);
 
     return {
-      ...chat,
+      id: chat?.id || null, // Might be null if chat not initiated yet
+      interest_id: interest.id,
+      last_message_text: chat?.last_message_text || null,
+      last_message_at: chat?.last_message_at || interest.updated_at,
+      is_active: chat ? chat.is_active : true,
+      isBlocked: blockedByMe || blockedByOther,
+      blockedByMe,
+      blockedByOther,
       otherUser: otherProfile ? {
         ...otherProfile,
         profile_photos: (otherProfile.profile_photos || []).map(p => ({
@@ -51,12 +100,15 @@ export const getChatList = async (userId) => {
       } : null,
     };
   });
+
+  // Sort by last activity descending
+  return result.sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at));
 };
 
 /**
  * Get messages for a chat
  */
-export const getMessages = async (chatId, limit = 50, before = null) => {
+export const getMessages = async (chatId, limit = 25, before = null) => {
   let query = supabase
     .from('messages')
     .select('*')
@@ -140,9 +192,9 @@ export const markMessagesRead = async (chatId, userId) => {
 };
 
 /**
- * Subscribe to new messages in a chat
+ * Subscribe to new messages and deletions in a chat
  */
-export const subscribeToMessages = (chatId, callback) => {
+export const subscribeToMessages = (chatId, onInsert, onDelete) => {
   return supabase
     .channel(`chat:${chatId}`)
     .on(
@@ -153,7 +205,17 @@ export const subscribeToMessages = (chatId, callback) => {
         table: 'messages',
         filter: `chat_id=eq.${chatId}`,
       },
-      (payload) => callback(payload.new)
+      (payload) => onInsert && onInsert(payload.new)
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'messages',
+        filter: `chat_id=eq.${chatId}`,
+      },
+      (payload) => onDelete && onDelete(payload.old)
     )
     .subscribe();
 };
@@ -181,4 +243,47 @@ export const getUnreadCount = async (userId) => {
 
   if (error) return 0;
   return count || 0;
+};
+
+/**
+ * Subscribe to chat list and block updates (realtime)
+ */
+export const subscribeToChatListUpdates = (userId, onChange) => {
+  const uniqueId = Math.random().toString(36).substring(7);
+  return supabase
+    .channel(`chatlist:${userId}:${uniqueId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chats', filter: `participant_1=eq.${userId}` }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chats', filter: `participant_2=eq.${userId}` }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'blocked_users', filter: `blocker_id=eq.${userId}` }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'blocked_users', filter: `blocked_id=eq.${userId}` }, onChange)
+    .subscribe();
+};
+
+/**
+ * Block a user
+ */
+export const blockUser = (targetId) => supabase.rpc('fn_block_user', { p_target_user_id: targetId });
+
+/**
+ * Unblock a user
+ */
+export const unblockUser = (targetId) => supabase.rpc('fn_unblock_user', { p_target_user_id: targetId });
+
+/**
+ * Get detailed block status between two users
+ */
+export const getBlockStatus = async (userId, targetId) => {
+  const { data, error } = await supabase.rpc('fn_is_blocked', { p_user_a: userId, p_user_b: targetId });
+  if (error) throw error;
+  
+  // Also determine direction for UI wording (who blocked whom) via a direct select
+  const { data: rows } = await supabase
+    .from('blocked_users')
+    .select('blocker_id, blocked_id')
+    .or(`and(blocker_id.eq.${userId},blocked_id.eq.${targetId}),and(blocker_id.eq.${targetId},blocked_id.eq.${userId})`);
+    
+  const blockedByMe = (rows || []).some(r => r.blocker_id === userId);
+  const blockedByOther = (rows || []).some(r => r.blocker_id === targetId);
+  
+  return { isBlocked: !!data, blockedByMe, blockedByOther };
 };

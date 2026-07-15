@@ -31,7 +31,7 @@ import useToastStore from '../../store/useToastStore';
 import { uploadProfilePhoto, deleteProfilePhoto, setPrimaryProfilePhoto } from '../../api/profiles';
 import { 
   HEIGHT_OPTIONS, WEIGHT_OPTIONS, FOOD_HABITS, MARITAL_STATUS, 
-  DOSHAM_OPTIONS, INCOME_RANGES, SMOKING_OPTIONS, DRINKING_OPTIONS,
+  DOSHAM_OPTIONS, INCOME_RANGES,
   FAMILY_TYPES, FAMILY_STATUS
 } from '../../utils/constants';
 import { 
@@ -39,6 +39,41 @@ import {
   getOccupations, getNakshatra, getRasi, getLagnam, getGothram,
   getReligions, getCastes, getEducationLevels
 } from '../../api/masterData';
+
+const getTamil = (englishName) => {
+  if (!englishName) return '';
+  const key = englishName.trim();
+  const map = {
+    // Rasi
+    'Mesha (Aries)': 'மேஷம் (Mesham)', 'Vrishabha (Taurus)': 'ரிஷபம் (Rishabam)', 'Mithuna (Gemini)': 'மிதுனம் (Mithunam)',
+    'Karka (Cancer)': 'கடகம் (Kadagam)', 'Simha (Leo)': 'சிம்மம் (Simmam)', 'Kanya (Virgo)': 'கன்னி (Kanni)',
+    'Tula (Libra)': 'துலாம் (Thulaam)', 'Vrischika (Scorpio)': 'விருச்சிகம் (Viruchigam)', 'Dhanu (Sagittarius)': 'தனுசு (Dhanusu)',
+    'Makara (Capricorn)': 'மகரம் (Magaram)', 'Kumbha (Aquarius)': 'கும்பம் (Kumbam)', 'Meena (Pisces)': 'மீனம் (Meenam)',
+
+    // Lagnam
+    'Mesha Lagnam': 'மேஷ லக்னம் (Mesham)', 'Vrishabha Lagnam': 'ரிஷப லக்னம் (Rishabam)', 'Mithuna Lagnam': 'மிதுன லக்னம் (Mithunam)',
+    'Karka Lagnam': 'கடக லக்னம் (Kadagam)', 'Simha Lagnam': 'சிம்ம லக்னம் (Simmam)', 'Kanya Lagnam': 'கன்னி லக்னம் (Kanni)',
+    'Tula Lagnam': 'துலா லக்னம் (Thulaam)', 'Vrischika Lagnam': 'விருச்சிக லக்னம் (Viruchigam)', 'Dhanu Lagnam': 'தனுசு லக்னம் (Dhanusu)',
+    'Makara Lagnam': 'மகர லக்னம் (Magaram)', 'Kumbha Lagnam': 'கும்ப லக்னம் (Kumbam)', 'Meena Lagnam': 'மீன லக்னம் (Meenam)',
+
+    // Nakshatra
+    'Ashwini': 'அஸ்வினி (Ashwini)', 'Bharani': 'பரணி (Bharani)', 'Krittika': 'கார்த்திகை (Krittika)', 'Rohini': 'ரோகிணி (Rohini)',
+    'Mrigashira': 'மிருகசீரிடம் (Mrigashira)', 'Ardra': 'திருவாதிரை (Ardra)', 'Punarvasu': 'புனர்பூசம் (Punarvasu)', 'Pushya': 'பூசம் (Pushya)',
+    'Ashlesha': 'ஆயில்யம் (Ashlesha)', 'Magha': 'மகம் (Magha)', 'Purva Phalguni': 'பூரம் (Purva Phalguni)', 'Uttara Phalguni': 'உத்திரம் (Uttara Phalguni)',
+    'Hasta': 'அஸ்தம் (Hasta)', 'Chitra': 'சித்திரை (Chitra)', 'Swati': 'சுவாதி (Swati)', 'Vishakha': 'விசாகம் (Vishakha)',
+    'Anuradha': 'அனுஷம் (Anuradha)', 'Jyeshtha': 'கேட்டை (Jyeshtha)', 'Mula': 'மூலம் (Mula)', 'Purva Ashadha': 'பூராடம் (Purva Ashadha)',
+    'Uttara Ashadha': 'உத்திராடம் (Uttara Ashadha)', 'Shravana': 'திருவோணம் (Shravana)', 'Dhanishta': 'அவிட்டம் (Dhanishta)', 'Shatabhisha': 'சதயம் (Shatabhisha)',
+    'Purva Bhadrapada': 'பூரட்டாதி (Purva Bhadrapada)', 'Uttara Bhadrapada': 'உத்திரட்டாதி (Uttara Bhadrapada)', 'Revati': 'ரேவதி (Revati)',
+
+    // Gothram
+    'Bharadwaja': 'பரத்வாஜ (Bharadwaja)', 'Kashyapa': 'கச்யப (Kashyapa)', 'Vashista': 'வசிஷ்ட (Vashista)', 'Vishwamitra': 'விஸ்வாமித்திர (Vishwamitra)',
+    'Atri': 'அத்ரி (Atri)', 'Agastya': 'அகஸ்திய (Agastya)', 'Gautama': 'கௌதம (Gautama)', 'Jamadagni': 'ஜமதக்னி (Jamadagni)',
+    'Kaundinya': 'கௌண்டின்ய (Kaundinya)', 'Shandilya': 'சாண்டில்ய (Shandilya)', 'Vatsa': 'வத்ஸ (Vatsa)', 'Kutsa': 'குத்ஸ (Kutsa)',
+    'Harita': 'ஹரித (Harita)', 'Mudgala': 'முத்கல (Mudgala)', 'Parashara': 'பராசர (Parashara)', 'Bhrigu': 'பிருகு (Bhrigu)',
+    'Angirasa': 'ஆங்கிரச (Angirasa)', 'Others': 'மற்றவை (Others)'
+  };
+  return map[key] || englishName;
+};
 
 const TABS = [
   { id: 'personal', label: 'Personal' },
@@ -73,7 +108,7 @@ const EditProfileScreen = ({ route, navigation }) => {
   const [countryId, setCountryId] = useState(profile?.country_id || '');
   const [stateId, setStateId] = useState(profile?.state_id || '');
   const [districtId, setDistrictId] = useState(profile?.district_id || '');
-  const [cityId, setCityId] = useState(profile?.city_id || '');
+  const [customCity, setCustomCity] = useState(profile?.city_text || '');
   const [occupationId, setOccupationId] = useState(profile?.occupation_id || '');
   const [religionId, setReligionId] = useState(profile?.religion_id || '');
   const [casteId, setCasteId] = useState(profile?.caste_id || '');
@@ -83,7 +118,6 @@ const EditProfileScreen = ({ route, navigation }) => {
   const [countries, setCountries] = useState([]);
   const [states, setStates] = useState([]);
   const [districts, setDistricts] = useState([]);
-  const [cities, setCities] = useState([]);
   const [occupations, setOccupations] = useState([]);
   const [stars, setStars] = useState([]);
   const [raasis, setRaasis] = useState([]);
@@ -96,10 +130,10 @@ const EditProfileScreen = ({ route, navigation }) => {
   useEffect(() => {
     getCountries().then(data => setCountries(data.map(d => ({ label: d.name, value: d.id }))));
     getOccupations().then(data => setOccupations(data.map(d => ({ label: d.name, value: d.id }))));
-    getNakshatra().then(data => setStars(data.map(d => ({ label: d.name, value: d.id }))));
-    getRasi().then(data => setRaasis(data.map(d => ({ label: d.name, value: d.id }))));
-    getLagnam().then(data => setLagnams(data.map(d => ({ label: d.name, value: d.id }))));
-    getGothram().then(data => setGothrams(data.map(d => ({ label: d.name, value: d.id }))));
+    getNakshatra().then(data => setStars(data.map(d => ({ label: getTamil(d.name), value: d.id }))));
+    getRasi().then(data => setRaasis(data.map(d => ({ label: getTamil(d.name), value: d.id }))));
+    getLagnam().then(data => setLagnams(data.map(d => ({ label: getTamil(d.name), value: d.id }))));
+    getGothram().then(data => setGothrams(data.map(d => ({ label: getTamil(d.name), value: d.id }))));
     getReligions().then(data => setReligions(data.map(d => ({ label: d.name, value: d.id }))));
     getEducationLevels().then(data => setEducationLevels(data.map(d => ({ label: d.name, value: d.id }))));
   }, []);
@@ -113,11 +147,6 @@ const EditProfileScreen = ({ route, navigation }) => {
     if (stateId) getDistricts(stateId).then(data => setDistricts(data.map(d => ({ label: d.name, value: d.id }))));
     else setDistricts([]);
   }, [stateId]);
-
-  useEffect(() => {
-    if (districtId) getCities(districtId).then(data => setCities(data.map(d => ({ label: d.name, value: d.id }))));
-    else setCities([]);
-  }, [districtId]);
 
   useEffect(() => {
     if (religionId) getCastes(religionId).then(data => setCastes(data.map(d => ({ label: d.name, value: d.id }))));
@@ -140,8 +169,6 @@ const EditProfileScreen = ({ route, navigation }) => {
 
   // Lifestyle Fields
   const [foodHabit, setFoodHabit] = useState(profile?.user_lifestyle?.food_habit || '');
-  const [smokingHabit, setSmokingHabit] = useState(profile?.user_lifestyle?.smoking_habit || '');
-  const [drinkingHabit, setDrinkingHabit] = useState(profile?.user_lifestyle?.drinking_habit || '');
   const [languagesKnown, setLanguagesKnown] = useState(profile?.user_lifestyle?.languages_known || '');
   const [interests, setInterests] = useState(profile?.user_lifestyle?.interests || '');
   const [hobbies, setHobbies] = useState(profile?.user_lifestyle?.hobbies || '');
@@ -152,7 +179,14 @@ const EditProfileScreen = ({ route, navigation }) => {
   const [lagnamId, setLagnamId] = useState(horoscope?.lagnam_id || '');
   const [gothramId, setGothramId] = useState(horoscope?.gothram_id || '');
   const [gothramText, setGothramText] = useState(horoscope?.gothram_text || '');
-  const [dosham, setDosham] = useState(horoscope?.dosham || '');
+  
+  const parseDosham = (val) => {
+    if (val === 'no') return 'none';
+    if (val === 'yes') return 'chevvai';
+    if (val === 'not_sure') return 'other';
+    return val || 'none';
+  };
+  const [dosham, setDosham] = useState(parseDosham(horoscope?.dosham));
   const [dasaBalance, setDasaBalance] = useState(horoscope?.notes || '');
 
   // Synchronize local states with store data when loaded asynchronously
@@ -163,7 +197,7 @@ const EditProfileScreen = ({ route, navigation }) => {
       setCountryId(profile.country_id || '');
       setStateId(profile.state_id || '');
       setDistrictId(profile.district_id || '');
-      setCityId(profile.city_id || '');
+      setCustomCity(profile.city_text || '');
       setReligionId(profile.religion_id || '');
       setCasteId(profile.caste_id || '');
       setEducationLevelId(profile.education_level_id || '');
@@ -183,8 +217,6 @@ const EditProfileScreen = ({ route, navigation }) => {
       setSisters(profile.user_family?.sisters_count ? String(profile.user_family.sisters_count) : '');
       
       setFoodHabit(profile.user_lifestyle?.food_habit || '');
-      setSmokingHabit(profile.user_lifestyle?.smoking_habit || '');
-      setDrinkingHabit(profile.user_lifestyle?.drinking_habit || '');
       setLanguagesKnown(profile.user_lifestyle?.languages_known || '');
       setInterests(profile.user_lifestyle?.interests || '');
       setHobbies(profile.user_lifestyle?.hobbies || '');
@@ -198,7 +230,7 @@ const EditProfileScreen = ({ route, navigation }) => {
       setLagnamId(horoscope.lagnam_id || '');
       setGothramId(horoscope.gothram_id || '');
       setGothramText(horoscope.gothram_text || '');
-      setDosham(horoscope.dosham || '');
+      setDosham(parseDosham(horoscope.dosham));
       setDasaBalance(horoscope.notes || '');
     }
   }, [horoscope]);
@@ -217,7 +249,8 @@ const EditProfileScreen = ({ route, navigation }) => {
         country_id: countryId || null,
         state_id: stateId || null,
         district_id: districtId || null,
-        city_id: cityId || null,
+        city_id: null,
+        city_text: customCity.trim() || null,
         religion_id: religionId || null,
         caste_id: casteId || null,
         education_level_id: educationLevelId || null,
@@ -243,8 +276,6 @@ const EditProfileScreen = ({ route, navigation }) => {
       await saveLifestyle({
         user_id: user.id,
         food_habit: foodHabit || null,
-        smoking_habit: smokingHabit || null,
-        drinking_habit: drinkingHabit || null,
         languages_known: languagesKnown || null,
         interests: interests || null,
         hobbies: hobbies || null,
@@ -311,14 +342,19 @@ const EditProfileScreen = ({ route, navigation }) => {
     }
   };
 
+  const [photoActionId, setPhotoActionId] = useState(null);
+
   const handleSetPrimary = async (photo) => {
     if (photo.is_primary) return;
     try {
+      setPhotoActionId(photo.id);
       await setPrimaryProfilePhoto(user.id, photo.id);
       setPrimaryPhoto(photo.id);
       showToast('success', 'Photo Updated', 'Primary photo set successfully.');
     } catch (error) {
       showToast('error', 'Error', 'Failed to set primary photo.');
+    } finally {
+      setPhotoActionId(null);
     }
   };
 
@@ -330,11 +366,14 @@ const EditProfileScreen = ({ route, navigation }) => {
         style: 'destructive',
         onPress: async () => {
           try {
+            setPhotoActionId(photo.id);
             await deleteProfilePhoto(photo.id, photo.storage_path);
             removePhoto(photo.id);
             showToast('success', 'Deleted', 'Photo removed.');
           } catch (error) {
             showToast('error', 'Error', 'Failed to delete photo.');
+          } finally {
+            setPhotoActionId(null);
           }
         }
       }
@@ -545,40 +584,17 @@ const EditProfileScreen = ({ route, navigation }) => {
           />
         </View>
       </View>
-      <SearchablePicker
+      <Input
         label="City"
-        options={cities}
-        value={cityId}
-        onChange={setCityId}
-        placeholder="Select City"
+        value={customCity}
+        onChangeText={setCustomCity}
+        placeholder="Type your city name"
       />
     </Animated.View>
   );
 
   const renderLifestyleTab = () => (
     <Animated.View entering={FadeIn} exiting={FadeOut} style={styles.tabContent}>
-      <View style={styles.row}>
-        <View style={styles.flex1}>
-          <SearchablePicker
-            label="Smoking"
-            options={SMOKING_OPTIONS}
-            value={smokingHabit}
-            onChange={setSmokingHabit}
-            placeholder="Select"
-            searchable={false}
-          />
-        </View>
-        <View style={styles.flex1}>
-          <SearchablePicker
-            label="Drinking"
-            options={DRINKING_OPTIONS}
-            value={drinkingHabit}
-            onChange={setDrinkingHabit}
-            placeholder="Select"
-            searchable={false}
-          />
-        </View>
-      </View>
       <SearchablePicker
         label="Dietary Habit"
         placeholder="Select Food Habit"
@@ -647,7 +663,12 @@ const EditProfileScreen = ({ route, navigation }) => {
             placeholder="Select Dosham"
             options={DOSHAM_OPTIONS}
             value={dosham}
-            onChange={setDosham}
+            onChange={(val) => {
+              setDosham(val);
+              if (val === 'none') {
+                setDasaBalance('');
+              }
+            }}
             searchable={false}
           />
         </View>
@@ -660,12 +681,14 @@ const EditProfileScreen = ({ route, navigation }) => {
           placeholder="Enter your gothram"
         />
       )}
-      <Input
-        label="Dasa Balance (Notes)"
-        value={dasaBalance}
-        onChangeText={setDasaBalance}
-        placeholder="e.g. Rahu 2 years"
-      />
+      {dosham !== 'none' && (
+        <Input
+          label="Dasa Balance (Notes)"
+          value={dasaBalance}
+          onChangeText={setDasaBalance}
+          placeholder="e.g., Rahu 2 years"
+        />
+      )}
     </Animated.View>
   );
 
@@ -686,12 +709,28 @@ const EditProfileScreen = ({ route, navigation }) => {
             )}
             <View style={styles.photoActions}>
               {!photo.is_primary && (
-                <TouchableOpacity style={styles.photoActionBtn} onPress={() => handleSetPrimary(photo)}>
-                  <Text style={styles.photoActionText}>★ Primary</Text>
+                <TouchableOpacity 
+                  style={styles.photoActionBtn} 
+                  onPress={() => handleSetPrimary(photo)}
+                  disabled={photoActionId === photo.id}
+                >
+                  {photoActionId === photo.id ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Text style={styles.photoActionText}>★ Primary</Text>
+                  )}
                 </TouchableOpacity>
               )}
-              <TouchableOpacity style={styles.photoActionBtnDel} onPress={() => handleDeletePhoto(photo)}>
-                <Text style={styles.photoActionTextDel}>🗑 Delete</Text>
+              <TouchableOpacity 
+                style={styles.photoActionBtnDel} 
+                onPress={() => handleDeletePhoto(photo)}
+                disabled={photoActionId === photo.id}
+              >
+                {photoActionId === photo.id ? (
+                  <ActivityIndicator size="small" color={colors.error} />
+                ) : (
+                  <Text style={styles.photoActionTextDel}>🗑 Delete</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>

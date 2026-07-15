@@ -1,7 +1,7 @@
 /**
  * Wedring Matrimony — Family Details Registration (Step 4)
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import { colors } from '../../theme';
 import Input from '../../components/common/Input';
@@ -32,13 +32,12 @@ const FamilyScreen = ({ navigation }) => {
   const [countryId, setCountryId] = useState(profile?.country_id || '');
   const [stateId, setStateId] = useState(profile?.state_id || '');
   const [districtId, setDistrictId] = useState(profile?.district_id || '');
-  const [cityId, setCityId] = useState(profile?.city_id || '');
+  const [customCity, setCustomCity] = useState(profile?.city_text || '');
   const [aboutMe, setAboutMe] = useState(profile?.about_me || '');
 
   const [countries, setCountries] = useState([]);
   const [statesList, setStatesList] = useState([]);
   const [districtsList, setDistrictsList] = useState([]);
-  const [citiesList, setCitiesList] = useState([]);
 
   useEffect(() => {
     getCountries().then(data => setCountries(data.map(c => ({ label: c.name, value: c.id }))));
@@ -54,14 +53,9 @@ const FamilyScreen = ({ navigation }) => {
     else setDistrictsList([]);
   }, [stateId]);
 
-  useEffect(() => {
-    if (districtId) getCities(districtId).then(data => setCitiesList(data.map(c => ({ label: c.name, value: c.id }))));
-    else setCitiesList([]);
-  }, [districtId]);
-
   const handleNext = useCallback(async () => {
-    if (!countryId || !stateId || !districtId || !cityId) {
-      Alert.alert('Required Fields', 'Please select your full location (Country, State, District, City) to continue.');
+    if (!countryId || !stateId || !districtId || !customCity.trim()) {
+      Alert.alert('Required Fields', 'Please select your full location and enter a city to continue.');
       return;
     }
 
@@ -74,8 +68,8 @@ const FamilyScreen = ({ navigation }) => {
         family_type: familyType || null,
         family_status: familyStatus || null,
         family_values: familyValues || null,
-        number_of_brothers: parseInt(brothers) || 0,
-        number_of_sisters: parseInt(sisters) || 0,
+        brothers_count: parseInt(brothers) || 0,
+        sisters_count: parseInt(sisters) || 0,
       });
 
       // Save location + about me to profiles table
@@ -84,7 +78,8 @@ const FamilyScreen = ({ navigation }) => {
         country_id: countryId,
         state_id: stateId,
         district_id: districtId,
-        city_id: cityId,
+        city_id: null,
+        city_text: customCity.trim(),
         about_me: aboutMe.trim() || null,
       });
 
@@ -92,7 +87,7 @@ const FamilyScreen = ({ navigation }) => {
     } catch (error) {
       console.error('Save error:', error);
     }
-  }, [fatherName, motherName, familyType, familyStatus, familyValues, brothers, sisters, countryId, stateId, districtId, cityId, aboutMe, user, saveProfile, saveFamilyDetails, navigation]);
+  }, [fatherName, motherName, familyType, familyStatus, familyValues, brothers, sisters, countryId, stateId, districtId, customCity, aboutMe, user, saveProfile, saveFamilyDetails, navigation]);
 
   return (
     <View style={styles.container}>
@@ -173,7 +168,7 @@ const FamilyScreen = ({ navigation }) => {
             setCountryId(val);
             setStateId('');
             setDistrictId('');
-            setCityId('');
+            setCustomCity('');
           }}
           columns={2}
         />
@@ -186,7 +181,7 @@ const FamilyScreen = ({ navigation }) => {
             onChange={(val) => {
               setStateId(val);
               setDistrictId('');
-              setCityId('');
+              setCustomCity('');
             }}
             columns={2}
           />
@@ -199,19 +194,18 @@ const FamilyScreen = ({ navigation }) => {
             value={districtId}
             onChange={(val) => {
               setDistrictId(val);
-              setCityId('');
+              setCustomCity('');
             }}
             columns={2}
           />
         )}
 
         {districtId !== '' && (
-          <OptionSelector
+          <Input
             label="City *"
-            options={citiesList}
-            value={cityId}
-            onChange={setCityId}
-            columns={2}
+            value={customCity}
+            onChangeText={setCustomCity}
+            placeholder="Type your city name"
           />
         )}
 

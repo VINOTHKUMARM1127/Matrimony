@@ -41,6 +41,8 @@ import InterestsScreen from '../screens/main/InterestsScreen';
 import UserProfileScreen from '../screens/detail/UserProfileScreen';
 import PhotoViewerScreen from '../screens/detail/PhotoViewerScreen';
 import HoroscopeDetailScreen from '../screens/detail/HoroscopeDetailScreen';
+import ChatListScreen from '../screens/main/ChatListScreen';
+import ChatScreen from '../screens/detail/ChatScreen';
 
 // Settings Screens
 import SettingsScreen from '../screens/settings/SettingsScreen';
@@ -71,6 +73,7 @@ const TabIcon = ({ label, focused }) => {
     Search: focused ? 'search' : 'search-outline',
     Matches: focused ? 'heart' : 'heart-outline',
     Interest: focused ? 'mail' : 'mail-outline',
+    Chat: focused ? 'chatbubble' : 'chatbubble-outline',
     Premium: focused ? 'star' : 'star-outline',
   };
 
@@ -176,6 +179,14 @@ const MainTabNavigator = () => (
       }}
     />
     <Tab.Screen
+      name="ChatTab"
+      component={ChatListScreen}
+      options={{
+        tabBarLabel: 'Chat',
+        tabBarIcon: ({ focused }) => <TabIcon label="Chat" focused={focused} />,
+      }}
+    />
+    <Tab.Screen
       name="PremiumTab"
       component={PremiumScreen}
       options={{
@@ -227,6 +238,8 @@ const AppNavigator = () => {
             <Stack.Screen name="EditPreferences" component={EditPreferencesScreen} />
             <Stack.Screen name="Privacy" component={PrivacyScreen} />
             <Stack.Screen name="Matches" component={MatchesScreen} />
+            <Stack.Screen name="ChatList" component={ChatListScreen} />
+            <Stack.Screen name="Chat" component={ChatScreen} />
           </>
         )}
       </Stack.Navigator>

@@ -2,8 +2,8 @@
  * Wedring Matrimony — Settings Screen (Redesigned)
  * Grouped sections, lucide icons, icon+title+description+chevron rows.
  */
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../../theme';
@@ -27,10 +27,20 @@ const SettingsScreen = ({ navigation }) => {
   const primary = photos?.find((p) => p.is_primary) || photos?.[0];
   const primaryPhoto = primary?.photo_url || primary?.storage_path;
 
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
+
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: async () => { await signOut(); } },
+      { text: 'Logout', style: 'destructive', onPress: async () => { 
+        setLoggingOut(true);
+        try {
+          await signOut();
+        } finally {
+          setLoggingOut(false);
+        }
+      } },
     ]);
   };
 
@@ -44,6 +54,7 @@ const SettingsScreen = ({ navigation }) => {
           text: 'Deactivate', style: 'destructive',
           onPress: async () => {
             try {
+              setDeactivating(true);
               if (profile?.id) {
                 await deactivateProfile(profile.id);
                 Alert.alert('Success', 'Your profile has been deactivated.');
@@ -51,6 +62,8 @@ const SettingsScreen = ({ navigation }) => {
               }
             } catch (error) {
               Alert.alert('Error', 'Failed to deactivate profile.');
+            } finally {
+              setDeactivating(false);
             }
           },
         },
@@ -151,14 +164,42 @@ const SettingsScreen = ({ navigation }) => {
 
         {/* Danger zone */}
         <View style={styles.section}>
-          <TouchableOpacity style={styles.deactivateButton} onPress={handleDeactivate} activeOpacity={0.8}>
-            <Icon name="match" size={18} color={colors.textSecondary} />
-            <Text style={styles.deactivateText}>Got Married? Deactivate Profile</Text>
+          <TouchableOpacity 
+            style={styles.deactivateButton} 
+            onPress={handleDeactivate} 
+            activeOpacity={0.8}
+            disabled={deactivating || loggingOut}
+          >
+            {deactivating ? (
+              <>
+                <ActivityIndicator size="small" color={colors.textSecondary} style={{ marginRight: 8 }} />
+                <Text style={styles.deactivateText}>Deactivating...</Text>
+              </>
+            ) : (
+              <>
+                <Icon name="match" size={18} color={colors.textSecondary} />
+                <Text style={styles.deactivateText}>Got Married? Deactivate Profile</Text>
+              </>
+            )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.8}>
-            <Icon name="logout" size={18} color={colors.error} />
-            <Text style={styles.logoutText}>Logout</Text>
+          <TouchableOpacity 
+            style={styles.logoutButton} 
+            onPress={handleLogout} 
+            activeOpacity={0.8}
+            disabled={loggingOut || deactivating}
+          >
+            {loggingOut ? (
+              <>
+                <ActivityIndicator size="small" color={colors.error} style={{ marginRight: 8 }} />
+                <Text style={styles.logoutText}>Logging out...</Text>
+              </>
+            ) : (
+              <>
+                <Icon name="logout" size={18} color={colors.error} />
+                <Text style={styles.logoutText}>Logout</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
 

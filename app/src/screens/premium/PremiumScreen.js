@@ -134,7 +134,12 @@ const PremiumScreen = ({ navigation }) => {
               
               if (error) throw error;
               
-              showToast('success', 'Success', `Successfully upgraded to ${plan.name} Premium!`);
+              if (data === 'queued') {
+                showToast('success', 'Success', `${plan.name} will activate once your current plan ends.`);
+              } else {
+                showToast('success', 'Success', `Successfully upgraded to ${plan.name} Premium!`);
+              }
+              
               await refreshAfterPurchase();
               navigation.goBack();
             } catch (error) {
@@ -209,8 +214,9 @@ const PremiumScreen = ({ navigation }) => {
 
         try {
           // 1) Trigger synchronous verification
+          let verifyResult = null;
           try {
-            await verifyRazorpayPayment({
+            verifyResult = await verifyRazorpayPayment({
               razorpay_order_id: paymentData.razorpay_order_id,
               razorpay_payment_id: paymentData.razorpay_payment_id,
               razorpay_signature: paymentData.razorpay_signature,
@@ -219,34 +225,52 @@ const PremiumScreen = ({ navigation }) => {
             console.warn('Sync verify failed or delayed:', verifyErr);
           }
 
-          // 2) ALWAYS poll until the DB reflects the new plan to prevent race conditions
-          let subscriptionActivated = false;
-          let attempts = 0;
-          const maxAttempts = 10; // 15 seconds at 1.5s intervals
-          while (attempts < maxAttempts) {
-            const sub = await getActiveSubscription(user.id);
-            if (sub && sub.plan_id === plan.id) {
-              subscriptionActivated = true;
-              break;
-            }
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            attempts++;
-          }
-
-          if (subscriptionActivated) {
+          if (verifyResult && verifyResult.subscription) {
             await refreshAfterPurchase();
-            Alert.alert(
-              'Success! 🎉', 
-              `Welcome to ${plan.name}! Enjoy premium access.`,
-              [{ text: 'Awesome', onPress: () => navigation.goBack() }]
-            );
+            if (verifyResult.subscription === 'queued') {
+              Alert.alert(
+                'Payment received',
+                `${plan.name} has been queued and will activate once your current plan ends.`,
+                [{ text: 'OK', onPress: () => navigation.goBack() }]
+              );
+            } else {
+              Alert.alert(
+                'Success! 🎉', 
+                `Welcome to ${plan.name}! Enjoy premium access.`,
+                [{ text: 'Awesome', onPress: () => navigation.goBack() }]
+              );
+            }
           } else {
-            // Timeout hit
-            Alert.alert(
-              'Payment received',
-              'Your plan will activate within a minute. You can safely leave this screen.',
-              [{ text: 'OK', onPress: () => navigation.goBack() }]
-            );
+            // 2) Fallback: poll until the DB reflects the new plan to prevent race conditions
+            let subscriptionActivated = false;
+            let attempts = 0;
+            const maxAttempts = 10; // 15 seconds at 1.5s intervals
+            while (attempts < maxAttempts) {
+              const sub = await getActiveSubscription(user.id);
+              if (sub && sub.plan_id === plan.id) {
+                subscriptionActivated = true;
+                break;
+              }
+              await new Promise(resolve => setTimeout(resolve, 1500));
+              attempts++;
+            }
+
+            await refreshAfterPurchase();
+
+            if (subscriptionActivated) {
+              Alert.alert(
+                'Success! 🎉', 
+                `Welcome to ${plan.name}! Enjoy premium access.`,
+                [{ text: 'Awesome', onPress: () => navigation.goBack() }]
+              );
+            } else {
+              // Timeout hit - might be queued or delayed webhook
+              Alert.alert(
+                'Payment received',
+                'Your plan will activate shortly, or it has been queued to start after your current plan ends.',
+                [{ text: 'OK', onPress: () => navigation.goBack() }]
+              );
+            }
           }
         } catch (subErr) {
           console.error('Subscription error:', subErr);

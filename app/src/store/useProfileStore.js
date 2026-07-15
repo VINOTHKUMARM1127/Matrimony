@@ -102,6 +102,10 @@ const useProfileStore = create((set, get) => ({
         user_lifestyle,
         registration_meta,
         profile_contact,
+        // Also strip injected helper fields from loadProfile
+        city, district, highest_qualification, education, occupation, religion, caste,
+        // And the raw join objects
+        cities, districts, education_levels, occupations, religions, castes,
         ...profileDbFields
       } = mergedData;
 

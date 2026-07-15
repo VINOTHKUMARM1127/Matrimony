@@ -31,6 +31,7 @@ import * as interestApi from '../../api/interests';
 import { createChat } from '../../api/chat';
 import { fetchUserDashboard } from '../../api/settingsApi';
 import usePremium from '../../hooks/usePremium';
+import { getPrimaryPhotoUrl } from '../../api/profiles';
 
 const InterestsScreen = ({ navigation }) => {
   const user = useAuthStore((s) => s.user);
@@ -39,6 +40,7 @@ const InterestsScreen = ({ navigation }) => {
 
   const [activeSubTab, setActiveSubTab] = useState('received');
   const [statusFilter, setStatusFilter] = useState('sent');
+  const [initialAutoSelectDone, setInitialAutoSelectDone] = useState(false);
   const queryClient = useQueryClient();
 
   useFocusEffect(
@@ -48,6 +50,22 @@ const InterestsScreen = ({ navigation }) => {
       }
     }, [user?.id, queryClient])
   );
+
+  // Realtime Sync Subscription
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const subscription = interestApi.subscribeToInterestChanges(user.id, () => {
+      queryClient.invalidateQueries({ queryKey: ['interestsReceived'] });
+      queryClient.invalidateQueries({ queryKey: ['interestsSent'] });
+      queryClient.invalidateQueries({ queryKey: ['passedInterests'] });
+      queryClient.invalidateQueries({ queryKey: ['chatList'] });
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [user?.id, queryClient]);
 
   // Fetch Received Interests
   const {
@@ -146,6 +164,69 @@ const InterestsScreen = ({ navigation }) => {
     },
   });
 
+  const [actionItemId, setActionItemId] = useState(null);
+  const [chattingId, setChattingId] = useState(null);
+
+  const handleChatPress = async (targetUser) => {
+    try {
+      setChattingId(targetUser.id);
+      const chat = await createChat(user.id, targetUser.id);
+      
+      const photoUrl = getPrimaryPhotoUrl(targetUser);
+      
+      navigation.navigate('Chat', {
+        chatId: chat.id,
+        otherUser: {
+          id: targetUser.id,
+          full_name: targetUser.full_name,
+          city: targetUser.city,
+          photos: photoUrl ? [{ photo_url: photoUrl, is_primary: true }] : [],
+        },
+      });
+    } catch (err) {
+      console.warn('Failed to open chat:', err);
+    } finally {
+      setChattingId(null);
+    }
+  };
+
+  const handleTabSwitch = useCallback((newTab) => {
+    setActiveSubTab(newTab);
+    
+    // Auto-select the sub-filter with the highest count when switching
+    if (newTab === 'received' || newTab === 'sent') {
+      const data = newTab === 'received' ? (receivedInterests || []) : (sentInterests || []);
+      let pCount = 0, aCount = 0, rCount = 0;
+      data.forEach(item => {
+        if (item.status === 'sent') pCount++;
+        else if (item.status === 'accepted') aCount++;
+        else if (item.status === 'rejected' || item.status === 'declined') rCount++;
+      });
+      
+      // Prioritize Accepted > Pending > Declined
+      if (aCount > pCount && aCount >= rCount) setStatusFilter('accepted');
+      else if (pCount >= aCount && pCount >= rCount) setStatusFilter('sent');
+      else setStatusFilter('rejected');
+    }
+  }, [receivedInterests, sentInterests]);
+
+  useEffect(() => {
+    if (!initialAutoSelectDone && receivedInterests) {
+      let pCount = 0, aCount = 0, rCount = 0;
+      receivedInterests.forEach(item => {
+        if (item.status === 'sent') pCount++;
+        else if (item.status === 'accepted') aCount++;
+        else if (item.status === 'rejected' || item.status === 'declined') rCount++;
+      });
+      
+      if (aCount > pCount && aCount >= rCount) setStatusFilter('accepted');
+      else if (pCount >= aCount && pCount >= rCount) setStatusFilter('sent');
+      else setStatusFilter('rejected');
+      
+      setInitialAutoSelectDone(true);
+    }
+  }, [receivedInterests, initialAutoSelectDone]);
+
   const handleRefresh = useCallback(() => {
     if (activeSubTab === 'received') refetchReceived();
     else if (activeSubTab === 'sent') refetchSent();
@@ -180,15 +261,7 @@ const InterestsScreen = ({ navigation }) => {
   };
 
   const getPrimaryPhoto = (prof) => {
-    if (prof?.photos?.length) {
-      const primary = prof.photos.find((p) => p.is_primary);
-      return (primary || prof.photos[0])?.storage_path;
-    }
-    if (prof?.profile_photos?.length) {
-      const primary = prof.profile_photos.find((p) => p.is_primary);
-      return (primary || prof.profile_photos[0])?.photo_url;
-    }
-    return null;
+    return getPrimaryPhotoUrl(prof);
   };
 
   /** Mask a display name, e.g. "Priya Sharma" → "Pr***" */
@@ -255,19 +328,46 @@ const InterestsScreen = ({ navigation }) => {
             <>
               <TouchableOpacity
                 style={styles.declineBtn}
-                onPress={() => declineMutation.mutate(item.id)}
-                disabled={declineMutation.isPending}
+                onPress={() => {
+                  setActionItemId(item.id);
+                  declineMutation.mutate(item.id, { onSettled: () => setActionItemId(null) });
+                }}
+                disabled={declineMutation.isPending || acceptMutation.isPending}
               >
-                <Text style={styles.declineBtnText}>Decline</Text>
+                {declineMutation.isPending && actionItemId === item.id ? (
+                  <ActivityIndicator size="small" color={colors.textPrimary} />
+                ) : (
+                  <Text style={styles.declineBtnText}>Decline</Text>
+                )}
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.acceptBtn}
-                onPress={() => acceptMutation.mutate({ interestId: item.id, senderId: sender.id })}
-                disabled={acceptMutation.isPending}
+                onPress={() => {
+                  setActionItemId(item.id);
+                  acceptMutation.mutate({ interestId: item.id, senderId: sender.id }, { onSettled: () => setActionItemId(null) });
+                }}
+                disabled={acceptMutation.isPending || declineMutation.isPending}
               >
-                <Text style={styles.acceptBtnText}>Accept Request</Text>
+                {acceptMutation.isPending && actionItemId === item.id ? (
+                  <ActivityIndicator size="small" color={colors.textInverse} />
+                ) : (
+                  <Text style={styles.acceptBtnText}>Accept Request</Text>
+                )}
               </TouchableOpacity>
             </>
+          )}
+          {item.status === 'accepted' && (
+            <TouchableOpacity
+              style={[styles.acceptBtn, { backgroundColor: colors.chatBubbleSent, marginRight: 8 }]}
+              onPress={() => handleChatPress(sender)}
+              disabled={chattingId === sender.id}
+            >
+              {chattingId === sender.id ? (
+                <ActivityIndicator size="small" color={colors.textPrimary} />
+              ) : (
+                <Text style={[styles.acceptBtnText, { color: colors.textPrimary }]}>Chat</Text>
+              )}
+            </TouchableOpacity>
           )}
           <TouchableOpacity
             style={styles.viewBtn}
@@ -389,20 +489,50 @@ const InterestsScreen = ({ navigation }) => {
           </View>
         </TouchableOpacity>
 
-        {/* Action Button for Passed Tab */}
-        {activeSubTab === 'passed' && (
-          <View style={styles.passedActions}>
+        {/* Action Buttons */}
+        <View style={styles.actionRow}>
+          {item.status === 'accepted' && (
+            <TouchableOpacity
+              style={[styles.acceptBtn, { backgroundColor: colors.chatBubbleSent, marginRight: 8 }]}
+              onPress={() => {
+                setChattingId(receiver.id);
+                handleChatPress(receiver);
+              }}
+              disabled={chattingId === receiver.id}
+            >
+              {chattingId === receiver.id ? (
+                <ActivityIndicator size="small" color={colors.textPrimary} />
+              ) : (
+                <Text style={[styles.acceptBtnText, { color: colors.textPrimary }]}>Chat</Text>
+              )}
+            </TouchableOpacity>
+          )}
+          {activeSubTab === 'passed' && (
             <TouchableOpacity
               style={[styles.actionBtn, styles.interestedActionBtn]}
-              onPress={() => interestedMutation.mutate(receiver.id)}
+              onPress={() => {
+                setActionItemId(receiver.id);
+                interestedMutation.mutate(receiver.id, { onSettled: () => setActionItemId(null) });
+              }}
               disabled={interestedMutation.isPending}
             >
-              <Text style={styles.interestedActionText}>
-                {interestedMutation.isPending ? 'Sending...' : 'Interested'}
-              </Text>
+              {interestedMutation.isPending && actionItemId === receiver.id ? (
+                <>
+                  <ActivityIndicator size="small" color={colors.textInverse} style={{ marginRight: 8 }} />
+                  <Text style={styles.interestedActionText}>Sending...</Text>
+                </>
+              ) : (
+                <Text style={styles.interestedActionText}>Interested</Text>
+              )}
             </TouchableOpacity>
-          </View>
-        )}
+          )}
+          <TouchableOpacity
+            style={styles.viewBtn}
+            onPress={() => handleProfilePress(receiver.id)}
+          >
+            <Text style={styles.viewBtnText}>View Profile</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -410,7 +540,19 @@ const InterestsScreen = ({ navigation }) => {
   const isLoading = activeSubTab === 'received' ? loadingReceived : activeSubTab === 'sent' ? loadingSent : loadingPassed;
   let listData = activeSubTab === 'received' ? receivedInterests : activeSubTab === 'sent' ? sentInterests : passedInterests;
   
+  // Calculate dynamic counts for the sub-filters
+  let pendingCount = 0;
+  let acceptedCount = 0;
+  let declinedCount = 0;
+
   if (activeSubTab === 'received' || activeSubTab === 'sent') {
+    (listData || []).forEach(item => {
+      if (item.status === 'sent') pendingCount++;
+      else if (item.status === 'accepted') acceptedCount++;
+      else if (item.status === 'rejected' || item.status === 'declined') declinedCount++;
+    });
+    
+    // Apply the filter for rendering
     listData = (listData || []).filter(item => {
       if (statusFilter === 'rejected') return item.status === 'rejected' || item.status === 'declined';
       return item.status === statusFilter;
@@ -503,7 +645,7 @@ const InterestsScreen = ({ navigation }) => {
         <View style={styles.pillTrack}>
           <TouchableOpacity
             style={[styles.pillButton, activeSubTab === 'received' && styles.pillActive]}
-            onPress={() => { setActiveSubTab('received'); setStatusFilter('sent'); }}
+            onPress={() => handleTabSwitch('received')}
           >
             <Text style={[styles.pillText, activeSubTab === 'received' && styles.pillTextActive]}>
               Received ({receivedCount})
@@ -511,7 +653,7 @@ const InterestsScreen = ({ navigation }) => {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.pillButton, activeSubTab === 'sent' && styles.pillActive]}
-            onPress={() => { setActiveSubTab('sent'); setStatusFilter('sent'); }}
+            onPress={() => handleTabSwitch('sent')}
           >
             <Text style={[styles.pillText, activeSubTab === 'sent' && styles.pillTextActive]}>
               Sent ({sentCount})
@@ -519,10 +661,10 @@ const InterestsScreen = ({ navigation }) => {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.pillButton, activeSubTab === 'passed' && styles.pillActive]}
-            onPress={() => setActiveSubTab('passed')}
+            onPress={() => handleTabSwitch('passed')}
           >
             <Text style={[styles.pillText, activeSubTab === 'passed' && styles.pillTextActive]}>
-              Not Interested ({passedCount})
+              Passed ({passedCount})
             </Text>
           </TouchableOpacity>
         </View>
@@ -536,19 +678,25 @@ const InterestsScreen = ({ navigation }) => {
               style={[styles.subFilterBtn, statusFilter === 'sent' && styles.subFilterBtnActive]}
               onPress={() => setStatusFilter('sent')}
             >
-              <Text style={[styles.subFilterText, statusFilter === 'sent' && styles.subFilterTextActive]}>Pending</Text>
+              <Text style={[styles.subFilterText, statusFilter === 'sent' && styles.subFilterTextActive]}>
+                Pending ({pendingCount})
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.subFilterBtn, statusFilter === 'accepted' && styles.subFilterBtnActive]}
               onPress={() => setStatusFilter('accepted')}
             >
-              <Text style={[styles.subFilterText, statusFilter === 'accepted' && styles.subFilterTextActive]}>Accepted</Text>
+              <Text style={[styles.subFilterText, statusFilter === 'accepted' && styles.subFilterTextActive]}>
+                Accepted ({acceptedCount})
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.subFilterBtn, statusFilter === 'rejected' && styles.subFilterBtnActive]}
               onPress={() => setStatusFilter('rejected')}
             >
-              <Text style={[styles.subFilterText, statusFilter === 'rejected' && styles.subFilterTextActive]}>Declined</Text>
+              <Text style={[styles.subFilterText, statusFilter === 'rejected' && styles.subFilterTextActive]}>
+                Declined ({declinedCount})
+              </Text>
             </TouchableOpacity>
           </ScrollView>
         </View>

@@ -19,7 +19,7 @@ export const PROFILE_SCALAR_FIELDS = [
   'religion_id', 'caste_id', 'sub_caste_id', 'sub_caste_text',
   'education_level_id', 'degree', 'college_name', 'occupation_id', 
   'is_working', 'annual_income',
-  'country_id', 'state_id', 'district_id', 'city_id',
+  'country_id', 'state_id', 'district_id', 'city_id', 'city_text',
 ];
 
 export const PROFILE_INT_FIELDS = [
@@ -31,7 +31,7 @@ export const PROFILE_FLOAT_FIELDS = ['annual_income'];
 export const PROFILE_BOOL_FIELDS = ['is_working'];
 
 // user_lifestyle columns
-export const LIFESTYLE_SCALAR_FIELDS = ['food_habit', 'drinking_habit', 'smoking_habit'];
+export const LIFESTYLE_SCALAR_FIELDS = ['food_habit'];
 export const LIFESTYLE_ARRAY_FIELDS = ['languages', 'interests', 'hobbies'];
 
 // user_horoscope columns

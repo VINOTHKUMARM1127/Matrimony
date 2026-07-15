@@ -60,7 +60,7 @@ const PhotoGallery = ({ photos = [], isPremiumUser = false, onPhotoPress }) => {
               style={styles.slide}
             >
               <Image
-                source={{ uri: item.storage_path }}
+                source={{ uri: item.photo_url || item.storage_path }}
                 style={styles.image}
                 contentFit="cover"
                 transition={300}
@@ -93,34 +93,7 @@ const PhotoGallery = ({ photos = [], isPremiumUser = false, onPhotoPress }) => {
         </View>
       )}
 
-      {/* Thumbnail Bar */}
-      {sortedPhotos.length > 1 && (
-        <View style={styles.thumbnailContainer}>
-          <FlatList
-            data={sortedPhotos}
-            keyExtractor={(item) => `thumb-${item.id}`}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.thumbnailList}
-            renderItem={({ item, index }) => (
-              <TouchableOpacity
-                onPress={() => onPhotoPress?.(item, sortedPhotos)}
-                style={[
-                  styles.thumbnailWrapper,
-                  activeIdx === index && styles.thumbnailWrapperActive
-                ]}
-              >
-                <Image
-                  source={{ uri: item.thumbnail_path || item.storage_path }}
-                  style={styles.thumbnail}
-                  contentFit="cover"
-                  blurRadius={item.is_private && !isPremiumUser ? 10 : 0}
-                />
-              </TouchableOpacity>
-            )}
-          />
-        </View>
-      )}
+
     </View>
   );
 };
@@ -158,7 +131,7 @@ const styles = StyleSheet.create({
   },
   indicatorContainer: {
     position: 'absolute',
-    bottom: 90,
+    bottom: 12,
     left: 0,
     right: 0,
     flexDirection: 'row',

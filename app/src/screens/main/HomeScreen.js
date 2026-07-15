@@ -15,7 +15,6 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import React from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -165,6 +164,14 @@ const HomeScreen = ({ navigation }) => {
         </View>
       </View>
       <View style={styles.headerRight}>
+        <TouchableOpacity
+          style={styles.iconButton}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          onPress={() => navigation.navigate('ChatList')}
+        >
+          <Icon name="chat" size={20} color={colors.textPrimary} strokeWidth={2} />
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.iconButton}
           activeOpacity={0.7}

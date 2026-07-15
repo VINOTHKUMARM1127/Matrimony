@@ -15,6 +15,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
   StatusBar,
+  Alert,
 } from 'react-native';
 import { SafeAreaView as SafeAreaContextView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -24,6 +25,8 @@ import Avatar from '../../components/common/Avatar';
 import Icon from '../../components/common/Icon';
 import useAuthStore from '../../store/useAuthStore';
 import * as chatApi from '../../api/chat';
+import { getPrimaryPhotoUrl } from '../../api/profiles';
+import usePremium from '../../hooks/usePremium';
 
 const ChatScreen = ({ route, navigation }) => {
   const { chatId, otherUser } = route.params || {};
@@ -45,6 +48,15 @@ const ChatScreen = ({ route, navigation }) => {
     queryFn: () => chatApi.getMessages(chatId),
     enabled: !!chatId,
     staleTime: 0, // Keep fresh to allow subscription updates
+    gcTime: 0, // Prevent caching deleted messages
+  });
+
+  // 1b. Premium and Block Status
+  const { isPremium } = usePremium();
+  const { data: blockStatus, refetch: refetchBlockStatus } = useQuery({
+    queryKey: ['blockStatus', currentUser?.id, otherUser?.id],
+    queryFn: () => chatApi.getBlockStatus(currentUser?.id, otherUser?.id),
+    enabled: !!currentUser?.id && !!otherUser?.id,
   });
 
   // 2. Mark messages as read
@@ -58,46 +70,147 @@ const ChatScreen = ({ route, navigation }) => {
   useEffect(() => {
     if (!chatId) return;
 
-    const subscription = chatApi.subscribeToMessages(chatId, (newMessage) => {
-      // Append the new message to React Query's cached list
-      queryClient.setQueryData(['chatMessages', chatId], (oldMessages = []) => {
-        // Prevent duplicate messages in cache
-        if (oldMessages.some((m) => m.id === newMessage.id)) {
-          return oldMessages;
-        }
-        return [...oldMessages, newMessage];
-      });
+    const subscription = chatApi.subscribeToMessages(
+      chatId,
+      (newMessage) => {
+        // Append the new message to React Query's cached list
+        queryClient.setQueryData(['chatMessages', chatId], (oldMessages = []) => {
+          // Prevent duplicate messages in cache
+          if (oldMessages.some((m) => m.id === newMessage.id)) {
+            return oldMessages;
+          }
+          return [...oldMessages, newMessage];
+        });
 
-      // Mark as read if the current user is active and isn't the sender
-      if (newMessage.sender_id !== currentUser?.id) {
-        chatApi.markMessagesRead(chatId, currentUser?.id);
+        // Mark as read if the current user is active and isn't the sender
+        if (newMessage.sender_id !== currentUser?.id) {
+          chatApi.markMessagesRead(chatId, currentUser?.id);
+        }
+      },
+      (deletedMessage) => {
+        // Remove pruned message from UI immediately
+        queryClient.setQueryData(['chatMessages', chatId], (oldMessages = []) => {
+          return oldMessages.filter((m) => m.id !== deletedMessage.id);
+        });
       }
+    );
+
+    // Also subscribe to block updates (to catch when other user blocks/unblocks us)
+    const blockSub = chatApi.subscribeToChatListUpdates(currentUser.id, () => {
+      refetchBlockStatus();
     });
 
     setIsSubscribed(true);
 
     return () => {
-      if (subscription) {
-        subscription.unsubscribe();
-      }
+      if (subscription) subscription.unsubscribe();
+      if (blockSub) blockSub.unsubscribe();
     };
   }, [chatId, queryClient, currentUser?.id]);
 
   // 4. Send Message Mutation
   const sendMessageMutation = useMutation({
     mutationFn: (text) => chatApi.sendMessage(chatId, currentUser.id, text),
-    onSuccess: (newMessage) => {
-      // Optimistically append the message
+    onMutate: async (text) => {
+      await queryClient.cancelQueries({ queryKey: ['chatMessages', chatId] });
+      const previousMessages = queryClient.getQueryData(['chatMessages', chatId]);
+
+      // Optimistically append a temporary message
+      const tempMessage = {
+        id: `temp-${Date.now()}`,
+        chat_id: chatId,
+        sender_id: currentUser.id,
+        content: text,
+        created_at: new Date().toISOString(),
+        is_read: false,
+        status: 'sending',
+      };
+
+      queryClient.setQueryData(['chatMessages', chatId], (old = []) => [...old, tempMessage]);
+
+      return { previousMessages, tempMessageId: tempMessage.id };
+    },
+    onSuccess: (newMessage, text, context) => {
+      // Replace temp message with the real one
       queryClient.setQueryData(['chatMessages', chatId], (oldMessages = []) => {
-        if (oldMessages.some((m) => m.id === newMessage.id)) {
-          return oldMessages;
+        const filtered = oldMessages.filter((m) => m.id !== context?.tempMessageId);
+        if (filtered.some((m) => m.id === newMessage.id)) {
+          return filtered;
         }
-        return [...oldMessages, newMessage];
+        return [...filtered, newMessage];
       });
       // Invalidate the chat list so the last message text updates there
       queryClient.invalidateQueries({ queryKey: ['chatList', currentUser?.id] });
     },
+    onError: (err, text, context) => {
+      // Restore previous messages to remove the temp one
+      if (context?.previousMessages) {
+        queryClient.setQueryData(['chatMessages', chatId], context.previousMessages);
+      }
+      // Restore typed text so it's not lost
+      setMessageText(text);
+      Alert.alert('Cannot send message', err.message || 'Failed to send message.');
+      // Re-check block/premium status in case it changed mid-session
+      refetchBlockStatus();
+      queryClient.invalidateQueries({ queryKey: ['user_dashboard_summary', currentUser?.id] });
+    }
   });
+
+  const handleBlockToggle = () => {
+    if (!blockStatus) return;
+    
+    if (blockStatus.blockedByMe) {
+      Alert.alert('Unblock User', 'Are you sure you want to unblock this user?', [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Unblock', 
+          onPress: async () => {
+            try {
+              await chatApi.unblockUser(otherUser.id);
+              refetchBlockStatus();
+            } catch (err) {
+              Alert.alert('Error', 'Failed to unblock user');
+            }
+          }
+        }
+      ]);
+    } else {
+      Alert.alert('Block User', 'Are you sure you want to block this user? They will not be able to message you anymore.', [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Block', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await chatApi.blockUser(otherUser.id);
+              refetchBlockStatus();
+            } catch (err) {
+              Alert.alert('Error', 'Failed to block user');
+            }
+          }
+        }
+      ]);
+    }
+  };
+
+  const handleMoreOptions = () => {
+    Alert.alert(
+      otherUser?.full_name || 'Options',
+      null,
+      [
+        {
+          text: 'View Profile',
+          onPress: () => navigation.navigate('UserProfile', { profileId: otherUser.id })
+        },
+        {
+          text: blockStatus?.blockedByMe ? 'Unblock User' : 'Block User',
+          style: blockStatus?.blockedByMe ? 'default' : 'destructive',
+          onPress: handleBlockToggle
+        },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
 
   const handleSend = () => {
     const trimmed = messageText.trim();
@@ -136,6 +249,7 @@ const ChatScreen = ({ route, navigation }) => {
           style={[
             styles.bubble,
             isMe ? styles.bubbleSent : styles.bubbleReceived,
+            item.status === 'sending' && { opacity: 0.7 },
           ]}
         >
           <Text style={isMe ? styles.textSent : styles.textReceived}>
@@ -145,10 +259,14 @@ const ChatScreen = ({ route, navigation }) => {
             <Text style={[styles.timeText, isMe ? styles.timeTextSent : styles.timeTextReceived]}>
               {formatMessageTime(item.created_at)}
             </Text>
-            {isMe && (
-              <Text style={styles.statusIndicator}>
-                {item.is_read ? ' ✓✓' : ' ✓'}
-              </Text>
+            {isMe && item.status === 'sending' ? (
+              <ActivityIndicator size="small" color={colors.textInverse} style={{ marginLeft: 4, transform: [{ scale: 0.6 }] }} />
+            ) : (
+              isMe && (
+                <Text style={styles.statusIndicator}>
+                  {item.is_read ? ' ✓✓' : ' ✓'}
+                </Text>
+              )
             )}
           </View>
         </View>
@@ -175,9 +293,13 @@ const ChatScreen = ({ route, navigation }) => {
           <Icon name="chevronLeft" size={24} color={colors.textPrimary} strokeWidth={2.2} />
         </TouchableOpacity>
         
-        <View style={styles.headerInfo}>
+        <TouchableOpacity 
+          style={styles.headerInfo} 
+          activeOpacity={0.7}
+          onPress={() => navigation.navigate('UserProfile', { profileId: otherUser.id })}
+        >
           <Avatar
-            source={otherUser?.photos?.find((p) => p.is_primary)?.photo_url || otherUser?.photos?.find((p) => p.is_primary)?.storage_path || null}
+            source={getPrimaryPhotoUrl(otherUser)}
             name={otherUser?.full_name || 'User'}
             size="small"
           />
@@ -189,7 +311,21 @@ const ChatScreen = ({ route, navigation }) => {
               {otherUser?.city || 'Verified Member'}
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.headerAction}
+          onPress={handleMoreOptions}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Icon name="more" size={24} color={colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.bannerContainer}>
+        <Icon name="lock" size={14} color={colors.textSecondary} />
+        <Text style={styles.bannerText}>
+          Messages are kept for 7 days (last 25 messages). Exchange contact details early!
+        </Text>
       </View>
 
       {/* Message List */}
@@ -216,27 +352,48 @@ const ChatScreen = ({ route, navigation }) => {
         )}
 
         {/* Input Bar */}
-        <View style={styles.inputBar}>
-          <TextInput
-            style={styles.input}
-            value={messageText}
-            onChangeText={setMessageText}
-            placeholder="Type a message..."
-            placeholderTextColor={colors.textMuted}
-            multiline
-            maxLength={1000}
-          />
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              !messageText.trim() && styles.sendButtonDisabled,
-            ]}
-            onPress={handleSend}
-            disabled={!messageText.trim()}
-          >
-            <Icon name="arrowRight" size={20} color="#FFFFFF" strokeWidth={2.4} />
-          </TouchableOpacity>
-        </View>
+        {blockStatus?.isBlocked ? (
+          <View style={styles.bannerContainerAlert}>
+            <Icon name="slash" size={16} color={colors.error} />
+            <Text style={styles.bannerTextAlert}>
+              {blockStatus.blockedByMe 
+                ? "You have blocked this user. Unblock them to continue messaging." 
+                : "You have been blocked by this user. You cannot send messages."}
+            </Text>
+          </View>
+        ) : !isPremium ? (
+          <View style={styles.premiumGateContainer}>
+            <Text style={styles.premiumGateText}>Upgrade to Premium to start messaging</Text>
+            <TouchableOpacity 
+              style={styles.premiumGateBtn}
+              onPress={() => navigation.navigate('Premium')}
+            >
+              <Text style={styles.premiumGateBtnText}>Upgrade Now</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.inputBar}>
+            <TextInput
+              style={styles.input}
+              value={messageText}
+              onChangeText={setMessageText}
+              placeholder="Type a message..."
+              placeholderTextColor={colors.textMuted}
+              multiline
+              maxLength={1000}
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                !messageText.trim() && styles.sendButtonDisabled,
+              ]}
+              onPress={handleSend}
+              disabled={!messageText.trim()}
+            >
+              <Icon name="arrowRight" size={20} color="#FFFFFF" strokeWidth={2.4} />
+            </TouchableOpacity>
+          </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaContextView>
   );
@@ -283,6 +440,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
     marginTop: 1,
+  },
+  bannerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  bannerText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginLeft: 6,
+    flexShrink: 1,
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -386,6 +559,49 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
   },
   sendButtonText: {
+    color: colors.textInverse,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  bannerContainerAlert: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.errorLight,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  bannerTextAlert: {
+    fontSize: 14,
+    color: colors.error,
+    marginLeft: 6,
+    fontWeight: '500',
+  },
+  premiumGateContainer: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  premiumGateText: {
+    fontSize: 14,
+    color: colors.textPrimary,
+    fontWeight: '500',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  premiumGateBtn: {
+    backgroundColor: colors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: borderRadius.full,
+  },
+  premiumGateBtnText: {
     color: colors.textInverse,
     fontWeight: '600',
     fontSize: 14,

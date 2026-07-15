@@ -299,9 +299,7 @@ const useAuthStore = create((set, get) => ({
           const useProfileStore = require('./useProfileStore').default;
           await useProfileStore.getState().saveProfile({
             id: data.user.id,
-            full_name: profileData.name,
-            gender: 'male', // default required field
-            dob: '2000-01-01', // default required field
+            full_name: profileData.full_name || '',
           });
           // Save registration meta separately
           const { upsertRegistrationMeta } = require('../api/profiles');

@@ -330,3 +330,15 @@ export const viewContact = async (viewerId, targetId, type = 'phone') => {
   if (error) throw error;
   return data;
 };
+
+/**
+ * Subscribe to interest changes (realtime)
+ */
+export const subscribeToInterestChanges = (userId, onChange) => {
+  const uniqueId = Math.random().toString(36).substring(7);
+  return supabase
+    .channel(`interests:${userId}:${uniqueId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'interests', filter: `sender_id=eq.${userId}` }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'interests', filter: `receiver_id=eq.${userId}` }, onChange)
+    .subscribe();
+};

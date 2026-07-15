@@ -12,9 +12,11 @@ import {
   TouchableOpacity,
   Alert,
   RefreshControl,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import * as Clipboard from 'expo-clipboard';
 import Animated, { useAnimatedStyle, withTiming, useSharedValue } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme';
@@ -31,9 +33,16 @@ import useToastStore from '../../store/useToastStore';
 import usePremium from '../../hooks/usePremium';
 import * as profilesApi from '../../api/profiles';
 import * as interestApi from '../../api/interests';
+import { createChat } from '../../api/chat';
 import { calculateCompatibility } from '../../utils/matchingEngine';
 import supabase from '../../api/supabaseClient';
+import { INCOME_RANGES, FAMILY_TYPES, FAMILY_STATUS, FAMILY_VALUES, FOOD_HABITS, DOSHAM_OPTIONS, NAKSHATRA_TAMIL, RASI_TAMIL, DOSHAM_TAMIL } from '../../utils/constants';
 
+const getLabel = (options, value) => {
+  if (!value) return 'N/A';
+  const opt = options.find((o) => o.value === value);
+  return opt ? opt.label : String(value).replace(/_/g, ' ');
+};
 const CollapsibleSection = ({ title, children, defaultExpanded = false }) => {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const heightValue = useSharedValue(defaultExpanded ? 1 : 0);
@@ -277,6 +286,31 @@ const UserProfileScreen = ({ route, navigation }) => {
     },
   });
 
+  const [chattingLoading, setChattingLoading] = useState(false);
+
+  const handleChatPress = async () => {
+    if (!currentUser?.id || !targetProfile?.id) return;
+    try {
+      setChattingLoading(true);
+      const chat = await createChat(currentUser.id, targetProfile.id);
+      
+      const primaryPhoto = targetProfile.profile_photos?.find((p) => p.is_primary) || targetProfile.profile_photos?.[0];
+      
+      navigation.navigate('Chat', {
+        chatId: chat.id,
+        otherUser: {
+          id: targetProfile.id,
+          full_name: targetProfile.full_name,
+          city: targetProfile.city,
+          photos: primaryPhoto ? [primaryPhoto] : [],
+        },
+      });
+    } catch (err) {
+      console.warn('Failed to open chat:', err);
+    } finally {
+      setChattingLoading(false);
+    }
+  };
   const handleSendInterest = async () => {
     if (!hasInterestsLeft) {
       Alert.alert(
@@ -322,6 +356,14 @@ const UserProfileScreen = ({ route, navigation }) => {
     onSuccess: () => {
       refetchInterest();
       showToast('success', 'Success', 'Interest request accepted! You are now connected.');
+    },
+  });
+
+  const declineInterestMutation = useMutation({
+    mutationFn: (interestId) => interestApi.declineInterest(interestId),
+    onSuccess: () => {
+      refetchInterest();
+      showToast('success', 'Success', 'Interest request declined.');
     },
   });
 
@@ -410,7 +452,7 @@ const UserProfileScreen = ({ route, navigation }) => {
         {/* Photo Gallery */}
         <View style={styles.photoContainer}>
           <PhotoGallery 
-            photos={targetProfile.photos || []} 
+            photos={targetProfile.profile_photos || []} 
             isPremiumUser={isPremiumTier} 
             onPhotoPress={(p) => {}}
           />
@@ -429,9 +471,19 @@ const UserProfileScreen = ({ route, navigation }) => {
           <View style={styles.contactCard}>
             <Text style={styles.contactTitle}>Contact Number</Text>
             {hasViewedPhone ? (
-              <View style={styles.revealedRow}>
+              <TouchableOpacity 
+                style={styles.revealedRow}
+                onPress={async () => {
+                  if (targetPhone && targetPhone !== 'Loading...') {
+                    await Clipboard.setStringAsync(targetPhone);
+                    showToast('success', 'Copied!', 'Number copied to clipboard');
+                    Linking.openURL(`tel:${targetPhone.replace(/\\s+/g, '')}`);
+                  }
+                }}
+              >
                 <Text style={styles.phoneValue}>{targetPhone || 'Loading...'}</Text>
-              </View>
+                <Ionicons name="call" size={16} color={colors.primary} style={{ marginLeft: 8 }} />
+              </TouchableOpacity>
             ) : (
               <View style={styles.maskedRow}>
                 <Text style={styles.maskedText}>+91 9840* *****</Text>
@@ -474,30 +526,38 @@ const UserProfileScreen = ({ route, navigation }) => {
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Annual Income</Text>
-              <Text style={styles.infoValue}>{targetProfile.annual_income || 'N/A'}</Text>
+              <Text style={styles.infoValue}>{getLabel(INCOME_RANGES, targetProfile.annual_income)}</Text>
             </View>
           </CollapsibleSection>
 
-          <CollapsibleSection title="Family Background">
+          <CollapsibleSection title="Family Background" defaultExpanded={true}>
             {isPremiumTier ? (
               <>
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>Family Type</Text>
-                  <Text style={styles.infoValue}>{targetProfile.user_family?.family_type?.replace(/_/g, ' ') || 'N/A'}</Text>
+                  <Text style={styles.infoValue}>{getLabel(FAMILY_TYPES, targetProfile.user_family?.family_type)}</Text>
                 </View>
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>Family Status</Text>
-                  <Text style={styles.infoValue}>{targetProfile.user_family?.family_status?.replace(/_/g, ' ') || 'N/A'}</Text>
+                  <Text style={styles.infoValue}>{getLabel(FAMILY_STATUS, targetProfile.user_family?.family_status)}</Text>
                 </View>
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>Family Values</Text>
-                  <Text style={styles.infoValue}>{targetProfile.user_family?.family_values?.replace(/_/g, ' ') || 'N/A'}</Text>
+                  <Text style={styles.infoValue}>{getLabel(FAMILY_VALUES, targetProfile.user_family?.family_values)}</Text>
                 </View>
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>Brothers / Sisters</Text>
                   <Text style={styles.infoValue}>
                     {targetProfile.user_family?.brothers_count || 0} / {targetProfile.user_family?.sisters_count || 0}
                   </Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Father's Occupation</Text>
+                  <Text style={styles.infoValue}>{targetProfile.user_family?.father_occupation || 'N/A'}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Mother's Occupation</Text>
+                  <Text style={styles.infoValue}>{targetProfile.user_family?.mother_occupation || 'N/A'}</Text>
                 </View>
               </>
             ) : (
@@ -513,12 +573,26 @@ const UserProfileScreen = ({ route, navigation }) => {
             )}
           </CollapsibleSection>
 
-          <CollapsibleSection title="Lifestyle">
+          <CollapsibleSection title="Lifestyle" defaultExpanded={true}>
             {isPremiumTier ? (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Dietary Habit</Text>
-                <Text style={styles.infoValue}>{targetProfile.user_lifestyle?.food_habit?.replace(/_/g, ' ') || 'N/A'}</Text>
-              </View>
+              <>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Dietary Habit</Text>
+                  <Text style={styles.infoValue}>{getLabel(FOOD_HABITS, targetProfile.user_lifestyle?.food_habit)}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Languages Known</Text>
+                  <Text style={styles.infoValue}>
+                    {targetProfile.user_lifestyle?.languages_known?.length ? targetProfile.user_lifestyle.languages_known.join(', ') : 'N/A'}
+                  </Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Interests & Hobbies</Text>
+                  <Text style={styles.infoValue}>
+                    {targetProfile.user_lifestyle?.interests?.length ? targetProfile.user_lifestyle.interests.join(', ') : 'N/A'}
+                  </Text>
+                </View>
+              </>
             ) : (
               <View style={styles.lockHoroCard}>
                 <Text style={styles.lockHoroTitle}>Lifestyle Locked</Text>
@@ -532,41 +606,27 @@ const UserProfileScreen = ({ route, navigation }) => {
             )}
           </CollapsibleSection>
 
-          <CollapsibleSection title="Horoscope">
-            {isHoroscopeUnlocked ? (
-              <>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Nakshatra (Star)</Text>
-                  <Text style={styles.infoValue}>{targetProfile.user_horoscope?.nakshatra_text || 'N/A'}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Raasi (Moon Sign)</Text>
-                  <Text style={styles.infoValue}>{targetProfile.user_horoscope?.rasi_text || 'N/A'}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Lagnam</Text>
-                  <Text style={styles.infoValue}>{targetProfile.user_horoscope?.lagnam_text || 'N/A'}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Gothram</Text>
-                  <Text style={styles.infoValue}>{targetProfile.user_horoscope?.gothram_text || 'N/A'}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Dosham</Text>
-                  <Text style={styles.infoValue}>{targetProfile.user_horoscope?.dosham?.replace(/_/g, ' ') || 'N/A'}</Text>
-                </View>
-              </>
-            ) : (
-              <View style={styles.lockHoroCard}>
-                <Text style={styles.lockHoroTitle}>Horoscope Locked</Text>
-                <Text style={styles.lockHoroDesc}>
-                  Upgrade to Premium to view complete profile details.
-                </Text>
-                <TouchableOpacity style={styles.unlockHoroBtn} onPress={() => navigation.navigate('Premium')}>
-                  <Text style={styles.unlockHoroBtnText}>Upgrade Now</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+          <CollapsibleSection title="Horoscope" defaultExpanded={true}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Nakshatra (Star)</Text>
+              <Text style={styles.infoValue}>{targetProfile.user_horoscope?.nakshatra_text ? (NAKSHATRA_TAMIL[targetProfile.user_horoscope.nakshatra_text] || targetProfile.user_horoscope.nakshatra_text) : 'N/A'}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Raasi (Moon Sign)</Text>
+              <Text style={styles.infoValue}>{targetProfile.user_horoscope?.rasi_text ? (RASI_TAMIL[targetProfile.user_horoscope.rasi_text] || targetProfile.user_horoscope.rasi_text) : 'N/A'}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Lagnam</Text>
+              <Text style={styles.infoValue}>{targetProfile.user_horoscope?.lagnam_text || 'N/A'}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Gothram</Text>
+              <Text style={styles.infoValue}>{targetProfile.user_horoscope?.gothram_text || 'N/A'}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Dosham</Text>
+              <Text style={styles.infoValue}>{targetProfile.user_horoscope?.dosham ? (DOSHAM_TAMIL[targetProfile.user_horoscope.dosham] || getLabel(DOSHAM_OPTIONS, targetProfile.user_horoscope.dosham)) : 'N/A'}</Text>
+            </View>
           </CollapsibleSection>
         </View>
 
@@ -588,23 +648,48 @@ const UserProfileScreen = ({ route, navigation }) => {
               </View>
             ) : (
               <View style={styles.footerRow}>
-                <TouchableOpacity style={styles.declineBtn} onPress={() => {}}>
-                  <Text style={styles.declineBtnText}>Decline</Text>
+                <TouchableOpacity 
+                  style={styles.declineBtn} 
+                  onPress={() => declineInterestMutation.mutate(interestStatus.id)}
+                  disabled={declineInterestMutation.isPending || acceptInterestMutation.isPending}
+                >
+                  {declineInterestMutation.isPending ? (
+                    <ActivityIndicator size="small" color={colors.textPrimary} />
+                  ) : (
+                    <Text style={styles.declineBtnText}>Decline</Text>
+                  )}
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.acceptBtn}
                   onPress={() => acceptInterestMutation.mutate(interestStatus.id)}
+                  disabled={acceptInterestMutation.isPending || declineInterestMutation.isPending}
                 >
-                  <Ionicons name="checkmark-circle" size={17} color={colors.textInverse} />
-                  <Text style={styles.acceptBtnText}>Accept Request</Text>
+                  {acceptInterestMutation.isPending ? (
+                    <ActivityIndicator size="small" color={colors.textInverse} />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark-circle" size={17} color={colors.textInverse} />
+                      <Text style={styles.acceptBtnText}>Accept Request</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </View>
             )
           ) : interestStatus.status === 'accepted' ? (
             <View style={styles.footerRow}>
-              <TouchableOpacity style={styles.connectBtn} disabled>
-                <Ionicons name="chatbubble-ellipses" size={17} color={colors.textInverse} />
-                <Text style={styles.connectBtnText}>Connected</Text>
+              <TouchableOpacity 
+                style={[styles.connectBtn, { backgroundColor: colors.chatBubbleSent }]} 
+                onPress={handleChatPress}
+                disabled={chattingLoading}
+              >
+                {chattingLoading ? (
+                  <ActivityIndicator size="small" color={colors.textPrimary} />
+                ) : (
+                  <>
+                    <Ionicons name="chatbubble-ellipses" size={17} color={colors.textPrimary} />
+                    <Text style={[styles.connectBtnText, { color: colors.textPrimary }]}>Chat</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           ) : (
@@ -621,10 +706,17 @@ const UserProfileScreen = ({ route, navigation }) => {
               onPress={handleSendInterest}
               disabled={sendInterestMutation.isPending}
             >
-              <Ionicons name="heart" size={17} color={colors.textInverse} />
-              <Text style={styles.sendInterestBtnText}>
-                {sendInterestMutation.isPending ? 'Sending...' : 'Send Interest'}
-              </Text>
+              {sendInterestMutation.isPending ? (
+                <>
+                  <ActivityIndicator size="small" color={colors.textInverse} style={{ marginRight: 8 }} />
+                  <Text style={styles.sendInterestBtnText}>Sending...</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="heart" size={17} color={colors.textInverse} />
+                  <Text style={styles.sendInterestBtnText}>Send Interest</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
         )}
@@ -932,6 +1024,9 @@ const styles = StyleSheet.create({
   },
   revealedRow: {
     paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
   },
   phoneValue: {
     fontSize: 18,

@@ -53,27 +53,6 @@ const ProfileScreen = ({ navigation }) => {
     }, [user?.id, queryClient])
   );
 
-  // Live quota balances from the single source of truth (get_user_quota,
-  // wallet-backed — same source unlock_contact / send_interest deduct from).
-  const { data: quotas } = useQuery({
-    queryKey: ['user_quotas', user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_user_quota', { p_user_id: user.id });
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!user?.id,
-  });
-
-  const limitInfo = {
-    contactsRemaining: quotas?.contacts_remaining ?? 0,
-    interestsRemaining: quotas?.interests_remaining ?? 0,
-    recommendedUnlocked: quotas?.recommended_limit ?? 0,
-    nearbyUnlocked: quotas?.nearby_limit ?? 0,
-    dailyUnlocked: quotas?.daily_limit ?? 0,
-    isPremium,
-  };
-
   const primary = photos?.find((p) => p.is_primary) || photos?.[0];
   const primaryPhoto = primary?.photo_url || primary?.storage_path;
   const completionPercent = profile?.profile_completion_percent || 0;
@@ -117,6 +96,23 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
+
+  const handleLogout = () => {
+    Alert.alert('Logout', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Logout', style: 'destructive', onPress: async () => { 
+        setLoggingOut(true);
+        try {
+          await signOut();
+        } finally {
+          setLoggingOut(false);
+        }
+      } },
+    ]);
+  };
+
   const handleDeactivate = () => {
     Alert.alert(
       'Got Married / Found a Match?',
@@ -128,6 +124,7 @@ const ProfileScreen = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
+              setDeactivating(true);
               if (profile?.id) {
                 await deactivateProfile(profile.id);
                 Alert.alert('Success', 'Your profile has been deactivated.');
@@ -135,6 +132,8 @@ const ProfileScreen = ({ navigation }) => {
               }
             } catch (error) {
               Alert.alert('Error', 'Failed to deactivate profile.');
+            } finally {
+              setDeactivating(false);
             }
           }
         }
@@ -244,7 +243,7 @@ const ProfileScreen = ({ navigation }) => {
               {profile?.dob ? `, ${calculateAge(profile.dob)}` : ''}
             </Text>
             <View style={styles.heroBadges}>
-              {limitInfo.isPremium && (
+              {isPremium && (
                 <View style={styles.premBadge}>
                   <Icon name="crown" size={14} color={colors.goldDark} style={{ marginRight: 4 }} />
                   <Text style={styles.premBadgeText}>Premium</Text>
@@ -277,42 +276,6 @@ const ProfileScreen = ({ navigation }) => {
             </View>
           ))}
         </View>
-
-        {/* Quota Balances Banner (live from get_user_quota — wallet-backed) */}
-        {limitInfo.isPremium && (
-          <View style={styles.limitBanner}>
-            <View style={styles.limitHeader}>
-              <Text style={styles.limitTitle}>Contacts Remaining</Text>
-              <Text style={styles.limitValue}>
-                {limitInfo.contactsRemaining === -1 ? 'Unlimited' : limitInfo.contactsRemaining}
-              </Text>
-            </View>
-            <View style={[styles.limitHeader, { marginTop: 8 }]}>
-              <Text style={styles.limitTitle}>Interests Remaining</Text>
-              <Text style={styles.limitValue}>
-                {limitInfo.interestsRemaining === -1 ? 'Unlimited' : limitInfo.interestsRemaining}
-              </Text>
-            </View>
-            
-            {/* Profile Limits */}
-            <View style={{ height: 1, backgroundColor: colors.borderLight, marginVertical: 12 }} />
-            <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8, textTransform: 'uppercase' }}>Profiles Unlocked</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.primary }}>{limitInfo.recommendedUnlocked}</Text>
-                <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>Recommended</Text>
-              </View>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.primary }}>{limitInfo.nearbyUnlocked}</Text>
-                <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>Nearby</Text>
-              </View>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.primary }}>{limitInfo.dailyUnlocked}</Text>
-                <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>Daily Matches</Text>
-              </View>
-            </View>
-          </View>
-        )}
 
         {/* Menu Groups */}
         {menuGroups.map((group, gi) => (
@@ -347,19 +310,39 @@ const ProfileScreen = ({ navigation }) => {
           style={styles.deactivateButton}
           onPress={handleDeactivate}
           activeOpacity={0.8}
+          disabled={deactivating || loggingOut}
         >
-          <Icon name="match" size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
-          <Text style={styles.deactivateText}>Got Married? Deactivate Profile</Text>
+          {deactivating ? (
+            <>
+              <ActivityIndicator size="small" color={colors.textSecondary} style={{ marginRight: 8 }} />
+              <Text style={styles.deactivateText}>Deactivating...</Text>
+            </>
+          ) : (
+            <>
+              <Icon name="match" size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
+              <Text style={styles.deactivateText}>Got Married? Deactivate Profile</Text>
+            </>
+          )}
         </TouchableOpacity>
 
         {/* Logout */}
         <TouchableOpacity
           style={styles.logoutButton}
-          onPress={() => signOut()}
+          onPress={handleLogout}
           activeOpacity={0.8}
+          disabled={loggingOut || deactivating}
         >
-          <Icon name="logout" size={18} color={colors.error} style={{ marginRight: 8 }} />
-          <Text style={styles.logoutText}>Log Out</Text>
+          {loggingOut ? (
+            <>
+              <ActivityIndicator size="small" color={colors.error} style={{ marginRight: 8 }} />
+              <Text style={styles.logoutText}>Logging out...</Text>
+            </>
+          ) : (
+            <>
+              <Icon name="logout" size={18} color={colors.error} style={{ marginRight: 8 }} />
+              <Text style={styles.logoutText}>Log Out</Text>
+            </>
+          )}
         </TouchableOpacity>
 
         <Text style={styles.version}>Wedring Matrimony v1.0.0</Text>

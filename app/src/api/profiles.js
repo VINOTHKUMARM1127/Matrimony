@@ -32,6 +32,17 @@ export const getR2PhotoUrl = (r2Key) => {
 };
 
 /**
+ * Get primary photo URL from a profile object
+ * @param {object} profile - Profile object containing profile_photos
+ * @returns {string|null} - Primary photo URL or null
+ */
+export const getPrimaryPhotoUrl = (profile) => {
+  const photos = profile?.profile_photos || [];
+  const primary = photos.find(p => p.is_primary) || photos[0];
+  return primary?.photo_url || primary?.thumbnail_url || null;
+};
+
+/**
  * Get current user's profile with all relations
  */
 export const getMyProfile = async (userId) => {
@@ -128,20 +139,28 @@ export const getProfile = async (profileId) => {
   ] = await Promise.all([
     supabase.from('profile_photos').select('*').eq('user_id', profileId),
     supabase.from('user_family').select('*').eq('user_id', profileId).maybeSingle(),
-    supabase.from('user_horoscope').select('*').eq('user_id', profileId).maybeSingle(),
+    supabase.from('user_horoscope').select('*, rasi(name), nakshatra(name), lagnam(name), gothram(name)').eq('user_id', profileId).maybeSingle(),
     supabase.from('partner_preferences').select('*').eq('user_id', profileId).maybeSingle(),
     supabase.from('user_lifestyle').select('*').eq('user_id', profileId).maybeSingle(),
   ]);
 
+  if (horoscope) {
+    horoscope.rasi_text = horoscope.rasi_text || horoscope.rasi?.name || '';
+    horoscope.nakshatra_text = horoscope.nakshatra_text || horoscope.nakshatra?.name || '';
+    horoscope.lagnam_text = horoscope.lagnam_text || horoscope.lagnam?.name || '';
+    horoscope.gothram_text = horoscope.gothram_text || horoscope.gothram?.name || '';
+  }
+
   const profile = {
     ...data,
-    city: data.cities?.name || '',
+    city: data.cities?.name || data.city_text || '',
     district: data.districts?.name || '',
-    highest_qualification: data.education_levels?.name || '',
-    education: data.education_levels?.name || '',
+    highest_qualification: data.education_levels?.name || data.degree || '',
+    education: data.education_levels?.name || data.degree || '',
     occupation: data.occupations?.name || '',
     religion: data.religions?.name || '',
     caste: data.castes?.name || '',
+    sub_caste: data.sub_caste_text || '',
     profile_photos: photos || [],
     user_family: family || null,
     user_horoscope: horoscope || null,

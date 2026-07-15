@@ -64,7 +64,7 @@ const ReligionCasteScreen = ({ navigation }) => {
     } catch (error) {
       console.error('Save error:', error);
     }
-  }, [validate, religion, caste, customCaste, subcaste, user, saveProfile, navigation]);
+  }, [validate, religionId, casteId, subcasteText, user, saveProfile, navigation]);
 
   return (
     <View style={styles.container}>

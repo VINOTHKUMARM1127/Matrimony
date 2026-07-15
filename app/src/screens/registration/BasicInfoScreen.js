@@ -60,7 +60,7 @@ const BasicInfoScreen = ({ navigation }) => {
     try {
       await saveProfile({
         id: user.id,
-        name: name.trim(),
+        full_name: name.trim(),
         gender,
         dob: dateOfBirth,
         height_cm: height ? parseInt(height) : null,

@@ -134,7 +134,7 @@ const CreateAccountScreen = ({ navigation }) => {
       profileFor,
       motherTongue,
       phone: formattedPhone,
-      name: '' // Empty name
+      full_name: '' // Empty full_name
     });
 
     setIsProcessing(false);

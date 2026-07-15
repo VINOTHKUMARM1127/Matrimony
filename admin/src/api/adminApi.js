@@ -334,11 +334,19 @@ export const updateUser = async (userId, profileData) => {
  */
 export const fetchUserRelations = async (userId) => {
   const [horo, prefs, family, lifestyle] = await Promise.all([
-    supabase.from('user_horoscope').select('*').eq('user_id', userId).maybeSingle(),
+    supabase.from('user_horoscope').select('*, rasi(name), nakshatra(name), lagnam(name), gothram(name)').eq('user_id', userId).maybeSingle(),
     supabase.from('partner_preferences').select('*').eq('user_id', userId).maybeSingle(),
     supabase.from('user_family').select('*').eq('user_id', userId).maybeSingle(),
     supabase.from('user_lifestyle').select('*').eq('user_id', userId).maybeSingle(),
   ]);
+
+  if (horo.data) {
+    horo.data.rasi_text = horo.data.rasi_text || horo.data.rasi?.name || '';
+    horo.data.nakshatra_text = horo.data.nakshatra_text || horo.data.nakshatra?.name || '';
+    horo.data.lagnam_text = horo.data.lagnam_text || horo.data.lagnam?.name || '';
+    horo.data.gothram_text = horo.data.gothram_text || horo.data.gothram?.name || '';
+  }
+
   return {
     horoscope: horo.data || null,
     preferences: prefs.data || null,
