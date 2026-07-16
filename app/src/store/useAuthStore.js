@@ -72,7 +72,7 @@ const useAuthStore = create((set, get) => ({
 
       // Add a timeout to getSession just in case it hangs
       const sessionPromise = authApi.getSession();
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('getSession timeout')), 10000));
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('getSession timeout')), 30000));
       const session = await Promise.race([sessionPromise, timeoutPromise]);
       
       if (session) {
@@ -94,6 +94,15 @@ const useAuthStore = create((set, get) => ({
       }
     } catch (error) {
       console.error('Auth init error:', error);
+      
+      // If the error is related to an invalid refresh token, we should clear the local session 
+      // so the client stops trying to refresh it on every startup.
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        // Ignore errors during forced sign-out
+      }
+
       // If session retrieval fails (e.g. cache cleared, token invalid, or network error), 
       // safely fallback to unauthenticated state without polluting global error state.
       set({ 

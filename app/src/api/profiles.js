@@ -58,9 +58,10 @@ export const getMyProfile = async (userId) => {
       castes ( name )
     `)
     .eq('id', userId)
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
+  if (!data) return null;
   
   // Fetch relations separately since they all reference auth.users(id), not profiles(id)
   const [

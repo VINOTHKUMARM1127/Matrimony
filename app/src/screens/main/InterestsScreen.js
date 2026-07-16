@@ -13,6 +13,8 @@ import {
   RefreshControl,
   ScrollView,
   AppState,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -180,11 +182,12 @@ const InterestsScreen = ({ navigation }) => {
           id: targetUser.id,
           full_name: targetUser.full_name,
           city: targetUser.city,
-          photos: photoUrl ? [{ photo_url: photoUrl, is_primary: true }] : [],
+          profile_photos: photoUrl ? [{ photo_url: photoUrl, is_primary: true }] : [],
         },
       });
     } catch (err) {
       console.warn('Failed to open chat:', err);
+      Alert.alert('Error', err.message || 'Failed to open chat. Please try again.');
     } finally {
       setChattingId(null);
     }

@@ -160,11 +160,18 @@ export const sendMessage = async (chatId, senderId, content, messageType = 'text
  */
 export const createChat = async (userId1, userId2) => {
   // Use RPC for canonical ordering
-  const { data: chatId, error } = await supabase.rpc('fn_create_or_get_chat', {
+  const { data: rawChatId, error } = await supabase.rpc('fn_create_or_get_chat', {
     p_other_user_id: userId2,
   });
 
   if (error) throw error;
+
+  // Defensively extract chatId in case it's returned as an object/array
+  let chatId = rawChatId;
+  if (Array.isArray(rawChatId)) chatId = rawChatId[0];
+  if (typeof chatId === 'object' && chatId !== null) {
+    chatId = chatId.fn_create_or_get_chat || chatId.id || Object.values(chatId)[0];
+  }
 
   // Fetch the full chat record
   const { data: chat, error: fetchError } = await supabase
