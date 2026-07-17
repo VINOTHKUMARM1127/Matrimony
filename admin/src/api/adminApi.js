@@ -80,94 +80,61 @@ export const fetchMasterData = async () => {
 };
 
 /**
- * Fetch all users with their memberships and photos
+ * Fetch a single page of users via the server-side fn_admin_list_users RPC.
+ * Replaces the old fetchAllUsers() waterfall of 5+ queries.
+ * Returns { users: [...], total: number }
  */
-export const fetchAllUsers = async () => {
-  const { data: profilesData, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .order('created_at', { ascending: false });
+export const fetchUsersPage = async ({ page = 1, perPage = 20, search = '', gender = '', tier = '', status = '' } = {}) => {
+  const { data, error } = await supabase.rpc('fn_admin_list_users', {
+    p_page: page,
+    p_per_page: perPage,
+    p_search: search || null,
+    p_gender: gender || null,
+    p_tier: tier || null,
+    p_status: status || null
+  });
 
   if (error) throw error;
-  
-  let profiles = profilesData || [];
-  
-  if (profiles.length > 0) {
-    const profileIds = profiles.map(p => p.id);
-    
-    // Fetch related data since there is no explicit FK from profiles to these tables
-    const [{ data: photos }, { data: subs }, { data: contacts }] = await Promise.all([
-      supabase.from('profile_photos').select('*').in('user_id', profileIds),
-      supabase.from('user_subscriptions').select('*, membership_plans(*)').in('user_id', profileIds),
-      supabase.from('profile_contact').select('user_id, mobile_number').in('user_id', profileIds)
-    ]);
-    
-    const photosByUserId = {};
-    if (photos) {
-      for (const photo of photos) {
-        if (!photosByUserId[photo.user_id]) photosByUserId[photo.user_id] = [];
-        photosByUserId[photo.user_id].push(photo);
-      }
-    }
-    
-    const subsByUserId = {};
-    if (subs) {
-      for (const sub of subs) {
-        if (!subsByUserId[sub.user_id]) subsByUserId[sub.user_id] = [];
-        subsByUserId[sub.user_id].push(sub);
-      }
-    }
-    
-    const contactsByUserId = {};
-    if (contacts) {
-      for (const contact of contacts) {
-        contactsByUserId[contact.user_id] = contact.mobile_number;
-      }
-    }
-    
-    profiles = profiles.map(p => ({
-      ...p,
-      profile_photos: photosByUserId[p.id] || [],
-      user_subscriptions: subsByUserId[p.id] || [],
-      db_phone: contactsByUserId[p.id] || ''
-    }));
-  }
-  
-  let mappedProfiles = profiles.map(p => ({ ...p, email: '' }));
-  
-  if (supabase) {
-    try {
-      // Get all auth users using Admin API
-      const { data, error: authError } = await supabase.functions.invoke('admin-users', {
-        body: { action: 'list_users', page: 1, perPage: 10000 }
-      });
-      const authData = data?.data;
-      
-      if (!authError && authData?.users) {
-        mappedProfiles = profiles.map(profile => {
-          const authUser = authData.users.find(u => u.id === profile.id);
-          return { ...profile, email: authUser?.email || '', phone: authUser?.phone || profile.db_phone || '' };
-        });
-      } else {
-        mappedProfiles = profiles.map(profile => ({ ...profile, phone: profile.db_phone || '' }));
-      }
-    } catch (err) {
-      console.error('GoTrue listUsers failed:', err);
-    }
-  }
 
-  // Filter out admin users
+  return {
+    users: data?.users || [],
+    total: data?.total || 0
+  };
+};
+
+/**
+ * Lightweight fetch of all profiles for CSV export only.
+ * Joins profile_contact for phone. Email comes from auth via edge function.
+ */
+export const fetchAllUsers = async () => {
+  const [{ data: profiles, error }, { data: contacts }, { data: adminUsers }] = await Promise.all([
+    supabase.from('profiles').select('*').order('created_at', { ascending: false }),
+    supabase.from('profile_contact').select('user_id, mobile_number'),
+    supabase.from('admin_users').select('id')
+  ]);
+
+  if (error) throw error;
+
+  const adminIds = new Set((adminUsers || []).map(a => a.id));
+  const phoneLookup = {};
+  if (contacts) contacts.forEach(c => phoneLookup[c.user_id] = c.mobile_number);
+
+  // Try to get emails from auth (best effort — export still works without them)
+  let emailLookup = {};
   try {
-    const { data: adminUsers } = await supabase.from('admin_users').select('id');
-    if (adminUsers && adminUsers.length > 0) {
-      const adminIds = adminUsers.map(a => a.id);
-      return mappedProfiles.filter(p => !adminIds.includes(p.id));
+    const { data } = await supabase.functions.invoke('admin-users', {
+      body: { action: 'list_users', page: 1, perPage: 10000 }
+    });
+    if (data?.data?.users) {
+      data.data.users.forEach(u => emailLookup[u.id] = u.email);
     }
   } catch (err) {
-    console.error('Failed to filter admins:', err);
+    console.warn('Could not fetch auth emails for export:', err);
   }
 
-  return mappedProfiles;
+  return (profiles || [])
+    .filter(p => !adminIds.has(p.id))
+    .map(p => ({ ...p, email: emailLookup[p.id] || '', phone: phoneLookup[p.id] || '' }));
 };
 
 /**
@@ -256,11 +223,10 @@ export const deleteUser = async (userId) => {
   try {
     const { data: userPhotos } = await supabase.from('profile_photos').select('r2_key').eq('user_id', userId);
     if (userPhotos && userPhotos.length > 0) {
-      for (const p of userPhotos) {
-        if (p.r2_key) {
-          await deletePhotoFromR2(p.r2_key).catch(err => console.warn('Failed to delete from R2:', err));
-        }
-      }
+      const deletePromises = userPhotos
+        .filter(p => p.r2_key)
+        .map(p => deletePhotoFromR2(p.r2_key).catch(err => console.warn('Failed to delete from R2:', err)));
+      await Promise.all(deletePromises);
     }
   } catch (err) {
     console.warn('Error fetching photos for cleanup:', err);
@@ -429,40 +395,46 @@ export const bulkUploadUsers = async (usersList, stopRef, onProgress) => {
   };
 
   let currentCount = 0;
+  const batchSize = 5;
 
-  for (const user of usersList) {
-    if (onProgress) onProgress(currentCount, usersList.length);
-
+  for (let i = 0; i < usersList.length; i += batchSize) {
     if (stopRef && stopRef.current) {
       results.errors.push('Process stopped by admin.');
       break;
     }
-    try {
-      const { data, error: err } = await supabase.functions.invoke('admin-users', {
-        body: {
-          action: 'create_full_user',
-          auth: { email: user.email, password: user.password, email_confirm: true },
-          meta: { creating_for: user.creating_for || 'self', mother_tongue_id: user.mother_tongue_id || null },
-          profile: buildProfilePayload(user),
-          family: buildFamilyPayload(user),
-          horoscope: buildHoroscopePayload(user),
-          lifestyle: buildLifestylePayload(user),
-          preferences: buildPreferencePayload(user),
-          plan_id: user.plan_id && user.plan_id !== 'free' ? user.plan_id : null,
-          photos: user.photos || []
-        }
-      });
-      
-      if (err) throw err;
-      if (data?.error) throw new Error(data.error);
 
-      results.success++;
-    } catch (err) {
-      results.failed++;
-      results.errors.push(`Failed for ${user.email}: ${err.message}`);
-    }
+    if (onProgress) onProgress(currentCount, usersList.length);
+
+    const batch = usersList.slice(i, i + batchSize);
+
+    await Promise.all(batch.map(async (user) => {
+      try {
+        const { data, error: err } = await supabase.functions.invoke('admin-users', {
+          body: {
+            action: 'create_full_user',
+            auth: { email: user.email, password: user.password, email_confirm: true },
+            meta: { creating_for: user.creating_for || 'self', mother_tongue_id: user.mother_tongue_id || null },
+            profile: buildProfilePayload(user),
+            family: buildFamilyPayload(user),
+            horoscope: buildHoroscopePayload(user),
+            lifestyle: buildLifestylePayload(user),
+            preferences: buildPreferencePayload(user),
+            plan_id: user.plan_id && user.plan_id !== 'free' ? user.plan_id : null,
+            photos: user.photos || []
+          }
+        });
+        
+        if (err) throw err;
+        if (data?.error) throw new Error(data.error);
+
+        results.success++;
+      } catch (err) {
+        results.failed++;
+        results.errors.push(`Failed for ${user.email}: ${err.message}`);
+      }
+    }));
     
-    currentCount++;
+    currentCount += batch.length;
   }
 
   if (onProgress) onProgress(currentCount, usersList.length);
@@ -553,26 +525,33 @@ export const updateAdminSetting = async (key, value) => {
  * Bulk Delete Incomplete Users
  */
 export const deleteIncompleteUsers = async () => {
-  const allUsers = await fetchAllUsers();
+  const { data: profiles, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, profile_completion_percent');
+    
+  if (error) throw error;
   
-  // Find all profiles where profile_completion_percent is 0 or full_name is null
-  const incompleteProfiles = allUsers.filter(u => !u.full_name || u.profile_completion_percent === 0);
+  const incompleteProfiles = profiles.filter(u => !u.full_name || u.profile_completion_percent === 0);
 
   if (!incompleteProfiles || incompleteProfiles.length === 0) return 0;
 
   let deletedCount = 0;
+  const batchSize = 5;
   
-  for (const profile of incompleteProfiles) {
-    try {
-      if (supabase) {
-        const { error: adminError } = await supabase.functions.invoke('admin-users', { body: { action: 'delete_user', id: profile.id } });
-        if (!adminError) {
-          deletedCount++;
+  for (let i = 0; i < incompleteProfiles.length; i += batchSize) {
+    const batch = incompleteProfiles.slice(i, i + batchSize);
+    await Promise.all(batch.map(async (profile) => {
+      try {
+        if (supabase) {
+          const { error: adminError } = await supabase.functions.invoke('admin-users', { body: { action: 'delete_user', id: profile.id } });
+          if (!adminError) {
+            deletedCount++;
+          }
         }
+      } catch (err) {
+        console.error(`Failed to delete user ${profile.id}:`, err);
       }
-    } catch (err) {
-      console.error(`Failed to delete user ${profile.id}:`, err);
-    }
+    }));
   }
 
   return deletedCount;
@@ -640,11 +619,7 @@ export const fetchRevenueStats = async () => {
 export const fetchPayments = async ({ page = 1, perPage = 25, status, planType, search, dateFrom, dateTo } = {}) => {
   let query = supabase
     .from('payments')
-    .select(`
-      *,
-      profile:profiles!payments_user_id_fkey ( id, full_name ),
-      membership_plans ( name, tier )
-    `, { count: 'exact' })
+    .select('*', { count: 'exact' })
     .order('created_at', { ascending: false });
 
   if (status && status !== 'all') {
@@ -664,22 +639,68 @@ export const fetchPayments = async ({ page = 1, perPage = 25, status, planType, 
 
   const { data, error, count } = await query;
   if (error) throw error;
+  
+  let payments = data || [];
+  
+  if (payments.length > 0) {
+    const userIds = [...new Set(payments.map(p => p.user_id).filter(Boolean))];
+    const planIds = [...new Set(payments.map(p => p.plan_id).filter(Boolean))];
+    
+    const [ { data: profilesData }, { data: plansData } ] = await Promise.all([
+      userIds.length > 0 ? supabase.from('profiles').select('id, full_name').in('id', userIds) : { data: [] },
+      planIds.length > 0 ? supabase.from('membership_plans').select('id, name, tier').in('id', planIds) : { data: [] }
+    ]);
+    
+    const profileLookup = (profilesData || []).reduce((acc, p) => ({ ...acc, [p.id]: p }), {});
+    const planLookup = (plansData || []).reduce((acc, p) => ({ ...acc, [p.id]: p }), {});
+    
+    payments = payments.map(p => ({
+      ...p,
+      profile: profileLookup[p.user_id] || null,
+      membership_plans: planLookup[p.plan_id] || null
+    }));
+  }
 
-  return { payments: data || [], total: count || 0 };
+  return { payments, total: count || 0 };
 };
 
 export const fetchAllPaymentsForExport = async ({ status, planType, dateFrom, dateTo } = {}) => {
   const { data, error } = await supabase
     .from('payments')
-    .select(`
-      *,
-      profile:profiles!payments_user_id_fkey ( id, full_name ),
-      membership_plans ( name, tier )
-    `)
+    .select('*')
     .order('created_at', { ascending: false });
     
   if (error) throw error;
-  return data || [];
+  
+  let payments = data || [];
+  
+  if (payments.length > 0) {
+    const userIds = [...new Set(payments.map(p => p.user_id).filter(Boolean))];
+    const planIds = [...new Set(payments.map(p => p.plan_id).filter(Boolean))];
+    
+    const profileLookup = {};
+    const planLookup = {};
+    
+    const chunkSize = 200;
+    for (let i = 0; i < userIds.length; i += chunkSize) {
+      const chunk = userIds.slice(i, i + chunkSize);
+      const { data: pData } = await supabase.from('profiles').select('id, full_name').in('id', chunk);
+      if (pData) pData.forEach(p => profileLookup[p.id] = p);
+    }
+    
+    if (planIds.length > 0) {
+      const { data: plansData } = await supabase.from('membership_plans').select('id, name, tier').in('id', planIds);
+      if (plansData) plansData.forEach(p => planLookup[p.id] = p);
+    }
+    
+    payments = payments.map(p => ({
+      ...p,
+      profile: profileLookup[p.user_id] || null,
+      membership_plans: planLookup[p.plan_id] || null
+    }));
+  }
+  
+  return payments;
 };
 
 export const deletePayments = async ({ status, planType, dateFrom, dateTo } = {}) => {

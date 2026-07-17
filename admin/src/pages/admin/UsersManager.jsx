@@ -1,14 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import * as adminApi from '../../api/adminApi';
+import { getR2PublicUrl } from '../../api/imageApi';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
-import { Search, Shield, ChevronRight, UserMinus, Trash2, Users as UsersIcon, Crown, X, SlidersHorizontal } from 'lucide-react';
+import { Search, ChevronRight, ChevronLeft, UserMinus, Trash2, Users as UsersIcon, Crown, X, SlidersHorizontal } from 'lucide-react';
 import UserModal from './UserModal';
+
+const PER_PAGE = 20;
 
 const UsersManager = () => {
   const [users, setUsers] = useState([]);
-  const [filteredUsers, setFilteredUsers] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterGender, setFilterGender] = useState('');
   const [filterTier, setFilterTier] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -17,68 +22,46 @@ const UsersManager = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedUserIds, setSelectedUserIds] = useState(new Set());
   const [deleteProgress, setDeleteProgress] = useState(null);
-  const [displayCount, setDisplayCount] = useState(20);
 
+  // Debounce search input (300ms)
   useEffect(() => {
-    loadUsers();
-  }, []);
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
-  const loadUsers = async () => {
+  // Load users whenever page/search/filters change
+  const loadUsers = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await adminApi.fetchAllUsers();
+      const { users: data, total } = await adminApi.fetchUsersPage({
+        page,
+        perPage: PER_PAGE,
+        search: debouncedSearch,
+        gender: filterGender,
+        tier: filterTier,
+        status: filterStatus
+      });
       setUsers(data);
-      setFilteredUsers(data);
-      setDisplayCount(20);
+      setTotalCount(total);
     } catch (err) {
       console.error('Error loading users:', err);
       alert('Failed to load users');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [page, debouncedSearch, filterGender, filterTier, filterStatus]);
 
   useEffect(() => {
-    let result = users;
+    loadUsers();
+  }, [loadUsers]);
 
-    if (searchTerm) {
-      const lower = searchTerm.toLowerCase();
-      result = result.filter(
-        (u) =>
-          u.full_name?.toLowerCase().includes(lower) ||
-          u.email?.toLowerCase().includes(lower)
-      );
-    }
+  // Reset to page 1 when search/filters change
+  useEffect(() => {
+    setPage(1);
+    setSelectedUserIds(new Set());
+  }, [debouncedSearch, filterGender, filterTier, filterStatus]);
 
-    if (filterGender) {
-      result = result.filter((u) => u.gender === filterGender);
-    }
-
-    if (filterTier) {
-      if (filterTier === 'free') {
-        result = result.filter((u) => {
-          const activeMembership = (u.user_subscriptions || []).find(m => m.is_active);
-          return !activeMembership || activeMembership?.membership_plans?.tier === 'free';
-        });
-      } else {
-        result = result.filter((u) => {
-          const activeMembership = (u.user_subscriptions || []).find(m => m.is_active);
-          return activeMembership?.membership_plans?.tier === filterTier;
-        });
-      }
-    }
-
-    if (filterStatus) {
-      if (filterStatus === 'complete') {
-        result = result.filter((u) => u.profile_completion_percent > 50);
-      } else if (filterStatus === 'incomplete') {
-        result = result.filter((u) => !u.profile_completion_percent || u.profile_completion_percent <= 50);
-      }
-    }
-
-    setFilteredUsers(result);
-    setDisplayCount(20);
-  }, [searchTerm, filterGender, filterTier, filterStatus, users]);
+  const totalPages = Math.ceil(totalCount / PER_PAGE);
 
   const handleUpdatePlan = async (userId, planType) => {
     if (!window.confirm(`Update plan to ${planType} for this user?`)) return;
@@ -86,7 +69,10 @@ const UsersManager = () => {
     try {
       await adminApi.updateUserPlan(userId, planType);
       alert('Plan updated successfully!');
-      loadUsers();
+      setUsers(prev => prev.map(u => {
+        if (u.id !== userId) return u;
+        return { ...u, tier: planType };
+      }));
     } catch (err) {
       console.error(err);
       alert(err.message || 'Failed to update plan');
@@ -101,6 +87,7 @@ const UsersManager = () => {
     try {
       const deletedCount = await adminApi.deleteIncompleteUsers();
       alert(`Successfully deleted ${deletedCount} incomplete account(s).`);
+      // Refresh current page from server
       loadUsers();
     } catch (err) {
       console.error(err);
@@ -112,7 +99,7 @@ const UsersManager = () => {
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedUserIds(new Set(filteredUsers.map((u) => u.id)));
+      setSelectedUserIds(new Set(users.map((u) => u.id)));
     } else {
       setSelectedUserIds(new Set());
     }
@@ -132,13 +119,17 @@ const UsersManager = () => {
     setDeleteProgress({ current: 0, total: selectedUserIds.size });
     try {
       let deletedCount = 0;
-      for (const userId of selectedUserIds) {
-        await adminApi.deleteUser(userId);
-        deletedCount++;
-        setDeleteProgress({ current: deletedCount, total: selectedUserIds.size });
+      const userIdsArray = Array.from(selectedUserIds);
+      const batchSize = 5;
+      for (let i = 0; i < userIdsArray.length; i += batchSize) {
+        const batch = userIdsArray.slice(i, i + batchSize);
+        await Promise.all(batch.map(id => adminApi.deleteUser(id).catch(e => console.error(e))));
+        deletedCount += batch.length;
+        setDeleteProgress({ current: deletedCount, total: userIdsArray.length });
       }
       alert(`Successfully deleted ${deletedCount} user(s).`);
       setSelectedUserIds(new Set());
+      // Refresh from server
       loadUsers();
     } catch (err) {
       console.error(err);
@@ -157,9 +148,36 @@ const UsersManager = () => {
     setFilterStatus('');
   };
 
+  const handleUserModalRefresh = (action, data) => {
+    if (action === 'ignore') return;
+    
+    if (action === 'delete') {
+      setUsers(prev => prev.filter(u => u.id !== selectedUser.id));
+      setTotalCount(prev => prev - 1);
+      return;
+    }
+
+    setUsers(prev => prev.map(u => {
+      if (u.id !== selectedUser.id) return u;
+      
+      if (action === 'updatePlan') {
+        return { ...u, tier: data };
+      }
+      if (action === 'makeFree') {
+        return { ...u, tier: 'free' };
+      }
+      if (action === 'update') {
+        return { ...u, ...data };
+      }
+      
+      return u;
+    }));
+  };
+
+  // ── Render helpers ──────────────────────────────────────────────────────────
+
   const tierChip = (u) => {
-    const activeMembership = (u.user_subscriptions || []).find(m => m.is_active);
-    const tier = activeMembership?.membership_plans?.tier || 'free';
+    const tier = u.tier || 'free';
     if (tier !== 'free') {
       const map = {
         silver: 'bg-slate-100 text-slate-700 ring-slate-200',
@@ -181,9 +199,10 @@ const UsersManager = () => {
   };
 
   const avatarFor = (u) => {
-    const photo = u.profile_photos?.find((p) => p.is_primary) || u.profile_photos?.[0];
-    if (photo?.photo_url) {
-      return <img src={imageApi.getR2PublicUrl(photo.r2_key)} alt="" className="w-full h-full object-cover" />;
+    const r2Key = u.primary_photo_r2_key;
+    if (r2Key) {
+      const url = getR2PublicUrl(r2Key);
+      if (url) return <img src={url} alt="" className="w-full h-full object-cover" />;
     }
     return (
       <span className="text-sm font-bold text-primary-600">
@@ -198,7 +217,6 @@ const UsersManager = () => {
   return (
     <div className="flex flex-col">
 
-
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
@@ -206,7 +224,7 @@ const UsersManager = () => {
             Manage Users
             {!isLoading && (
               <span className="text-sm font-semibold text-primary-700 bg-primary-50 px-3 py-1 rounded-full ring-1 ring-primary-100">
-                {users.length.toLocaleString()}
+                {totalCount.toLocaleString()}
               </span>
             )}
           </h1>
@@ -312,7 +330,7 @@ const UsersManager = () => {
                   <th className="px-6 py-3.5 w-12">
                     <input
                       type="checkbox"
-                      checked={filteredUsers.length > 0 && selectedUserIds.size === filteredUsers.length}
+                      checked={users.length > 0 && selectedUserIds.size === users.length}
                       onChange={handleSelectAll}
                       className="rounded border-neutral-300 text-primary-600 focus:ring-primary-500 cursor-pointer w-4 h-4"
                     />
@@ -325,7 +343,7 @@ const UsersManager = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
-                {filteredUsers.slice(0, displayCount).map((u) => (
+                {users.map((u) => (
                   <tr
                     key={u.id}
                     className={`group transition-colors cursor-pointer ${selectedUserIds.has(u.id) ? 'bg-primary-50/60' : 'hover:bg-neutral-50'}`}
@@ -391,7 +409,7 @@ const UsersManager = () => {
                     </td>
                   </tr>
                 ))}
-                {filteredUsers.length === 0 && (
+                {users.length === 0 && (
                   <tr>
                     <td colSpan="6" className="px-6 py-16 text-center">
                       <div className="flex flex-col items-center gap-3 text-neutral-400">
@@ -413,16 +431,40 @@ const UsersManager = () => {
           </div>
         )}
         
-        {!isLoading && displayCount < filteredUsers.length && (
-          <div className="p-4 flex justify-center border-t border-neutral-100 bg-neutral-50/50">
-            <Button variant="outline" size="sm" onClick={() => setDisplayCount((prev) => prev + 20)}>
-              Load More
-            </Button>
+        {/* Pagination controls */}
+        {!isLoading && totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-3.5 border-t border-neutral-100 bg-neutral-50/50">
+            <p className="text-sm text-neutral-500">
+              Showing {((page - 1) * PER_PAGE) + 1}–{Math.min(page * PER_PAGE, totalCount)} of {totalCount.toLocaleString()}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                icon={ChevronLeft}
+              >
+                Prev
+              </Button>
+              <span className="text-sm font-medium text-neutral-700 px-2">
+                {page} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                icon={ChevronRight}
+              >
+                Next
+              </Button>
+            </div>
           </div>
         )}
       </Card>
 
-      {selectedUser && <UserModal user={selectedUser} onClose={() => setSelectedUser(null)} onRefresh={loadUsers} />}
+      {selectedUser && <UserModal user={selectedUser} onClose={() => setSelectedUser(null)} onRefresh={handleUserModalRefresh} />}
     </div>
   );
 };

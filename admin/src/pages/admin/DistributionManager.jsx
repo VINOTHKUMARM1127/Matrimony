@@ -144,10 +144,6 @@ const DistributionManager = () => {
             </div>
           </div>
         </div>
-        <div className="p-5 bg-white rounded-xl shadow-sm border border-neutral-200 col-span-1 md:col-span-3">
-          <h3 className="text-sm font-medium text-neutral-500 mb-1">Total Unlocked Profiles in Pool</h3>
-          <p className="text-2xl font-bold text-primary-600">{health.total_unlocked}</p>
-        </div>
       </div>
 
 

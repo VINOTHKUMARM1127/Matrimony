@@ -3,21 +3,32 @@ import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import { Download, FileText, Users, CreditCard, Heart, SlidersHorizontal, Loader2 } from 'lucide-react';
 import supabase from '../../api/supabaseClient';
+import { fetchAllUsers } from '../../api/adminApi';
 
 const ReportsManager = () => {
   const [isExporting, setIsExporting] = useState(null);
 
-  const downloadCSV = (filename, data) => {
+  const downloadCSV = async (filename, data) => {
     if (!data || data.length === 0) {
       alert('No records found for export.');
       return;
     }
     const headers = Object.keys(data[0]);
     const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const rows = data.map(row => headers.map(h => esc(row[h])).join(','));
-    const csv = [headers.join(','), ...rows].join('\n');
     
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const CHUNK_SIZE = 5000;
+    const blobParts = [headers.join(',') + '\n'];
+    
+    for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+      const chunk = data.slice(i, i + CHUNK_SIZE);
+      const rowsStr = chunk.map(row => headers.map(h => esc(row[h])).join(',')).join('\n');
+      blobParts.push(rowsStr + (i + CHUNK_SIZE < data.length ? '\n' : ''));
+      
+      // Yield to main thread to prevent UI freezing
+      await new Promise(r => setTimeout(r, 0));
+    }
+    
+    const blob = new Blob(blobParts, { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -31,7 +42,7 @@ const ReportsManager = () => {
     try {
       const { data, error } = await supabase.from(table).select('*').limit(50000);
       if (error) throw error;
-      downloadCSV(table, data);
+      await downloadCSV(table, data);
     } catch (err) {
       alert(`Failed to export ${label}: ` + (err.message || err));
     } finally {
@@ -42,37 +53,20 @@ const ReportsManager = () => {
   const exportUsers = async () => {
     setIsExporting('users');
     try {
-      const { data: users, error } = await supabase
-        .from('profiles')
-        .select(`
-          *,
-          users ( email, phone, creating_for, is_verified, created_at )
-        `)
-        .limit(50000);
-      
-      if (error) throw error;
+      const users = await fetchAllUsers();
 
       const flattened = users.map(u => ({
         id: u.id,
-        email: u.users?.email,
-        phone: u.users?.phone,
-        creating_for: u.users?.creating_for,
-        is_verified: u.users?.is_verified,
-        created_at: u.users?.created_at,
+        email: u.email || '',
+        phone: u.phone || '',
+        created_at: u.created_at,
         name: u.full_name,
         gender: u.gender,
         dob: u.dob,
-        city: u.city,
-        state: u.state,
-        country: u.country,
-        religion: u.religion,
-        caste: u.caste,
-        highest_qualification: u.highest_qualification,
-        occupation: u.occupation,
         is_active: u.is_active,
         profile_completion: u.profile_completion_percent
       }));
-      downloadCSV('users_detailed', flattened);
+      await downloadCSV('users_detailed', flattened);
     } catch (err) {
       alert('Failed to export Users: ' + (err.message || err));
     } finally {
@@ -84,26 +78,34 @@ const ReportsManager = () => {
     setIsExporting('payments');
     try {
       const { data, error } = await supabase
-        .from('purchase_history')
-        .select(`*, profiles(name, phone)`)
+        .from('payments')
+        .select('*')
         .limit(50000)
-        .order('purchased_at', { ascending: false });
+        .order('created_at', { ascending: false });
         
       if (error) throw error;
-      const flattened = data.map(p => ({
+      
+      // Lookup profile names for each payment
+      const userIds = [...new Set((data || []).map(p => p.user_id).filter(Boolean))];
+      const profileLookup = {};
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('id, full_name, phone').in('id', userIds);
+        if (profiles) profiles.forEach(p => profileLookup[p.id] = p);
+      }
+      
+      const flattened = (data || []).map(p => ({
         id: p.id,
-        purchased_at: p.purchased_at,
-        user_name: p.profiles?.name || '',
-        user_phone: p.profiles?.phone || '',
-        tier: p.tier,
-        amount_paid: p.amount_paid,
-        tax_amount: p.tax_amount,
-        final_amount: p.final_amount,
-        payment_gateway: p.payment_gateway,
-        gateway_transaction_id: p.gateway_transaction_id,
-        payment_status: p.payment_status,
+        created_at: p.created_at,
+        user_name: profileLookup[p.user_id]?.full_name || '',
+        user_phone: profileLookup[p.user_id]?.phone || '',
+        amount_paise: p.amount_paise,
+        currency: p.currency,
+        status: p.status,
+        razorpay_order_id: p.razorpay_order_id || '',
+        razorpay_payment_id: p.razorpay_payment_id || '',
+        confirmed_at: p.confirmed_at || '',
       }));
-      downloadCSV('payments_detailed', flattened);
+      await downloadCSV('payments_detailed', flattened);
     } catch (err) {
       alert('Failed to export Payments: ' + (err.message || err));
     } finally {
@@ -149,13 +151,13 @@ const ReportsManager = () => {
       action: () => exportTable('distribution_logs', 'Distribution Logs')
     },
     {
-      id: 'interest_transactions',
+      id: 'interests',
       title: 'Interests & Interactions',
       desc: 'Export logs of interests sent, accepted, rejected, and skipped.',
       icon: Heart,
       color: 'text-rose-600',
       bg: 'bg-rose-50',
-      action: () => exportTable('interest_transactions', 'Interests')
+      action: () => exportTable('interests', 'Interests')
     }
   ];
 

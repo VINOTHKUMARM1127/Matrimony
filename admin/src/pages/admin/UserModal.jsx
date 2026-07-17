@@ -193,7 +193,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
       }
 
       alert('User updated successfully');
-      onRefresh();
+      onRefresh('update', { ...profilePayload, phone });
       onClose();
     } catch (err) {
       alert('Failed to update user: ' + err.message);
@@ -208,7 +208,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
     try {
       await adminApi.deleteUser(user.id);
       alert('User deleted completely.');
-      onRefresh();
+      onRefresh('delete');
       onClose();
     } catch (err) {
       alert('Failed to delete user: ' + err.message);
@@ -242,7 +242,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
     try {
       await adminApi.updateUserPlan(user.id, planType);
       alert('Plan updated successfully!');
-      onRefresh();
+      onRefresh('updatePlan', planType);
     } catch (err) {
       alert('Failed to update plan: ' + err.message);
     } finally {
@@ -262,7 +262,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
     try {
       await adminApi.makeUserFree(user.id, resetDistribution);
       alert(resetDistribution ? 'User reset to Free (full reset).' : 'User downgraded to Free.');
-      onRefresh();
+      onRefresh('makeFree');
       onClose();
     } catch (err) {
       alert('Failed to make user free: ' + err.message);
@@ -281,7 +281,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
       const newPhoto = await adminApi.addPhoto(user.id, r2Result.publicUrl);
       setPhotos((prev) => [...prev, newPhoto]);
       alert('Photo uploaded successfully!');
-      onRefresh();
+      onRefresh('updatePhoto');
     } catch (err) {
       alert('Failed to upload photo: ' + err.message);
     } finally {
@@ -297,7 +297,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
       await adminApi.deletePhoto(photo.id);
       await imageApi.deletePhotoFromR2(imageApi.getR2PublicUrl(photo.r2_key));
       setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
-      onRefresh();
+      onRefresh('updatePhoto');
     } catch (err) {
       alert('Failed to delete photo: ' + err.message);
     } finally {
@@ -608,7 +608,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
                           try {
                             await adminApi.manualPushToUsers('user', user.id, userPlan?.daily_recommended_increment || 0, 0);
                             alert('Pushed successfully!');
-                            onRefresh();
+                            onRefresh('ignore');
                           } catch (err) {
                             alert('Failed to push: ' + err.message);
                           } finally {

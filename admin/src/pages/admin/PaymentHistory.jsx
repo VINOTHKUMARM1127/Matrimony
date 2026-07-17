@@ -130,22 +130,32 @@ const PaymentHistory = () => {
       ];
 
       const esc = (c) => `"${String(c ?? '').replace(/"/g, '""')}"`;
-      const dataRows = rows.map((p) => [
-        p.id,
-        formatDate(p.purchased_at),
-        p.profile?.full_name || '-',
-        p.profile?.phone || '-',
-        p.tier,
-        p.amount,
-        p.tax,
-        p.final_amount,
-        p.payment_gateway,
-        p.gateway_transaction_id || '-',
-        p.payment_status,
-      ]);
+      
+      const CHUNK_SIZE = 5000;
+      const blobParts = [headers.map(esc).join(',') + '\n'];
+      
+      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+        const chunk = rows.slice(i, i + CHUNK_SIZE);
+        const dataRowsStr = chunk.map((p) => [
+          p.id,
+          formatDate(p.purchased_at),
+          p.profile?.full_name || '-',
+          p.profile?.phone || '-',
+          p.tier,
+          p.amount,
+          p.tax,
+          p.final_amount,
+          p.payment_gateway,
+          p.gateway_transaction_id || '-',
+          p.payment_status,
+        ].map(esc).join(',')).join('\n');
+        
+        blobParts.push(dataRowsStr + (i + CHUNK_SIZE < rows.length ? '\n' : ''));
+        // Yield to prevent UI freeze
+        await new Promise(r => setTimeout(r, 0));
+      }
 
-      const csv = [headers, ...dataRows].map((r) => r.map(esc).join(',')).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
+      const blob = new Blob(blobParts, { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
