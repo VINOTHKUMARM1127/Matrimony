@@ -18,48 +18,13 @@ import useProfileStore from '../../store/useProfileStore';
 import useAuthStore from '../../store/useAuthStore';
 import supabase from '../../api/supabaseClient';
 
-const uriToBlob = async (uri) => {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.onload = function () {
-      resolve(xhr.response);
-    };
-    xhr.onerror = function (e) {
-      console.error('uriToBlob error:', e);
-      reject(new TypeError('Local file read failed'));
-    };
-    xhr.responseType = 'blob';
-    xhr.open('GET', uri, true);
-    xhr.send(null);
-  });
-};
+import { uploadProfilePhoto } from '../../api/profiles';
 
 const PhotoUploadScreen = ({ navigation }) => {
   const user = useAuthStore((s) => s.user);
   const { addPhoto, photos } = useProfileStore();
   const [uploading, setUploading] = useState(false);
   const [localPhotos, setLocalPhotos] = useState([]);
-
-  const compressImage = useCallback(async (uri) => {
-    const { getInfoAsync } = require('expo-file-system/legacy');
-    let quality = 0.8;
-    let width = IMAGE_CONFIG.MAX_WIDTH;
-    let manipulated;
-    let fileSize = Infinity;
-
-    while (fileSize > 200 * 1024 && quality > 0.1) {
-      manipulated = await ImageManipulator.manipulateAsync(
-        uri,
-        [{ resize: { width } }],
-        { compress: quality, format: ImageManipulator.SaveFormat.WEBP }
-      );
-      const fileInfo = await getInfoAsync(manipulated.uri);
-      fileSize = fileInfo.size;
-      quality -= 0.15;
-      width = Math.floor(width * 0.8);
-    }
-    return manipulated;
-  }, []);
 
   const pickImage = useCallback(async () => {
     if (localPhotos.length >= IMAGE_CONFIG.MAX_PHOTOS) {
@@ -84,62 +49,19 @@ const PhotoUploadScreen = ({ navigation }) => {
       setUploading(true);
       try {
         for (const asset of result.assets) {
-          // Compress
-          const compressed = await compressImage(asset.uri);
+          const isPrimary = localPhotos.length === 0;
+          
+          const photoRecord = await uploadProfilePhoto(user.id, asset.uri, {
+            replacePrimary: false,
+            isPrimary: isPrimary,
+          });
 
-          // Generate filename
-          const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.webp`;
-
-          // Check R2 credentials
-          const r2AccountId = process.env.EXPO_PUBLIC_R2_ACCOUNT_ID;
-          const r2AccessKeyId = process.env.EXPO_PUBLIC_R2_ACCESS_KEY_ID;
-          const r2SecretAccessKey = process.env.EXPO_PUBLIC_R2_SECRET_ACCESS_KEY;
-          const hasR2Creds = r2AccountId && r2AccessKeyId && r2SecretAccessKey;
-
-          let publicUrl;
-          if (!hasR2Creds && (__DEV__ || process.env.EXPO_PUBLIC_APP_ENV === 'development')) {
-            console.warn('Cloudflare R2 credentials are not set. Using dev mock fallback.');
-            const randomId = Math.floor(Math.random() * 1000);
-            publicUrl = `https://picsum.photos/id/${randomId % 100}/400/400`;
-          } else {
-            // Upload to Cloudflare R2 via the shared, RN-correct client
-            // (forcePathStyle + checksum-safe). See src/api/r2Client.js.
-            const { decode } = require('base64-arraybuffer');
-            const { getR2Client, PutObjectCommand, R2_BUCKET, R2_PUBLIC_URL } = require('../../api/r2Client');
-            const fileInstance = new (require('expo-file-system').File)(compressed.uri);
-            const base64 = await fileInstance.base64();
-            const arrayBuffer = decode(base64);
-
-            const command = new PutObjectCommand({
-              Bucket: R2_BUCKET(),
-              Key: fileName,
-              Body: new Uint8Array(arrayBuffer),
-              ContentType: 'image/webp',
-            });
-
-            await getR2Client().send(command);
-
-            publicUrl = `${R2_PUBLIC_URL()}/${fileName}`;
-          }
-
-          // Save to DB
-          const { data: photoData, error: dbError } = await supabase
-            .from('profile_photos')
-            .insert({
-              user_id: user.id,
-              photo_url: publicUrl,
-              is_primary: localPhotos.length === 0,
-              display_order: localPhotos.length,
-            })
-            .select()
-            .single();
-
-          if (!dbError && photoData) {
+          if (photoRecord) {
             setLocalPhotos((prev) => [...prev, {
-              ...photoData,
-              localUri: compressed.uri,
+              ...photoRecord,
+              localUri: asset.uri,
             }]);
-            addPhoto(photoData);
+            addPhoto(photoRecord);
           }
         }
       } catch (error) {
@@ -148,7 +70,7 @@ const PhotoUploadScreen = ({ navigation }) => {
       }
       setUploading(false);
     }
-  }, [localPhotos, user, compressImage, addPhoto]);
+  }, [localPhotos, user, addPhoto]);
 
   const removePhoto = useCallback((index) => {
     setLocalPhotos((prev) => prev.filter((_, i) => i !== index));

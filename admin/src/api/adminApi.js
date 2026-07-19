@@ -221,11 +221,11 @@ export const deleteUser = async (userId) => {
 
   // 1. Clean up user photos from Cloudflare R2
   try {
-    const { data: userPhotos } = await supabase.from('profile_photos').select('r2_key').eq('user_id', userId);
+    const { data: userPhotos } = await supabase.from('profile_photos').select('id, r2_key').eq('user_id', userId);
     if (userPhotos && userPhotos.length > 0) {
       const deletePromises = userPhotos
         .filter(p => p.r2_key)
-        .map(p => deletePhotoFromR2(p.r2_key).catch(err => console.warn('Failed to delete from R2:', err)));
+        .map(p => deletePhotoFromR2(p.id).catch(err => console.warn('Failed to delete from R2:', err)));
       await Promise.all(deletePromises);
     }
   } catch (err) {
@@ -240,6 +240,24 @@ export const deleteUser = async (userId) => {
   }
   
   return true;
+};
+
+/**
+ * Fetch all Profile Photos for a User
+ */
+export const fetchUserPhotos = async (userId) => {
+  if (!supabase) throw new Error('Service Role Key required');
+  const { data, error } = await supabase
+    .from('profile_photos')
+    .select('id, user_id, r2_key, thumbnail_key, is_primary, order_index')
+    .eq('user_id', userId)
+    .order('order_index', { ascending: true });
+    
+  if (error) {
+    console.warn('Failed to fetch user photos:', error);
+    return [];
+  }
+  return data || [];
 };
 
 /**
@@ -605,14 +623,34 @@ export const manualPushToUsers = async (targetType, targetVal, allMatchesCount, 
 // ============================================================
 
 export const fetchRevenueStats = async () => {
-  const { data, error } = await supabase.from('revenue_summary').select('*').maybeSingle();
-  if (error) throw error;
-  
-  // Format to match old RPC
+  const [{ data: adminStats }, { data: dailyStats }] = await Promise.all([
+    supabase.from('admin_stats_view').select('total_revenue_paise, revenue_this_month_paise').maybeSingle(),
+    supabase.from('revenue_summary').select('revenue_paise').eq('day', new Date().toISOString().split('T')[0]).maybeSingle()
+  ]);
+
+  const [{ count: successCount }, { count: failedCount }, { count: refundCount }, { data: successPayments }] = await Promise.all([
+    supabase.from('payments').select('*', { count: 'exact', head: true }).eq('status', 'success'),
+    supabase.from('payments').select('*', { count: 'exact', head: true }).eq('status', 'failed'),
+    supabase.from('payments').select('*', { count: 'exact', head: true }).eq('status', 'refunded'),
+    supabase.from('payments').select('amount_paise, membership_plans(tier)').eq('status', 'success')
+  ]);
+
+  const planRevenueMap = {};
+  (successPayments || []).forEach(p => {
+    const tier = p.membership_plans?.tier || 'unknown';
+    if (!planRevenueMap[tier]) planRevenueMap[tier] = { tier, revenue: 0, count: 0 };
+    planRevenueMap[tier].revenue += (p.amount_paise / 100);
+    planRevenueMap[tier].count += 1;
+  });
+
   return {
-    total_revenue: data?.total_revenue || 0,
-    monthly_revenue: data?.monthly_revenue || 0,
-    daily_revenue: data?.daily_revenue || 0,
+    total_revenue: (adminStats?.total_revenue_paise || 0) / 100,
+    monthly_revenue: (adminStats?.revenue_this_month_paise || 0) / 100,
+    today_revenue: (dailyStats?.revenue_paise || 0) / 100,
+    success_count: successCount || 0,
+    failed_count: failedCount || 0,
+    refund_count: refundCount || 0,
+    plan_revenue: Object.values(planRevenueMap),
   };
 };
 
@@ -792,7 +830,7 @@ export const fetchSubscriptionPlans = async () => {
 export const updateSubscriptionPlan = async (tierName, planData) => {
   if (!supabase) throw new Error('Service Role Key required for Admin updates');
   
-  const { error } = await supabase
+  const { error: distError } = await supabase
     .from('distribution_config')
     .upsert({
       tier: tierName,
@@ -803,7 +841,20 @@ export const updateSubscriptionPlan = async (tierName, planData) => {
       updated_at: new Date().toISOString()
     });
 
-  if (error) throw new Error(error.message || 'Failed to update distribution config');
+  if (distError) throw new Error(distError.message || 'Failed to update distribution config');
+
+  const { error: planError } = await supabase
+    .from('membership_plans')
+    .update({
+      price: planData.price_inr,
+      duration_days: planData.validity_days,
+      contact_credits: planData.contact_credits,
+      interest_credits: planData.interest_credits
+    })
+    .eq('tier', tierName);
+
+  if (planError) throw new Error(planError.message || 'Failed to update membership plans');
+
   return true;
 };
 

@@ -14,6 +14,7 @@ import {
   ScrollView,
   SafeAreaView,
   Alert,
+  Image,
 } from 'react-native';
 import { SafeAreaView as SafeAreaContextView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -158,14 +159,9 @@ const LoginScreen = ({ navigation }) => {
         >
           {/* Header section with brand accent */}
           <View style={styles.header}>
-            <LinearGradient
-              colors={[colors.gradientPrimaryStart, colors.gradientPrimaryEnd]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.logoBadge}
-            >
-              <Icon name="heart" size={30} color="#FFFFFF" fill="#FFFFFF" />
-            </LinearGradient>
+            <View style={styles.logoBadge}>
+              <Image source={require('../../../assets/icon.png')} style={{ width: 76, height: 76, borderRadius: 24 }} />
+            </View>
             <Text style={styles.greeting}>Vanakkam</Text>
             <Text style={styles.title}>Wedring Matrimony</Text>
             <Text style={styles.subtitle}>Find your perfect life partner</Text>

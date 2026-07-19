@@ -138,16 +138,16 @@ const PaymentHistory = () => {
         const chunk = rows.slice(i, i + CHUNK_SIZE);
         const dataRowsStr = chunk.map((p) => [
           p.id,
-          formatDate(p.purchased_at),
+          formatDate(p.created_at),
           p.profile?.full_name || '-',
           p.profile?.phone || '-',
-          p.tier,
-          p.amount,
-          p.tax,
-          p.final_amount,
-          p.payment_gateway,
-          p.gateway_transaction_id || '-',
-          p.payment_status,
+          p.membership_plans?.tier || p.tier || '-',
+          (p.amount_paise ? p.amount_paise / 100 : 0),
+          0,
+          (p.amount_paise ? p.amount_paise / 100 : 0),
+          'Razorpay',
+          p.razorpay_payment_id || '-',
+          p.status,
         ].map(esc).join(',')).join('\n');
         
         blobParts.push(dataRowsStr + (i + CHUNK_SIZE < rows.length ? '\n' : ''));
@@ -371,7 +371,6 @@ const PaymentHistory = () => {
                     <th className="px-4 py-3 text-left font-semibold text-neutral-600">Gateway</th>
                     <th className="px-4 py-3 text-left font-semibold text-neutral-600">Txn ID</th>
                     <th className="px-4 py-3 text-center font-semibold text-neutral-600">Status</th>
-                    <th className="px-4 py-3 text-right font-semibold text-neutral-600">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -379,7 +378,7 @@ const PaymentHistory = () => {
                     const StatusIcon = STATUS_ICONS[p.status] || Clock;
                     return (
                       <tr key={p.id} className="border-b border-neutral-50 hover:bg-neutral-50/50 transition-colors">
-                        <td className="px-4 py-3 text-neutral-600 text-xs whitespace-nowrap">{formatDate(p.purchased_at)}</td>
+                        <td className="px-4 py-3 text-neutral-600 text-xs whitespace-nowrap">{formatDate(p.created_at)}</td>
                         <td className="px-4 py-3">
                           <div>
                             <p className="font-medium text-neutral-900 text-sm">{p.profile?.full_name || 'Unknown'}</p>
@@ -387,28 +386,18 @@ const PaymentHistory = () => {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="capitalize font-semibold text-neutral-700">{p.tier}</span>
+                          <span className="capitalize font-semibold text-neutral-700">{p.membership_plans?.tier || p.tier || 'Unknown'}</span>
                         </td>
-                        <td className="px-4 py-3 text-right font-bold text-neutral-900">{formatCurrency(p.amount)}</td>
-                        <td className="px-4 py-3 text-neutral-500 capitalize text-xs">{p.payment_gateway}</td>
+                        <td className="px-4 py-3 text-right font-bold text-neutral-900">{formatCurrency(p.amount_paise ? p.amount_paise / 100 : 0)}</td>
+                        <td className="px-4 py-3 text-neutral-500 capitalize text-xs">Razorpay</td>
                         <td className="px-4 py-3 text-neutral-400 text-xs font-mono truncate max-w-[120px]">
-                          {p.gateway_transaction_id || '-'}
+                          {p.razorpay_payment_id || '-'}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full ${STATUS_COLORS[p.payment_status] || STATUS_COLORS.pending}`}>
+                          <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full ${STATUS_COLORS[p.status] || STATUS_COLORS.pending}`}>
                             <StatusIcon size={11} />
-                            {p.payment_status}
+                            {p.status}
                           </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {p.payment_status === 'success' && (
-                            <button
-                              onClick={() => handleRefund(p.id)}
-                              className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                            >
-                              Refund
-                            </button>
-                          )}
                         </td>
                       </tr>
                     );

@@ -89,15 +89,7 @@ const SettingsScreen = ({ navigation }) => {
     {
       title: 'Preferences',
       rows: [
-        { icon: 'globe', tint: colors.secondary, title: 'Language / மொழி', desc: 'Change app language', screen: 'Language' },
         { icon: 'privacy', tint: colors.primary, title: 'Privacy & Security', desc: 'Control who can see your profile', screen: 'Privacy' },
-      ],
-    },
-    {
-      title: 'Support',
-      rows: [
-        { icon: 'help', tint: colors.textSecondary, title: 'Help & Support', desc: 'Get help or contact us', screen: null },
-        { icon: 'document', tint: colors.textSecondary, title: 'Terms of Service', desc: 'Read our terms & policies', screen: null },
       ],
     },
   ];
@@ -121,7 +113,7 @@ const SettingsScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <ScreenHeader title="Settings" subtitle="Manage your account & preferences" />
+      <ScreenHeader title="Settings" subtitle="Manage your account & preferences" onBack={() => navigation.goBack()} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Profile summary card — premium gradient */}

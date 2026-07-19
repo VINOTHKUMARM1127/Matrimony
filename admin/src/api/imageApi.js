@@ -56,17 +56,15 @@ export const uploadPhotoToR2 = async (userId, file) => {
 };
 
 /**
- * Delete an image from Cloudflare R2 using its R2 key
+ * Delete an image from Cloudflare R2 using its photo ID.
+ * The edge function also deletes the database record.
  */
-export const deletePhotoFromR2 = async (r2Key) => {
-  if (!r2Key) return;
+export const deletePhotoFromR2 = async (photoId) => {
+  if (!photoId) return;
   
-  // Try to extract key if a full URL was passed
-  const key = getR2KeyFromUrl(r2Key);
-
   const { error } = await supabase.functions.invoke(
     'r2-delete-photo',
-    { body: { r2_key: key } }
+    { body: { photo_id: photoId } }
   );
 
   if (error) {

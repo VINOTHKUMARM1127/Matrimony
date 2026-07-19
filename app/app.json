@@ -18,6 +18,8 @@
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
         "backgroundColor": "#E8631A"
       },
       "package": "com.vinoth_kumarm_27.MATRIMONY"

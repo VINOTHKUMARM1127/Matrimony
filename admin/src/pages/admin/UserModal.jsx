@@ -74,16 +74,17 @@ const UserModal = ({ user, onClose, onRefresh }) => {
     if (!user) return;
     // Seed all known profile columns from the row.
     setForm({ ...user });
-    setPhotos(user.profile_photos || []);
-    // Load horoscope + preferences.
+    // Load horoscope + preferences + photos.
     (async () => {
       setLoadingRel(true);
       try {
-        const [rel, masterData] = await Promise.all([
+        const [rel, masterData, userPhotos] = await Promise.all([
           adminApi.fetchUserRelations(user.id),
-          adminApi.fetchMasterData()
+          adminApi.fetchMasterData(),
+          adminApi.fetchUserPhotos(user.id)
         ]);
         setMaster(masterData || {});
+        setPhotos(userPhotos || []);
         setHoroscope(rel.horoscope || {});
         setPrefs(rel.preferences || {});
         setFamily(rel.family || {});
@@ -278,7 +279,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
     setPhotoLoading(true);
     try {
       const r2Result = await imageApi.uploadPhotoToR2(user.id, file);
-      const newPhoto = await adminApi.addPhoto(user.id, r2Result.publicUrl);
+      const newPhoto = await adminApi.addPhoto(user.id, r2Result.path);
       setPhotos((prev) => [...prev, newPhoto]);
       alert('Photo uploaded successfully!');
       onRefresh('updatePhoto');
@@ -294,8 +295,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
     if (!window.confirm('Delete this photo?')) return;
     setPhotoLoading(true);
     try {
-      await adminApi.deletePhoto(photo.id);
-      await imageApi.deletePhotoFromR2(imageApi.getR2PublicUrl(photo.r2_key));
+      await imageApi.deletePhotoFromR2(photo.id);
       setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
       onRefresh('updatePhoto');
     } catch (err) {
@@ -421,6 +421,45 @@ const UserModal = ({ user, onClose, onRefresh }) => {
 
               {tab === 'Account' && (
                 <div className="space-y-6">
+                  {/* Profile Photos */}
+                  <div className="bg-neutral-50 rounded-2xl border border-neutral-100 p-5">
+                    <h3 className="text-sm font-bold text-neutral-900 mb-4 flex items-center gap-2"><ImagePlus size={16} className="text-primary-500" /> Profile Photos</h3>
+                    
+                    <div className="flex flex-wrap gap-4 mb-4">
+                      {photos.map(p => (
+                        <div key={p.id} className="relative group w-24 h-24 rounded-xl overflow-hidden shadow-sm border border-neutral-200 bg-neutral-100">
+                          <img src={imageApi.getR2PublicUrl(p.r2_key) || p.photo_url} alt="Profile" className="w-full h-full object-cover" />
+                          <button 
+                            onClick={() => handlePhotoDelete(p)} 
+                            className="absolute top-1 right-1 bg-white/90 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-error-50 hover:text-error-600 shadow-sm"
+                            title="Delete Photo"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                          {p.is_primary && (
+                            <div className="absolute bottom-0 left-0 right-0 bg-primary-500/90 text-white text-[10px] font-bold text-center py-0.5 tracking-wider">
+                              PRIMARY
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {photos.length === 0 && (
+                        <div className="w-24 h-24 rounded-xl bg-neutral-100 border border-neutral-200 border-dashed flex items-center justify-center text-neutral-400">
+                          <ImagePlus size={24} opacity={0.5} />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <label className={`cursor-pointer ${photoLoading ? 'bg-neutral-100 text-neutral-400' : 'bg-primary-50 text-primary-600 hover:bg-primary-100'} px-4 py-2 rounded-xl text-xs font-bold transition-colors inline-flex items-center gap-2`}>
+                        {photoLoading ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}
+                        {photoLoading ? 'Processing...' : 'Upload Photo'}
+                        <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={photoLoading} />
+                      </label>
+                      <p className="text-[11px] text-neutral-500">Max 5 photos. Deleting removes from Cloudflare R2 too.</p>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="bg-neutral-50 rounded-2xl border border-neutral-100 p-4">
                       <p className="text-xs text-neutral-500 mb-1 flex items-center gap-1.5"><Mail size={13} /> Email</p>
@@ -659,33 +698,7 @@ const UserModal = ({ user, onClose, onRefresh }) => {
                     </div>
                   </div>
 
-                  {/* Photos */}
-                  <div className="border-t border-neutral-100 pt-5">
-                    <h3 className="font-semibold text-neutral-900 mb-3 flex items-center gap-2 text-sm">
-                      <ImagePlus size={17} className="text-primary-500" /> Profile Photos
-                    </h3>
-                    <div className="flex gap-3 overflow-x-auto pb-2">
-                      {photos && photos.length > 0 ? photos.map((photo) => (
-                        <div key={photo.id} className="relative group shrink-0 w-24 h-24 rounded-2xl overflow-hidden border border-neutral-200 shadow-sm">
-                          <img src={imageApi.getR2PublicUrl(photo.r2_key)} alt="" className="w-full h-full object-cover" />
-                          <div className="absolute inset-0 bg-neutral-950/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <button onClick={() => handlePhotoDelete(photo)} disabled={photoLoading} className="bg-error-500 text-white p-2 rounded-full hover:bg-error-600 disabled:opacity-50">
-                              <Trash2 size={15} />
-                            </button>
-                          </div>
-                        </div>
-                      )) : (
-                        <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-neutral-200 flex flex-col items-center justify-center text-neutral-400 bg-neutral-50">
-                          <ImagePlus size={20} className="mb-1 text-neutral-300" />
-                          <span className="text-[11px]">No Photos</span>
-                        </div>
-                      )}
-                      <label className="shrink-0 w-24 h-24 rounded-2xl border-2 border-dashed border-primary-200 flex flex-col items-center justify-center text-primary-600 bg-primary-50 cursor-pointer hover:bg-primary-100">
-                        {photoLoading ? <Loader2 size={20} className="animate-spin mb-1" /> : <><ImagePlus size={20} className="mb-1" /><span className="text-[11px] font-medium">Upload</span></>}
-                        <input type="file" accept="image/jpeg, image/png, image/webp" className="hidden" onChange={handlePhotoUpload} disabled={photoLoading} />
-                      </label>
-                    </div>
-                  </div>
+
 
                   <div className="border-t border-neutral-100 pt-5 flex items-center gap-3">
                     <Button variant="outline" size="md" onClick={handleResetPassword} disabled={isLoading} icon={Key}>Reset Password</Button>

@@ -96,8 +96,8 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
-  const [loggingOut, setLoggingOut] = useState(false);
-  const [deactivating, setDeactivating] = useState(false);
+  const [loggingOut, setLoggingOut] = React.useState(false);
+  const [deactivating, setDeactivating] = React.useState(false);
 
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to sign out?', [

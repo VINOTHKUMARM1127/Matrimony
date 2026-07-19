@@ -42,19 +42,6 @@ const PremiumSettings = () => {
     }));
   };
 
-  const handleFeatureChange = (tier, index, value) => {
-    const newFeatures = [...(plans[tier]?.features || [])];
-    newFeatures[index] = value;
-    handleChange(tier, 'features', newFeatures);
-  };
-
-  const addFeature = (tier) => {
-    handleChange(tier, 'features', [...(plans[tier]?.features || []), 'New Feature']);
-  };
-
-  const removeFeature = (tier, index) => {
-    handleChange(tier, 'features', (plans[tier]?.features || []).filter((_, i) => i !== index));
-  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -121,13 +108,8 @@ const PremiumSettings = () => {
               {/* Tier header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 bg-gradient-to-r from-neutral-50/80 to-transparent">
                 <div className="flex items-center gap-3">
-                  <span className={`w-3 h-3 rounded-full ${tier.dot} ring-4 ring-offset-0`} style={{ boxShadow: `0 0 0 4px ${s.color_code || '#AAA'}22` }} />
+                  <span className={`w-3 h-3 rounded-full ${tier.dot} ring-4 ring-offset-0`} />
                   <h2 className="text-lg font-bold text-neutral-900">{tier.label}</h2>
-                  {s.is_popular && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-amber-100 text-amber-700 px-2 py-1 rounded-full">
-                      <Star size={11} fill="currentColor" /> BEST VALUE
-                    </span>
-                  )}
                 </div>
                 {!isFree && (
                   <div className="flex items-center gap-1.5 text-sm font-bold text-neutral-700">
@@ -139,13 +121,13 @@ const PremiumSettings = () => {
 
               <div className="p-6 space-y-6">
                 {/* Row 1: Plan Details + Features */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-10 gap-y-6">
+                <div className="grid grid-cols-1 gap-y-6">
                   {/* Plan Details */}
                   <div>
                     <h3 className="font-semibold text-neutral-800 text-sm flex items-center gap-2 mb-3">
                       <Tag size={15} className="text-primary-500" /> Plan Details
                     </h3>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label className={labelClass}>Plan Name (ID)</label>
                         <input type="text" value={s.name || ''} onChange={(e) => handleChange(tier.id, 'name', e.target.value)} disabled className={`${fieldClass} disabled:opacity-50`} />
@@ -158,44 +140,7 @@ const PremiumSettings = () => {
                         <label className={labelClass}>Duration (Days)</label>
                         <input type="number" value={s.validity_days || 0} onChange={(e) => handleChange(tier.id, 'validity_days', parseInt(e.target.value) || 0)} disabled={isFree} className={`${fieldClass} disabled:opacity-50`} />
                       </div>
-                      <div>
-                        <label className={labelClass}>Brand Color</label>
-                        <div className="flex gap-2">
-                          <input type="color" value={s.color_code || '#AAAAAA'} onChange={(e) => handleChange(tier.id, 'color_code', e.target.value)} className="h-[42px] w-12 p-1 border border-neutral-200 rounded-xl cursor-pointer bg-white" />
-                          <input type="text" value={s.color_code || ''} onChange={(e) => handleChange(tier.id, 'color_code', e.target.value)} className={`${fieldClass} font-mono uppercase`} />
-                        </div>
-                      </div>
                     </div>
-                    {!isFree && (
-                      <label className="flex items-center gap-2.5 mt-4 cursor-pointer select-none">
-                        <input type="checkbox" checked={!!s.is_popular} onChange={(e) => handleChange(tier.id, 'is_popular', e.target.checked)} className="w-4 h-4 text-primary-600 rounded border-neutral-300 focus:ring-primary-500" />
-                        <span className="text-sm font-medium text-neutral-700">Mark as "Popular / Best Value"</span>
-                      </label>
-                    )}
-                  </div>
-
-                  {/* Features */}
-                  <div>
-                    <div className="flex justify-between items-center mb-3">
-                      <h3 className="font-semibold text-neutral-800 text-sm">Features (App UI)</h3>
-                      <button onClick={() => addFeature(tier.id)} className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 font-semibold bg-primary-50 hover:bg-primary-100 px-2.5 py-1.5 rounded-lg transition-colors">
-                        <Plus size={14} /> Add
-                      </button>
-                    </div>
-                    {(s.features || []).length === 0 ? (
-                      <p className="text-sm text-neutral-400 italic py-2">No features listed.</p>
-                    ) : (
-                      <div className="space-y-2 max-h-40 overflow-y-auto">
-                        {(s.features || []).map((feature, idx) => (
-                          <div key={idx} className="flex items-center gap-2">
-                            <input type="text" value={feature} onChange={(e) => handleFeatureChange(tier.id, idx, e.target.value)} className={`${fieldClass} flex-1`} />
-                            <button onClick={() => removeFeature(tier.id, idx)} className="p-2.5 text-neutral-400 hover:text-error-500 hover:bg-error-50 rounded-xl transition-colors">
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
 

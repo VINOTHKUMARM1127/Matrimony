@@ -3,7 +3,7 @@
  * Animated brand splash with auto-login check
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Animated, StatusBar, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Animated, StatusBar, TouchableOpacity, Image } from 'react-native';
 import { colors } from '../../theme';
 import useAuthStore from '../../store/useAuthStore';
 
@@ -85,7 +85,7 @@ const SplashScreen = ({ navigation }) => {
         ]}
       >
         <View style={styles.logoCircle}>
-          <Text style={styles.logoIcon}>🪷</Text>
+          <Image source={require('../../../assets/icon.png')} style={{ width: 100, height: 100, borderRadius: 50 }} />
         </View>
         <Text style={styles.appName}>Wedring Matrimony</Text>
       </Animated.View>
