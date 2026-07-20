@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Outlet, Navigate, NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, UploadCloud, Settings, LogOut, Heart, ChevronLeft, Menu, SlidersHorizontal, CreditCard, Download } from 'lucide-react';
+import { LayoutDashboard, Users, UploadCloud, Settings, LogOut, Heart, ChevronLeft, Menu, SlidersHorizontal, CreditCard, Download, KeyRound, Eye, EyeOff, Loader2 } from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
+import supabase from '../../api/supabaseClient';
 import * as adminApi from '../../api/adminApi';
 
 const AdminLayout = () => {
@@ -10,6 +11,41 @@ const AdminLayout = () => {
   const [isAdmin, setIsAdmin] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showPwModal, setShowPwModal] = useState(false);
+  const [pwForm, setPwForm] = useState({ current: '', newPw: '', confirm: '' });
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const [pwSuccess, setPwSuccess] = useState('');
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const handleChangePassword = async () => {
+    setPwError('');
+    setPwSuccess('');
+    if (!pwForm.current) return setPwError('Enter your current password.');
+    if (pwForm.newPw.length < 8) return setPwError('New password must be at least 8 characters.');
+    if (pwForm.newPw !== pwForm.confirm) return setPwError('New passwords do not match.');
+    setPwLoading(true);
+    try {
+      // Verify current password by re-signing in
+      const { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: pwForm.current,
+      });
+      if (signInErr) throw new Error('Current password is incorrect.');
+      // Update to new password
+      const { error: updateErr } = await supabase.auth.updateUser({ password: pwForm.newPw });
+      if (updateErr) throw updateErr;
+      setPwSuccess('Password changed successfully!');
+      setPwForm({ current: '', newPw: '', confirm: '' });
+      setTimeout(() => { setShowPwModal(false); setPwSuccess(''); }, 1500);
+    } catch (err) {
+      setPwError(err.message || 'Failed to change password.');
+    } finally {
+      setPwLoading(false);
+    }
+  };
 
   useEffect(() => {
     const verifyAdmin = async () => {
@@ -142,6 +178,16 @@ const AdminLayout = () => {
           )}
         </div>
         <button
+          onClick={() => { setShowPwModal(true); setPwError(''); setPwSuccess(''); setPwForm({ current: '', newPw: '', confirm: '' }); }}
+          title={collapsed ? 'Change Password' : undefined}
+          className={`flex items-center gap-3 px-3 py-2.5 w-full rounded-xl text-sm font-medium text-neutral-400 hover:bg-white/5 hover:text-white transition-colors ${
+            collapsed ? 'justify-center' : ''
+          }`}
+        >
+          <KeyRound size={18} />
+          {!collapsed && <span>Change Password</span>}
+        </button>
+        <button
           onClick={handleLogout}
           title={collapsed ? 'Sign Out' : undefined}
           className={`flex items-center gap-3 px-3 py-2.5 w-full rounded-xl text-sm font-medium text-neutral-400 hover:bg-error-500/10 hover:text-error-400 transition-colors ${
@@ -203,6 +249,111 @@ const AdminLayout = () => {
           </div>
         </main>
       </div>
+
+      {/* Change Password Modal */}
+      {showPwModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-neutral-950/60 backdrop-blur-sm" onClick={() => setShowPwModal(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden animate-fade-in">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-neutral-900 to-neutral-800 px-6 py-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary-500/20 flex items-center justify-center">
+                  <KeyRound size={20} className="text-primary-400" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Change Password</h2>
+                  <p className="text-xs text-neutral-400">{user?.email}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              {pwError && (
+                <div className="bg-error-50 border border-error-200 text-error-700 text-sm rounded-xl px-4 py-3 font-medium">
+                  {pwError}
+                </div>
+              )}
+              {pwSuccess && (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-xl px-4 py-3 font-medium">
+                  {pwSuccess}
+                </div>
+              )}
+
+              {/* Current Password */}
+              <div>
+                <label className="block text-xs font-semibold text-neutral-600 mb-1.5">Current Password</label>
+                <div className="relative">
+                  <input
+                    type={showCurrent ? 'text' : 'password'}
+                    value={pwForm.current}
+                    onChange={(e) => setPwForm({ ...pwForm, current: e.target.value })}
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-2.5 pr-10 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition"
+                    placeholder="Enter current password"
+                  />
+                  <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600">
+                    {showCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* New Password */}
+              <div>
+                <label className="block text-xs font-semibold text-neutral-600 mb-1.5">New Password</label>
+                <div className="relative">
+                  <input
+                    type={showNew ? 'text' : 'password'}
+                    value={pwForm.newPw}
+                    onChange={(e) => setPwForm({ ...pwForm, newPw: e.target.value })}
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-2.5 pr-10 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition"
+                    placeholder="Min 8 characters"
+                  />
+                  <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600">
+                    {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Confirm New Password */}
+              <div>
+                <label className="block text-xs font-semibold text-neutral-600 mb-1.5">Confirm New Password</label>
+                <div className="relative">
+                  <input
+                    type={showConfirm ? 'text' : 'password'}
+                    value={pwForm.confirm}
+                    onChange={(e) => setPwForm({ ...pwForm, confirm: e.target.value })}
+                    className="w-full border border-neutral-200 rounded-xl px-4 py-2.5 pr-10 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition"
+                    placeholder="Re-enter new password"
+                  />
+                  <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600">
+                    {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-neutral-50 border-t border-neutral-100 flex justify-end gap-3">
+              <button
+                onClick={() => setShowPwModal(false)}
+                disabled={pwLoading}
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-neutral-600 bg-white border border-neutral-200 hover:bg-neutral-100 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleChangePassword}
+                disabled={pwLoading}
+                className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 shadow-md shadow-primary-500/20 transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {pwLoading && <Loader2 size={14} className="animate-spin" />}
+                {pwLoading ? 'Updating…' : 'Update Password'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
