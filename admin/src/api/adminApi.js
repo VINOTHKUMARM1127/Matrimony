@@ -50,32 +50,53 @@ export const fetchMasterData = async () => {
   const [
     { data: religions },
     { data: castes },
+    { data: sub_castes },
     { data: education_levels },
     { data: occupations },
     { data: countries },
     { data: states },
     { data: districts },
-    { data: cities }
+    { data: cities },
+    { data: mother_tongues },
+    { data: rasi },
+    { data: nakshatra },
+    { data: lagnam },
+    { data: gothram },
+    { data: membership_plans }
   ] = await Promise.all([
     supabase.from('religions').select('id, name').order('name'),
-    supabase.from('castes').select('id, name').order('name'),
+    supabase.from('castes').select('id, name, religion_id').order('name'),
+    supabase.from('sub_castes').select('id, name, caste_id').order('name'),
     supabase.from('education_levels').select('id, name').order('name'),
     supabase.from('occupations').select('id, name').order('name'),
     supabase.from('countries').select('id, name').order('name'),
-    supabase.from('states').select('id, name').order('name'),
-    supabase.from('districts').select('id, name').order('name'),
-    supabase.from('cities').select('id, name').order('name')
+    supabase.from('states').select('id, name, country_id').order('name'),
+    supabase.from('districts').select('id, name, state_id').order('name'),
+    supabase.from('cities').select('id, name, district_id').order('name'),
+    supabase.from('mother_tongues').select('id, name').order('name'),
+    supabase.from('rasi').select('id, name').order('name'),
+    supabase.from('nakshatra').select('id, name').order('name'),
+    supabase.from('lagnam').select('id, name').order('name'),
+    supabase.from('gothram').select('id, name').order('name'),
+    supabase.from('membership_plans').select('id, tier')
   ]);
   
   return {
     religions: religions || [],
     castes: castes || [],
+    sub_castes: sub_castes || [],
     education_levels: education_levels || [],
     occupations: occupations || [],
     countries: countries || [],
     states: states || [],
     districts: districts || [],
-    cities: cities || []
+    cities: cities || [],
+    mother_tongues: mother_tongues || [],
+    rasi: rasi || [],
+    nakshatra: nakshatra || [],
+    lagnam: lagnam || [],
+    gothram: gothram || [],
+    membership_plans: membership_plans || [],
   };
 };
 
@@ -412,6 +433,80 @@ export const bulkUploadUsers = async (usersList, stopRef, onProgress) => {
     errors: []
   };
 
+  const master = await fetchMasterData();
+
+  const mapUserWithMasterData = (user) => {
+    const mapped = { ...user };
+    
+    const findId = (array, name) => {
+      if (!name || !array) return null;
+      const item = array.find(a => a.name.toLowerCase() === String(name).toLowerCase());
+      return item ? item.id : null;
+    };
+
+    if (user.religion) mapped.religion_id = findId(master.religions, user.religion);
+    if (user.caste) mapped.caste_id = findId(master.castes, user.caste);
+    if (user.subcaste) mapped.sub_caste_id = findId(master.sub_castes, user.subcaste);
+    if (user.highest_qualification) mapped.education_level_id = findId(master.education_levels, user.highest_qualification);
+    if (user.occupation) mapped.occupation_id = findId(master.occupations, user.occupation);
+    if (user.country) mapped.country_id = findId(master.countries, user.country);
+    if (user.state) mapped.state_id = findId(master.states, user.state);
+    if (user.district) mapped.district_id = findId(master.districts, user.district);
+    if (user.city) mapped.city_id = findId(master.cities, user.city);
+    if (user.mother_tongue) mapped.mother_tongue_id = findId(master.mother_tongues, user.mother_tongue);
+    if (user.education_detail) mapped.degree = user.education_detail;
+    if (user.languages_known) mapped.languages = user.languages_known;
+    if (user.number_of_brothers !== undefined) mapped.brothers_count = user.number_of_brothers;
+    if (user.number_of_sisters !== undefined) mapped.sisters_count = user.number_of_sisters;
+
+    if (user.horoscope) {
+      mapped.horoscope = { ...user.horoscope };
+      if (user.horoscope.rasi) {
+        mapped.horoscope.rasi_id = findId(master.rasi, user.horoscope.rasi);
+        mapped.horoscope.rasi_text = user.horoscope.rasi;
+      }
+      if (user.horoscope.nakshatra) {
+        mapped.horoscope.nakshatra_id = findId(master.nakshatra, user.horoscope.nakshatra);
+        mapped.horoscope.nakshatra_text = user.horoscope.nakshatra;
+      }
+      if (user.horoscope.lagnam) {
+        mapped.horoscope.lagnam_id = findId(master.lagnam, user.horoscope.lagnam);
+        mapped.horoscope.lagnam_text = user.horoscope.lagnam;
+      }
+      if (user.horoscope.gothram) {
+        mapped.horoscope.gothram_id = findId(master.gothram, user.horoscope.gothram);
+        mapped.horoscope.gothram_text = user.horoscope.gothram;
+      }
+    }
+
+    if (user.preferences) {
+      mapped.preferences = { ...user.preferences };
+      const p = user.preferences;
+      if (p.pref_religion && p.pref_religion.length > 0) mapped.preferences.religion_id = findId(master.religions, p.pref_religion[0]);
+      if (p.pref_caste && p.pref_caste.length > 0) mapped.preferences.caste_id = findId(master.castes, p.pref_caste[0]);
+      if (p.pref_education && p.pref_education.length > 0) mapped.preferences.education_level_id = findId(master.education_levels, p.pref_education[0]);
+      if (p.pref_occupation && p.pref_occupation.length > 0) mapped.preferences.occupation_id = findId(master.occupations, p.pref_occupation[0]);
+      if (p.pref_location && p.pref_location.length > 0) mapped.preferences.location_city_id = findId(master.cities, p.pref_location[0]);
+      if (p.pref_age_min) mapped.preferences.min_age = p.pref_age_min;
+      if (p.pref_age_max) mapped.preferences.max_age = p.pref_age_max;
+      if (p.pref_height_min) mapped.preferences.min_height_cm = p.pref_height_min;
+      if (p.pref_height_max) mapped.preferences.max_height_cm = p.pref_height_max;
+      if (p.pref_marital_status && p.pref_marital_status.length > 0) mapped.preferences.marital_status = p.pref_marital_status[0];
+      if (p.pref_food_habit && p.pref_food_habit.length > 0) mapped.preferences.food_habit = p.pref_food_habit[0];
+    }
+    
+    // tier to plan_id handling
+    if (user.tier && user.tier.toLowerCase() !== 'free') {
+      const plan = master.membership_plans?.find(p => p.tier.toLowerCase() === user.tier.toLowerCase());
+      mapped.plan_id = plan ? plan.id : null;
+    } else {
+      mapped.plan_id = null;
+    }
+    mapped.photos = user.profile_photos || [];
+
+    return mapped;
+  };
+
   let currentCount = 0;
   const batchSize = 5;
 
@@ -425,8 +520,9 @@ export const bulkUploadUsers = async (usersList, stopRef, onProgress) => {
 
     const batch = usersList.slice(i, i + batchSize);
 
-    await Promise.all(batch.map(async (user) => {
+    await Promise.all(batch.map(async (rawUser) => {
       try {
+        const user = mapUserWithMasterData(rawUser);
         const { data, error: err } = await supabase.functions.invoke('admin-users', {
           body: {
             action: 'create_full_user',
@@ -434,9 +530,9 @@ export const bulkUploadUsers = async (usersList, stopRef, onProgress) => {
             meta: { creating_for: user.creating_for || 'self', mother_tongue_id: user.mother_tongue_id || null },
             profile: buildProfilePayload(user),
             family: buildFamilyPayload(user),
-            horoscope: buildHoroscopePayload(user),
+            horoscope: buildHoroscopePayload(user.horoscope || {}),
             lifestyle: buildLifestylePayload(user),
-            preferences: buildPreferencePayload(user),
+            preferences: buildPreferencePayload(user.preferences || {}),
             plan_id: user.plan_id && user.plan_id !== 'free' ? user.plan_id : null,
             photos: user.photos || []
           }
@@ -448,7 +544,7 @@ export const bulkUploadUsers = async (usersList, stopRef, onProgress) => {
         results.success++;
       } catch (err) {
         results.failed++;
-        results.errors.push(`Failed for ${user.email}: ${err.message}`);
+        results.errors.push(`Failed for ${rawUser.email || 'Unknown'}: ${err.message}`);
       }
     }));
     

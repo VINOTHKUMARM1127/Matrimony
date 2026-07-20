@@ -79,7 +79,9 @@ const BulkUploader = () => {
     stopRef.current = false;
 
     try {
-      const json = JSON.parse(pastedJson);
+      // Clean invisible characters often added by clipboards (BOM, zero-width spaces)
+      const cleanJsonStr = pastedJson.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+      const json = JSON.parse(cleanJsonStr);
       await processJsonArray(json);
     } catch (err) {
       console.error(err);
@@ -91,7 +93,7 @@ const BulkUploader = () => {
 
   const sampleJsonStr = `[
   {
-    "email": "sample@example.com",
+    "email": "arun.demo1@example.com",
     "password": "TempPassword123!",
     "full_name": "Arun Kumar",
     "gender": "male",
@@ -99,42 +101,37 @@ const BulkUploader = () => {
     "phone": "9876543210",
     "height_cm": 175,
     "marital_status": "never_married",
+    "physical_status": "normal",
     "mother_tongue": "Tamil",
     "religion": "Hindu",
     "caste": "Mudaliar",
-    "subcaste": "Arcot",
-    "dosham": "no",
-    "highest_qualification": "B.E. / B.Tech.",
+    "highest_qualification": "Bachelor's Degree",
     "education_detail": "Computer Science",
     "occupation": "Software Engineer",
-    "occupation_detail": "Backend Developer",
-    "company_name": "Tech Corp",
-    "annual_income": "10-15 Lakhs",
-    "family_type": "nuclear",
-    "family_status": "upper_middle_class",
-    "father_occupation": "Government Employee",
-    "mother_occupation": "Homemaker",
-    "number_of_brothers": 1,
-    "brothers_married": 1,
-    "number_of_sisters": 0,
-    "sisters_married": 0,
-    "city": "Chennai",
-    "district": "Chennai",
-    "state": "Tamil Nadu",
+    "is_working": true,
+    "annual_income": 1200000,
     "country": "India",
-    "about_me": "Friendly and family-oriented.",
+    "state": "Tamil Nadu",
+    "district": "Chennai",
+    "city": "Chennai",
+    "about_me": "Friendly and family-oriented, looking for a like-minded partner.",
     "food_habit": "vegetarian",
-    "smoking": "no",
-    "drinking": "no",
     "languages_known": ["Tamil", "English"],
     "interests": ["Cricket", "Music"],
     "hobbies": ["Reading"],
+    "father_name": "Kumar R",
+    "mother_name": "Lakshmi K",
+    "family_type": "nuclear",
+    "family_status": "upper_middle_class",
+    "family_values": "traditional",
+    "number_of_brothers": 1,
+    "number_of_sisters": 0,
     "horoscope": {
+      "rasi": "Mesha (Aries)",
       "nakshatra": "Ashwini",
-      "rasi": "Mesham",
-      "lagnam": "Simmam",
+      "lagnam": "Mesha Lagnam",
       "gothram": "Bharadwaja",
-      "dasa_balance": "Venus 3y"
+      "dosham": "none"
     },
     "preferences": {
       "pref_age_min": 24,
@@ -143,14 +140,14 @@ const BulkUploader = () => {
       "pref_height_max": 170,
       "pref_religion": ["Hindu"],
       "pref_caste": ["Mudaliar"],
-      "pref_education": ["B.E. / B.Tech.", "M.E."],
+      "pref_education": ["Bachelor's Degree"],
       "pref_occupation": ["Software Engineer"],
       "pref_marital_status": ["never_married"],
       "pref_food_habit": ["vegetarian"],
       "pref_location": ["Chennai"]
     },
-    "tier": "gold",
-    "profile_photos": ["https://your-cdn.com/photo1.jpg", "https://your-cdn.com/photo2.jpg"]
+    "tier": "free",
+    "profile_photos": []
   }
 ]`;
 
