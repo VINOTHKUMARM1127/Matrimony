@@ -636,40 +636,71 @@ export const updateAdminSetting = async (key, value) => {
 };
 
 /**
- * Bulk Delete Incomplete Users
+ * Fetch pending/stuck auth users who have NO profile row.
+ * These are users who started signup but never completed it.
+ * Returns { users: [...], total: number }
  */
-export const deleteIncompleteUsers = async () => {
-  const { data: profiles, error } = await supabase
-    .from('profiles')
-    .select('id, full_name, profile_completion_percent');
-    
+export const fetchPendingUsers = async ({ page = 1, perPage = 20, search = '' } = {}) => {
+  const { data, error } = await supabase.rpc('fn_admin_list_pending_users', {
+    p_page: page,
+    p_per_page: perPage,
+    p_search: search || null,
+  });
+
   if (error) throw error;
-  
-  const incompleteProfiles = profiles.filter(u => !u.full_name || u.profile_completion_percent === 0);
 
-  if (!incompleteProfiles || incompleteProfiles.length === 0) return 0;
+  return {
+    users: data?.users || [],
+    total: data?.total || 0,
+  };
+};
 
+/**
+ * Bulk Delete ONLY abandoned signups (auth users with no profile, older than 15 min).
+ * This is the SAFE replacement for the old deleteIncompleteUsers.
+ * Never touches verified users with profiles — they are just new, not broken.
+ */
+export const deleteAbandonedUsers = async () => {
+  // 1. Get IDs of abandoned auth users from the RPC
+  const { data, error } = await supabase.rpc('fn_admin_get_abandoned_user_ids', {
+    p_min_age_minutes: 15,
+  });
+
+  if (error) throw error;
+
+  const ids = data?.ids || [];
+  const total = data?.count || 0;
+
+  if (total === 0) return 0;
+
+  // 2. Delete each one via the edge function (which uses auth.admin.deleteUser)
   let deletedCount = 0;
   const batchSize = 5;
-  
-  for (let i = 0; i < incompleteProfiles.length; i += batchSize) {
-    const batch = incompleteProfiles.slice(i, i + batchSize);
-    await Promise.all(batch.map(async (profile) => {
+
+  for (let i = 0; i < ids.length; i += batchSize) {
+    const batch = ids.slice(i, i + batchSize);
+    await Promise.all(batch.map(async (id) => {
       try {
-        if (supabase) {
-          const { error: adminError } = await supabase.functions.invoke('admin-users', { body: { action: 'delete_user', id: profile.id } });
-          if (!adminError) {
-            deletedCount++;
-          }
+        const { error: adminError } = await supabase.functions.invoke('admin-users', {
+          body: { action: 'delete_user', id },
+        });
+        if (!adminError) {
+          deletedCount++;
         }
       } catch (err) {
-        console.error(`Failed to delete user ${profile.id}:`, err);
+        console.error(`Failed to delete abandoned user ${id}:`, err);
       }
     }));
   }
 
   return deletedCount;
 };
+
+/**
+ * @deprecated Use deleteAbandonedUsers() instead.
+ * Kept as alias for backward compat — now safely only targets abandoned signups.
+ */
+export const deleteIncompleteUsers = deleteAbandonedUsers;
 
 // ============================================================
 // DISTRIBUTION MANAGEMENT

@@ -44,7 +44,7 @@ const Button = ({
     styles[`size_${size}`],
     fullWidth && styles.fullWidth,
     disabled && styles.disabled,
-    gradientColors ? shadows.buttonFloat : shadows.button,
+    (variant === 'outline' || variant === 'ghost') ? null : (gradientColors ? shadows.buttonFloat : shadows.button),
     style,
   ];
 

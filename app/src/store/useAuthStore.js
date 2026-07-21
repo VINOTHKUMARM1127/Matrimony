@@ -17,6 +17,7 @@ const useAuthStore = create((set, get) => ({
   isOtpSent: false,
   error: null,
   pendingVerification: null,
+  unverifiedLoginIdentifier: null,
   authListenerSubscription: null,
 
   // Actions
@@ -26,6 +27,7 @@ const useAuthStore = create((set, get) => ({
   setError: (error) => set({ error }),
   clearError: () => set({ error: null }),
   clearPendingVerification: () => set({ pendingVerification: null }),
+  clearUnverifiedLogin: () => set({ unverifiedLoginIdentifier: null }),
 
   /**
    * Initialize auth state - check for existing session
@@ -140,11 +142,7 @@ const useAuthStore = create((set, get) => ({
       set({ isLoading: false, isOtpSent: true });
       return true;
     } catch (error) {
-      if (__DEV__ || process.env.EXPO_PUBLIC_APP_ENV === 'development') {
-        console.warn('Email OTP Provider error, using development mock bypass:', error.message);
-        set({ isLoading: false, isOtpSent: true, error: null });
-        return true;
-      }
+      console.warn('Email OTP Provider error:', error.message);
       set({ isLoading: false, error: error.message });
       return false;
     }
@@ -164,11 +162,7 @@ const useAuthStore = create((set, get) => ({
       set({ isLoading: false });
       return true;
     } catch (error) {
-      if (__DEV__ || process.env.EXPO_PUBLIC_APP_ENV === 'development') {
-        console.warn('Email Resend Provider error, using development mock bypass:', error.message);
-        set({ isLoading: false, error: null });
-        return true;
-      }
+      console.warn('Email Resend Provider error:', error.message);
       set({ isLoading: false, error: error.message });
       return false;
     }
@@ -341,7 +335,7 @@ const useAuthStore = create((set, get) => ({
    */
   signInWithPassword: async (identifier, password) => {
     try {
-      set({ isLoading: true, error: null, pendingVerification: null });
+      set({ isLoading: true, error: null, pendingVerification: null, unverifiedLoginIdentifier: null });
       const data = await authApi.signInWithPassword(identifier, password);
 
       // Pre-fetch profile prior to resolving auth state
@@ -365,7 +359,7 @@ const useAuthStore = create((set, get) => ({
         set({ 
           isLoading: false, 
           error: 'Email not verified. Please verify your OTP to continue.',
-          pendingVerification: identifier 
+          unverifiedLoginIdentifier: identifier 
         });
         return false;
       }
@@ -411,18 +405,19 @@ const useAuthStore = create((set, get) => ({
   },
 
   /**
-   * Check if user exists by email or phone
+   * Check if user exists by email or phone.
+   * Returns 'email', 'phone', 'both', or 'none'.
    */
   checkUserExists: async (email, phone) => {
     try {
       set({ isLoading: true, error: null });
-      const exists = await authApi.checkUserExists(email, phone);
+      const result = await authApi.checkUserExists(email, phone);
       set({ isLoading: false });
-      return exists;
+      return result; // 'email' | 'phone' | 'both' | 'none'
     } catch (error) {
       console.warn('DB checkUserExists RPC failed:', error.message);
       set({ isLoading: false, error: error.message });
-      return false;
+      return 'none';
     }
   },
 }));

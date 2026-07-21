@@ -77,6 +77,7 @@ const SettingsScreen = ({ navigation }) => {
       title: 'Account',
       rows: [
         { icon: 'edit', tint: colors.primary, title: 'Edit Profile', desc: 'Photos, basic details, family & more', screen: 'EditProfile' },
+        { icon: 'sparkles', tint: colors.gold, title: 'Horoscope Details', desc: 'Manage your astrological info', screen: 'EditProfile', params: { initialTab: 'horoscope' } },
         { icon: 'sliders', tint: colors.secondary, title: 'Partner Preferences', desc: 'Age, religion, location & lifestyle', screen: 'EditPreferences' },
       ],
     },
@@ -89,7 +90,8 @@ const SettingsScreen = ({ navigation }) => {
     {
       title: 'Preferences',
       rows: [
-        { icon: 'privacy', tint: colors.primary, title: 'Privacy & Security', desc: 'Control who can see your profile', screen: 'Privacy' },
+        { icon: 'bell', tint: colors.primary, title: 'Notifications', desc: 'Manage alerts and emails', screen: 'Notifications' },
+        { icon: 'privacy', tint: colors.textSecondary, title: 'Privacy & Security', desc: 'Control who can see your profile', screen: 'Privacy' },
       ],
     },
   ];
@@ -98,7 +100,7 @@ const SettingsScreen = ({ navigation }) => {
     <TouchableOpacity
       style={[styles.row, !isLast && styles.rowDivider]}
       activeOpacity={0.6}
-      onPress={() => row.screen && navigation.navigate(row.screen)}
+      onPress={() => row.screen && navigation.navigate(row.screen, row.params)}
     >
       <View style={[styles.rowIcon, { backgroundColor: row.tint + '15' }]}>
         <Icon name={row.icon} size={20} color={row.tint} />

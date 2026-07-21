@@ -2,6 +2,7 @@
  * Wedring Matrimony — Chat List Screen
  */
 import React, { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, Modal, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -42,6 +43,15 @@ const ChatListScreen = ({ navigation }) => {
       subscription.unsubscribe();
     };
   }, [user?.id, queryClient]);
+
+  // Refresh data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) {
+        refetch();
+      }
+    }, [user?.id, refetch])
+  );
 
   const handleChatPress = useCallback(async (chat) => {
     let chatId = chat.id;

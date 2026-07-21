@@ -2,7 +2,8 @@
  * Wedring Matrimony — Premium Login Screen
  * Vanakkam! Clean, modern login supporting both credentials & OTP flows.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -36,8 +37,8 @@ const LoginScreen = ({ navigation }) => {
     isLoading,
     error,
     clearError,
-    pendingVerification,
-    clearPendingVerification,
+    unverifiedLoginIdentifier,
+    clearUnverifiedLogin,
   } = useAuthStore();
 
   // Sync global error store to local error
@@ -48,27 +49,29 @@ const LoginScreen = ({ navigation }) => {
   }, [error]);
 
   // Handle unverified email redirection
-  useEffect(() => {
-    if (pendingVerification) {
-      const identifier = pendingVerification;
-      clearPendingVerification(); // Clear it so we don't loop
-      
-      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
-      
-      // Automatically trigger a new OTP
-      if (isEmail) {
-        sendEmailOTP(identifier);
-      } else {
-        sendOTP(identifier);
-      }
+  useFocusEffect(
+    useCallback(() => {
+      if (unverifiedLoginIdentifier) {
+        const identifier = unverifiedLoginIdentifier;
+        clearUnverifiedLogin(); // Clear it so we don't loop
+        
+        const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
+        
+        // Automatically trigger a new OTP
+        if (isEmail) {
+          sendEmailOTP(identifier);
+        } else {
+          sendOTP(identifier);
+        }
 
-      navigation.navigate('OTP', {
-        email: isEmail ? identifier : '',
-        phone: isEmail ? '' : identifier,
-        mode: 'signup', // We treat it like signup verification
-      });
-    }
-  }, [pendingVerification]);
+        navigation.navigate('OTP', {
+          email: isEmail ? identifier : '',
+          phone: isEmail ? '' : identifier,
+          mode: 'signup', // We treat it like signup verification
+        });
+      }
+    }, [unverifiedLoginIdentifier])
+  );
 
   const validateInput = () => {
     setLocalError('');

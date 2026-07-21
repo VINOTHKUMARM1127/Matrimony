@@ -12,6 +12,7 @@ import {
 import { colors } from '../../theme';
 import { borderRadius } from '../../theme/spacing';
 import Button from '../../components/common/Button';
+import Icon from '../../components/common/Icon';
 import useAuthStore from '../../store/useAuthStore';
 
 const OTPVerifyScreen = ({ route, navigation }) => {
@@ -21,7 +22,7 @@ const OTPVerifyScreen = ({ route, navigation }) => {
   const isEmail = !!email;
   const identifier = email || phone;
 
-  const [otp, setOtp] = useState(['', '', '', '', '', '', '', '']);
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [timer, setTimer] = useState(300); // 5 minutes
   const [localError, setLocalError] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
@@ -60,12 +61,12 @@ const OTPVerifyScreen = ({ route, navigation }) => {
       // If it looks like a full OTP paste (6 to 8 digits)
       if (cleaned.length >= 6) {
         const newOtp = [...otp];
-        const digits = cleaned.split('').slice(0, 8);
-        for (let i = 0; i < 8; i++) {
+        const digits = cleaned.split('').slice(0, 6);
+        for (let i = 0; i < 6; i++) {
           newOtp[i] = digits[i] || '';
         }
         setOtp(newOtp);
-        const targetIndex = Math.min(digits.length, 7);
+        const targetIndex = Math.min(digits.length, 5);
         inputRefs.current[targetIndex]?.focus();
         return;
       } else {
@@ -74,7 +75,7 @@ const OTPVerifyScreen = ({ route, navigation }) => {
         const newOtp = [...otp];
         newOtp[index] = digit;
         setOtp(newOtp);
-        if (index < 7) {
+        if (index < 5) {
           inputRefs.current[index + 1]?.focus();
         }
         return;
@@ -86,7 +87,7 @@ const OTPVerifyScreen = ({ route, navigation }) => {
     setOtp(newOtp);
 
     // Auto-focus next box
-    if (cleaned && index < 7) {
+    if (cleaned && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
   };
@@ -102,8 +103,8 @@ const OTPVerifyScreen = ({ route, navigation }) => {
     setLocalError('');
     const otpCode = otp.join('');
     
-    if (otpCode.length < 8) {
-      setLocalError('Please enter a valid 8-digit OTP');
+    if (otpCode.length < 6) {
+      setLocalError('Please enter a valid 6-digit OTP');
       return;
     }
 
@@ -170,18 +171,15 @@ const OTPVerifyScreen = ({ route, navigation }) => {
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backText}>← Back</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Icon name="arrowLeft" size={28} color={colors.textPrimary} strokeWidth={2.5} />
         </TouchableOpacity>
       </View>
 
       <View style={styles.content}>
         <Text style={styles.title}>Verify OTP</Text>
         <Text style={styles.subtitle}>
-          Enter the 8-digit code sent to
+          Enter the 6-digit code sent to
           {'\n'}
           <Text style={styles.identifierText}>{identifier}</Text>
           {'\n'}
@@ -202,7 +200,7 @@ const OTPVerifyScreen = ({ route, navigation }) => {
               onChangeText={(text) => handleChange(text, index)}
               onKeyPress={(e) => handleKeyPress(e, index)}
               keyboardType="number-pad"
-              maxLength={index === 0 ? 8 : 1}
+              maxLength={index === 0 ? 6 : 1}
               selectTextOnFocus
             />
           ))}
@@ -288,7 +286,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 48,
     borderWidth: 1.5,
-    borderColor: colors.borderLight,
+    borderColor: colors.border,
     borderRadius: borderRadius.md,
     backgroundColor: colors.surface,
     fontSize: 18,

@@ -34,7 +34,9 @@ export const usePremium = () => {
           label: q.membership_plans?.name,
           status: 'paused',
           duration_months: Math.floor((q.membership_plans?.duration_days || 0) / 30),
-          remaining_days: q.membership_plans?.duration_days
+          remaining_days: q.remaining_days ?? q.membership_plans?.duration_days,
+          remaining_contact_credits: q.remaining_contact_credits || 0,
+          remaining_interest_credits: q.remaining_interest_credits || 0
         })) || []
       };
     },

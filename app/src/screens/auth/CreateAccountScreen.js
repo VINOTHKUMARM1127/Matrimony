@@ -4,12 +4,13 @@
  */
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, StatusBar, ScrollView, Alert, Modal
+  View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, StatusBar, ScrollView, Alert
 } from 'react-native';
 import { SafeAreaView as SafeAreaContextView } from 'react-native-safe-area-context';
 import { colors, shadows, borderRadius } from '../../theme';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
+import Icon from '../../components/common/Icon';
 import OptionSelector from '../../components/registration/OptionSelector';
 import useAuthStore from '../../store/useAuthStore';
 
@@ -40,7 +41,7 @@ const CreateAccountScreen = ({ navigation }) => {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({});
-  const [showOtpModal, setShowOtpModal] = useState(false);
+
   const [isProcessing, setIsProcessing] = useState(false);
 
   const { signUpWithPassword, checkUserExists, clearError } = useAuthStore();
@@ -90,65 +91,43 @@ const CreateAccountScreen = ({ navigation }) => {
       : `+91${enteredPhone.slice(-10)}`;
 
     try {
-      // Verify if the user already exists in the system
-      const userAlreadyExists = await checkUserExists(enteredEmail, formattedPhone);
+      // Check which identifier(s), if any, are already taken
+      const conflict = await checkUserExists(enteredEmail, formattedPhone);
       
-      if (userAlreadyExists) {
-        Alert.alert(
-          'Account Already Exists',
-          'An account with this email or phone number already exists. Please use different details or Sign In.',
-          [
-            { text: 'Use Different Details', style: 'cancel' },
-            { text: 'Go to Login', onPress: () => {
-              setShowOtpModal(false);
-              navigation.navigate('Login');
-            }}
-          ]
-        );
+      if (conflict !== 'none') {
+        const newErrors = {};
+        if (conflict === 'email' || conflict === 'both') {
+          newErrors.email = 'This email is already registered';
+        }
+        if (conflict === 'phone' || conflict === 'both') {
+          newErrors.phone = 'This phone number is already registered';
+        }
+        setErrors(newErrors);
         setIsProcessing(false);
         return;
       }
       
-      // If no duplicate, show the OTP Method Selection Modal
-      setShowOtpModal(true);
+      // No conflicts — proceed with email OTP signup
+      const success = await signUpWithPassword(enteredEmail, password, {
+        profileFor,
+        motherTongue,
+        phone: formattedPhone,
+        full_name: ''
+      });
+
+      if (success) {
+        navigation.navigate('OTP', {
+          mode: 'signup',
+          email: enteredEmail,
+          phone: formattedPhone,
+        });
+      } else {
+        Alert.alert('Error', useAuthStore.getState().error || 'Failed to send Email OTP. Please try again later.');
+      }
     } catch (error) {
       Alert.alert('Error', 'Failed to verify account details. Please try again.');
     } finally {
       setIsProcessing(false);
-    }
-  };
-
-  const handleMobileOtp = () => {
-    Alert.alert('Coming Soon', 'Mobile OTP is currently under process. Please verify via Email OTP.');
-  };
-
-  const handleEmailOtp = async () => {
-    setIsProcessing(true);
-    const enteredEmail = email.trim();
-    const enteredPhone = phone.trim().replace(/[^0-9]/g, '');
-    const formattedPhone = enteredPhone.startsWith('91') && enteredPhone.length > 10 
-      ? `+${enteredPhone}` 
-      : `+91${enteredPhone.slice(-10)}`;
-
-    const success = await signUpWithPassword(enteredEmail, password, {
-      profileFor,
-      motherTongue,
-      phone: formattedPhone,
-      full_name: '' // Empty full_name
-    });
-
-    setIsProcessing(false);
-
-    if (success) {
-      setShowOtpModal(false);
-      // Navigate to OTP verification passing all registration details
-      navigation.navigate('OTP', {
-        mode: 'signup',
-        email: enteredEmail,
-        phone: formattedPhone,
-      });
-    } else {
-      Alert.alert('Error', useAuthStore.getState().error || 'Failed to send Email OTP. Please try again later.');
     }
   };
 
@@ -159,7 +138,7 @@ const CreateAccountScreen = ({ navigation }) => {
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           
           <TouchableOpacity style={styles.backButton} onPress={() => step === 2 ? setStep(1) : navigation.goBack()}>
-            <Text style={styles.backText}>← Back</Text>
+            <Icon name="arrowLeft" size={28} color={colors.textPrimary} strokeWidth={2.5} />
           </TouchableOpacity>
 
           <View style={styles.header}>
@@ -252,51 +231,7 @@ const CreateAccountScreen = ({ navigation }) => {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* OTP Method Selection Modal */}
-      <Modal
-        visible={showOtpModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowOtpModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Choose Verification Method</Text>
-              <TouchableOpacity onPress={() => setShowOtpModal(false)} style={styles.closeBtn}>
-                <Text style={{ fontSize: 20, color: colors.textSecondary }}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.modalSubtitle}>Where should we send your verification OTP?</Text>
-            
-            <View style={styles.methodButtons}>
-              <TouchableOpacity style={styles.methodCard} onPress={handleEmailOtp} disabled={isProcessing}>
-                <View style={[styles.iconBox, { backgroundColor: colors.primarySurface }]}>
-                  <Text style={{ fontSize: 20 }}>✉</Text>
-                </View>
-                <View style={styles.methodTextContainer}>
-                  <Text style={styles.methodTitle}>Email OTP</Text>
-                  <Text style={styles.methodDesc}>Send code to {email || 'your email'}</Text>
-                </View>
-              </TouchableOpacity>
 
-              <TouchableOpacity style={styles.methodCard} onPress={handleMobileOtp} disabled={isProcessing}>
-                <View style={[styles.iconBox, { backgroundColor: '#f3f4f6' }]}>
-                  <Text style={{ fontSize: 20 }}>📱</Text>
-                </View>
-                <View style={styles.methodTextContainer}>
-                  <Text style={[styles.methodTitle, { color: '#6b7280' }]}>Mobile OTP</Text>
-                  <Text style={styles.methodDesc}>Currently under process</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            {isProcessing && (
-              <Text style={styles.processingText}>Processing...</Text>
-            )}
-          </View>
-        </View>
-      </Modal>
 
     </SafeAreaContextView>
   );
@@ -319,80 +254,7 @@ const styles = StyleSheet.create({
   signinText: { fontSize: 14, color: colors.textSecondary },
   signinLink: { fontSize: 14, color: colors.primary, fontWeight: '700' },
 
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  modalContainer: {
-    backgroundColor: '#fff',
-    borderRadius: borderRadius.lg,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    ...shadows.card,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  closeBtn: {
-    padding: 4,
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: 24,
-  },
-  methodButtons: {
-    gap: 16,
-  },
-  methodCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    backgroundColor: '#fff',
-  },
-  iconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  methodTextContainer: {
-    flex: 1,
-  },
-  methodTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: 4,
-  },
-  methodDesc: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  processingText: {
-    textAlign: 'center',
-    marginTop: 16,
-    color: colors.primary,
-    fontWeight: '600',
-  },
+
 });
 
 export default CreateAccountScreen;

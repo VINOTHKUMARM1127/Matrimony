@@ -186,52 +186,52 @@ export const ACTIVITY_TYPES = {
 
 // Tamil Translations for Horoscope
 export const NAKSHATRA_TAMIL = {
-  'Ashwini': '???????',
-  'Bharani': '????',
-  'Krittika': '??????????',
-  'Rohini': '??????',
-  'Mrigashira': '????????????',
-  'Ardra': '??????????',
-  'Punarvasu': '??????????',
-  'Pushya': '?????',
-  'Ashlesha': '????????',
-  'Magha': '????',
-  'Purva Phalguni': '?????',
-  'Uttara Phalguni': '????????',
-  'Hasta': '??????',
-  'Chitra': '????????',
-  'Swati': '??????',
-  'Vishakha': '???????',
-  'Anuradha': '??????',
-  'Jyeshtha': '??????',
-  'Mula': '?????',
-  'Purva Ashadha': '???????',
-  'Uttara Ashadha': '??????????',
-  'Shravana': '?????????',
-  'Dhanishta': '????????',
-  'Shatabhisha': '?????',
-  'Purva Bhadrapada': '?????????',
-  'Uttara Bhadrapada': '????????????',
-  'Revati': '?????'
+  'Ashwini': 'அஸ்வினி (Ashwini)',
+  'Bharani': 'பரணி (Bharani)',
+  'Krittika': 'கார்த்திகை (Krittika)',
+  'Rohini': 'ரோகிணி (Rohini)',
+  'Mrigashira': 'மிருகசீரிஷம் (Mrigashira)',
+  'Ardra': 'திருவாதிரை (Ardra)',
+  'Punarvasu': 'புனர்பூசம் (Punarvasu)',
+  'Pushya': 'பூசம் (Pushya)',
+  'Ashlesha': 'ஆயில்யம் (Ashlesha)',
+  'Magha': 'மகம் (Magha)',
+  'Purva Phalguni': 'பூரம் (Purva Phalguni)',
+  'Uttara Phalguni': 'உத்திரம் (Uttara Phalguni)',
+  'Hasta': 'அஸ்தம் (Hasta)',
+  'Chitra': 'சித்திரை (Chitra)',
+  'Swati': 'சுவாதி (Swati)',
+  'Vishakha': 'விசாகம் (Vishakha)',
+  'Anuradha': 'அனுஷம் (Anuradha)',
+  'Jyeshtha': 'கேட்டை (Jyeshtha)',
+  'Mula': 'மூலம் (Mula)',
+  'Purva Ashadha': 'பூராடம் (Purva Ashadha)',
+  'Uttara Ashadha': 'உத்திராடம் (Uttara Ashadha)',
+  'Shravana': 'திருவோணம் (Shravana)',
+  'Dhanishta': 'அவிட்டம் (Dhanishta)',
+  'Shatabhisha': 'சதயம் (Shatabhisha)',
+  'Purva Bhadrapada': 'பூரட்டாதி (Purva Bhadrapada)',
+  'Uttara Bhadrapada': 'உத்திரட்டாதி (Uttara Bhadrapada)',
+  'Revati': 'ரேவதி (Revati)'
 };
 
 export const RASI_TAMIL = {
-  'Mesha (Aries)': '????? (Aries)',
-  'Vrishabha (Taurus)': '?????? (Taurus)',
-  'Mithuna (Gemini)': '??????? (Gemini)',
-  'Karka (Cancer)': '????? (Cancer)',
-  'Simha (Leo)': '??????? (Leo)',
-  'Kanya (Virgo)': '????? (Virgo)',
-  'Tula (Libra)': '?????? (Libra)',
-  'Vrischika (Scorpio)': '??????????? (Scorpio)',
-  'Dhanu (Sagittarius)': '????? (Sagittarius)',
-  'Makara (Capricorn)': '????? (Capricorn)',
-  'Kumbha (Aquarius)': '??????? (Aquarius)',
-  'Meena (Pisces)': '????? (Pisces)'
+  'Mesha (Aries)': 'மேஷம் (Aries)',
+  'Vrishabha (Taurus)': 'ரிஷபம் (Taurus)',
+  'Mithuna (Gemini)': 'மிதுனம் (Gemini)',
+  'Karka (Cancer)': 'கடகம் (Cancer)',
+  'Simha (Leo)': 'சிம்மம் (Leo)',
+  'Kanya (Virgo)': 'கன்னி (Virgo)',
+  'Tula (Libra)': 'துலாம் (Libra)',
+  'Vrischika (Scorpio)': 'விருச்சிகம் (Scorpio)',
+  'Dhanu (Sagittarius)': 'தனுசு (Sagittarius)',
+  'Makara (Capricorn)': 'மகரம் (Capricorn)',
+  'Kumbha (Aquarius)': 'கும்பம் (Aquarius)',
+  'Meena (Pisces)': 'மீனம் (Pisces)'
 };
 
 export const DOSHAM_TAMIL = {
-  'none': '?????',
-  'chevvai': '??? (???????? ?????)'
+  'none': 'இல்லை (No)',
+  'chevvai': 'ஆம் (Chevvai)'
 };
 

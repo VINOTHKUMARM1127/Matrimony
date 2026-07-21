@@ -155,7 +155,7 @@ const HomeScreen = ({ navigation }) => {
   const renderHeader = () => (
     <View style={styles.headerContainer}>
       <View style={styles.headerLeft}>
-        <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+        <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
           <Avatar source={primaryPhoto} name={profile?.full_name || ''} size={48} fallbackText={!primaryPhoto ? "No Photo" : ""} />
         </TouchableOpacity>
         <View style={styles.headerTextBlock}>

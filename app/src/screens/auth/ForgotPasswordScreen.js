@@ -17,6 +17,7 @@ import { SafeAreaView as SafeAreaContextView } from 'react-native-safe-area-cont
 import { colors, borderRadius, shadows } from '../../theme';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
+import Icon from '../../components/common/Icon';
 import useAuthStore from '../../store/useAuthStore';
 
 const ForgotPasswordScreen = ({ navigation }) => {
@@ -77,11 +78,8 @@ const ForgotPasswordScreen = ({ navigation }) => {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         {/* Back */}
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backText}>← Back</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Icon name="arrowLeft" size={28} color={colors.textPrimary} strokeWidth={2.5} />
         </TouchableOpacity>
 
         <View style={styles.content}>

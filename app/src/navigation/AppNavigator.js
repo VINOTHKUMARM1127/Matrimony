@@ -32,7 +32,6 @@ import PartnerPreferenceScreen from '../screens/registration/PartnerPreferenceSc
 
 // Main Screens
 import HomeScreen from '../screens/main/HomeScreen';
-import ProfileScreen from '../screens/main/ProfileScreen';
 import NotificationsScreen from '../screens/main/NotificationsScreen';
 import MatchesScreen from '../screens/main/MatchesScreen';
 import InterestsScreen from '../screens/main/InterestsScreen';
@@ -226,7 +225,6 @@ const AppNavigator = () => {
         ) : (
           <>
             <Stack.Screen name="Main" component={MainTabNavigator} />
-            <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="UserProfile" component={UserProfileScreen} />
             <Stack.Screen name="Premium" component={PremiumScreen} />
             <Stack.Screen name="UpgradesTab" component={PremiumScreen} />

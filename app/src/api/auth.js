@@ -181,6 +181,6 @@ export const checkUserExists = async (email, phone) => {
     p_phone: phone || '',
   });
   if (error) throw error;
-  return !!data;
+  return data || 'none'; // returns 'email', 'phone', 'both', or 'none'
 };
 
