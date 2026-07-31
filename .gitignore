@@ -43,3 +43,6 @@ Thumbs.db
 *.swp
 *.swo
 .claude/
+
+# Local debug/admin scripts — never commit or ship these
+scripts/local-only/

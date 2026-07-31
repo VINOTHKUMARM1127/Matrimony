@@ -1,7 +1,7 @@
 /**
  * Wedring Matrimony — Chat List Screen
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, Modal, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,8 +15,17 @@ import EmptyState from '../../components/common/EmptyState';
 import Icon from '../../components/common/Icon';
 import { ChatItemSkeleton } from '../../components/common/SkeletonLoader';
 import useAuthStore from '../../store/useAuthStore';
-import { getChatList, subscribeToChatListUpdates, createChat } from '../../api/chat';
+import {
+  getChatList,
+  subscribeToChatListUpdates,
+  createChat,
+  getBatchUserPresence,
+  subscribeToAllUserPresence,
+  getUnreadCountPerChat,
+} from '../../api/chat';
 import { getPrimaryPhotoUrl } from '../../api/profiles';
+
+const PRESENCE_FRESHNESS_MS = 30000; // 30 seconds — same threshold as ChatScreen
 
 const ChatListScreen = ({ navigation }) => {
   const user = useAuthStore((s) => s.user);
@@ -24,14 +33,91 @@ const ChatListScreen = ({ navigation }) => {
   const [creatingChatId, setCreatingChatId] = useState(null);
   const [selectedAvatar, setSelectedAvatar] = useState(null);
 
-  const { data: chats, isLoading, refetch } = useQuery({
+  // ─── Presence state ───
+  const [presenceMap, setPresenceMap] = useState({}); // { [userId]: last_active_at }
+  const presenceMapRef = useRef(presenceMap);
+  presenceMapRef.current = presenceMap;
+
+  // ─── Unread counts ───
+  const [unreadMap, setUnreadMap] = useState({}); // { [chatId]: number }
+
+  const { data: chats, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['chatList', user?.id],
     queryFn: () => getChatList(user?.id),
     enabled: !!user?.id,
     staleTime: 60 * 1000,
   });
 
-  // Realtime Sync Subscription
+  // ─── Fetch unread counts alongside chat list ───
+  useEffect(() => {
+    if (!user?.id) return;
+    getUnreadCountPerChat(user.id).then(setUnreadMap).catch(() => {});
+  }, [user?.id, chats]); // Re-fetch when chats data changes (new message arrived)
+
+  // ─── Batch-fetch presence for all chat partners ───
+  useEffect(() => {
+    if (!chats || chats.length === 0) return;
+    const otherUserIds = chats
+      .map((c) => c.otherUser?.id)
+      .filter(Boolean);
+    if (otherUserIds.length === 0) return;
+
+    getBatchUserPresence(otherUserIds).then((rows) => {
+      const map = {};
+      for (const row of rows) {
+        map[row.user_id] = row.last_active_at;
+      }
+      setPresenceMap(map);
+    });
+  }, [chats]);
+
+  // ─── Subscribe to live presence changes (unfiltered — RLS handles scoping) ───
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const sub = subscribeToAllUserPresence((payload) => {
+      if (payload.eventType === 'DELETE') {
+        const deletedUserId = payload.old?.user_id;
+        if (deletedUserId) {
+          setPresenceMap((prev) => {
+            const next = { ...prev };
+            delete next[deletedUserId];
+            return next;
+          });
+        }
+      } else if (payload.new) {
+        setPresenceMap((prev) => ({
+          ...prev,
+          [payload.new.user_id]: payload.new.last_active_at,
+        }));
+      }
+    });
+
+    return () => {
+      if (sub) sub.unsubscribe();
+    };
+  }, [user?.id]);
+
+  // ─── Staleness interval: flip stale entries to offline automatically ───
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const current = presenceMapRef.current;
+      let changed = false;
+      const next = { ...current };
+      for (const [userId, lastActive] of Object.entries(next)) {
+        if (now - new Date(lastActive).getTime() >= PRESENCE_FRESHNESS_MS) {
+          delete next[userId];
+          changed = true;
+        }
+      }
+      if (changed) setPresenceMap(next);
+    }, 10000); // Check every 10s — same cadence as ChatScreen
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // ─── Realtime Sync Subscription ───
   useEffect(() => {
     if (!user?.id) return;
 
@@ -44,7 +130,7 @@ const ChatListScreen = ({ navigation }) => {
     };
   }, [user?.id, queryClient]);
 
-  // Refresh data when screen comes into focus
+  // ─── Refresh data when screen comes into focus ───
   useFocusEffect(
     useCallback(() => {
       if (user?.id) {
@@ -93,10 +179,19 @@ const ChatListScreen = ({ navigation }) => {
     return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   }, []);
 
+  const isUserOnline = useCallback((userId) => {
+    const lastActive = presenceMap[userId];
+    if (!lastActive) return false;
+    return Date.now() - new Date(lastActive).getTime() < PRESENCE_FRESHNESS_MS;
+  }, [presenceMap]);
+
   const renderChatItem = useCallback(({ item }) => {
     const { otherUser } = item;
     const photo = getPrimaryPhotoUrl(otherUser);
     const isCreating = creatingChatId === item.interest_id;
+    const online = isUserOnline(otherUser?.id);
+    const unreadCount = item.id ? (unreadMap[item.id] || 0) : 0;
+    const hasUnread = unreadCount > 0;
 
     return (
       <TouchableOpacity
@@ -111,13 +206,13 @@ const ChatListScreen = ({ navigation }) => {
             name={otherUser?.full_name || ''}
             size="medium"
             showOnline
-            isOnline={false}
+            isOnline={online}
           />
         </TouchableOpacity>
         <View style={styles.chatInfo}>
           <View style={styles.chatHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-              <Text style={styles.chatName} numberOfLines={1}>
+              <Text style={[styles.chatName, hasUnread && styles.chatNameUnread]} numberOfLines={1}>
                 {otherUser?.full_name || 'User'}
               </Text>
               {item.isBlocked && (
@@ -126,9 +221,27 @@ const ChatListScreen = ({ navigation }) => {
                 </View>
               )}
             </View>
-            <Text style={styles.chatTime}>{formatTime(item.last_message_at)}</Text>
+            <View style={styles.chatHeaderRight}>
+              <Text style={[styles.chatTime, hasUnread && styles.chatTimeUnread]}>
+                {formatTime(item.last_message_at)}
+              </Text>
+              {hasUnread && (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadBadgeText}>
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
-          <Text style={[styles.chatMessage, item.isBlocked && { color: colors.error }]} numberOfLines={1}>
+          <Text
+            style={[
+              styles.chatMessage,
+              item.isBlocked && { color: colors.error },
+              hasUnread && styles.chatMessageUnread,
+            ]}
+            numberOfLines={1}
+          >
             {item.isBlocked 
               ? (item.blockedByMe ? 'You have blocked this user.' : 'You have been blocked.')
               : (item.last_message_text || 'Start a conversation')}
@@ -139,7 +252,7 @@ const ChatListScreen = ({ navigation }) => {
         )}
       </TouchableOpacity>
     );
-  }, [handleChatPress, formatTime, creatingChatId]);
+  }, [handleChatPress, formatTime, creatingChatId, presenceMap, unreadMap, isUserOnline]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -167,7 +280,7 @@ const ChatListScreen = ({ navigation }) => {
           )
         }
         refreshControl={
-          <RefreshControl refreshing={false} onRefresh={refetch} tintColor={colors.primary} colors={[colors.primary]} />
+          <RefreshControl refreshing={isFetching && !isLoading} onRefresh={refetch} tintColor={colors.primary} colors={[colors.primary]} />
         }
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         showsVerticalScrollIndicator={false}
@@ -227,10 +340,35 @@ const styles = StyleSheet.create({
   chatHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
+  chatHeaderRight: {
+    alignItems: 'flex-end',
+    marginLeft: 8,
+  },
   chatName: { fontSize: 15.5, fontWeight: '700', color: colors.textPrimary, flexShrink: 1 },
-  chatTime: { fontSize: 12, color: colors.textMuted, marginLeft: 8, fontWeight: '500' },
+  chatNameUnread: { fontWeight: '800' },
+  chatTime: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
+  chatTimeUnread: { color: colors.primary, fontWeight: '600' },
   chatMessage: { fontSize: 13.5, color: colors.textSecondary, marginTop: 3 },
+  chatMessageUnread: { color: colors.textPrimary, fontWeight: '600' },
   separator: { height: 1, backgroundColor: colors.borderLight, marginLeft: 78 },
+
+  // Unread badge
+  unreadBadge: {
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  unreadBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
   blockedBadge: {
     backgroundColor: colors.errorLight,
     paddingHorizontal: 6,

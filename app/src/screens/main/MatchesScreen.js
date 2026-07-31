@@ -18,7 +18,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeInDown, FadeOutUp, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOutUp, LinearTransition, Easing } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -40,6 +40,21 @@ import SuccessOverlay from '../../components/common/SuccessOverlay';
 import supabase from '../../api/supabaseClient';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Height reserved at the bottom of the card for the action-button overlay
+// (button height + its own bottom padding). The info-text block's bottom
+// padding is derived from this so the two never overlap.
+const ACTION_BAR_HEIGHT = 64;
+const ACTION_BAR_GAP = 16;
+
+// Fixed, predictable timings for the card dismiss animation. Using a fixed
+// duration (instead of spring physics) means the animation always settles at
+// exactly this time, so the list can reliably reclaim the vacated space and
+// slide the remaining cards up right when the fade visually finishes —
+// instead of waiting on unpredictable spring "settle" time.
+const EXIT_DURATION = 450;
+const REFLOW_DURATION = 450;
+const EXIT_EASING = Easing.out(Easing.cubic);
 
 // ── Pure helpers (module scope — no per-render allocation) ──
 const getPrimaryPhotoFor = (prof) => {
@@ -77,8 +92,22 @@ const NewTodayDivider = React.memo(() => (
 // change — list-level updates (pagination, footer, focus refetch) no longer
 // re-render every mounted card, which is what triggered the VirtualizedList
 // "slow to update" warning.
+//
+// FIX #1: The photo/info area and the action buttons are separate touch targets.
+//         Buttons are no longer nested inside the card's TouchableOpacity, so
+//         tapping a button no longer triggers the card's highlight flash.
+// FIX #5: The info-text block reserves ACTION_BAR_HEIGHT + gap at the bottom
+//         so the button overlay never covers the last line(s) of text.
+//
+// Exit/reflow animation: Reanimated's `exiting` and `layout` props do all the
+// work here. When a card is removed from the FlatList's data array in one
+// step, Reanimated automatically keeps its last rendered frame on screen,
+// plays `exiting` on it, and only unmounts it for real once that finishes —
+// no manual "snapshot and keep it in the array" bookkeeping needed, and none
+// should be added back, since that's what caused the previous stuck/frozen
+// dismiss bug.
 const ProfileMatchCard = React.memo(({
-  item, index, isPremium, onPress, onInterested, onDecline, onPremiumAlert, cardHeight
+  item, index, isPremium, onPress, onInterested, onDecline, onPremiumAlert, cardHeight,
 }) => {
   const age = calculateAge(item.dob);
   const photoUri = getPrimaryPhotoFor(item);
@@ -89,13 +118,14 @@ const ProfileMatchCard = React.memo(({
 
   return (
     <Animated.View
-      layout={LinearTransition.springify().damping(18).mass(0.9)}
+      layout={LinearTransition.duration(REFLOW_DURATION).easing(EXIT_EASING)}
       entering={FadeInDown.springify().damping(18).mass(0.9).delay(enterDelay)}
-      exiting={FadeOutUp.duration(200)}
+      exiting={FadeOutUp.duration(EXIT_DURATION).easing(EXIT_EASING)}
       style={[styles.cardWrapper, { height: cardHeight }]}
     >
+      {/* FIX #1: Photo / info area — tappable to open profile */}
       <TouchableOpacity
-        style={styles.card}
+        style={styles.cardTappableArea}
         activeOpacity={0.95}
         onPress={() => onPress(item)}
       >
@@ -117,16 +147,17 @@ const ProfileMatchCard = React.memo(({
                 <Text style={styles.noPhotoText}>No Photo</Text>
               </View>
             )}
-            
+
             <View style={styles.compatBubble}>
               <Text style={styles.compatBubbleText}>{score}%</Text>
             </View>
           </View>
 
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0.9)']}
+            colors={['transparent', 'rgba(0,0,0,0.72)', 'rgba(0,0,0,0.92)']}
             locations={[0, 0.45, 1]}
             style={styles.infoContainer}
+            pointerEvents="none"
           >
             <View style={styles.infoHeader}>
               <Text style={styles.nameText} numberOfLines={1}>
@@ -136,47 +167,58 @@ const ProfileMatchCard = React.memo(({
                 <Ionicons name="checkmark-circle" size={16} color="#4ade80" style={{ marginLeft: 4 }} />
               )}
             </View>
-            
+
             <Text style={styles.basicInfoText} numberOfLines={1}>
               {age} yrs • {item.height_cm ? `${item.height_cm} cm` : 'Height N/A'}
             </Text>
-            
-            <Text style={styles.detailsText} numberOfLines={1}>
-              {item.occupation || 'Professional'}
-            </Text>
-            
-            <Text style={styles.detailsText} numberOfLines={1}>
-              {item.highest_qualification || 'Graduate'}
-            </Text>
-            
-            <Text style={styles.locationText} numberOfLines={1}>
-              <Ionicons name="location-outline" size={12} color="rgba(255,255,255,0.7)" /> {item.city}{item.district ? `, ${item.district}` : ''}
-            </Text>
 
-            <View style={styles.spacer} />
+            <View style={styles.detailsRow}>
+              <Ionicons name="briefcase-outline" size={12} color="rgba(255,255,255,0.65)" />
+              <Text style={styles.detailsText} numberOfLines={1}>
+                {item.occupation || 'Professional'}
+              </Text>
+            </View>
 
-            <View style={styles.actionsRow}>
-              <TouchableOpacity
-                style={styles.actionBtnSkip}
-                onPress={() => onDecline(item)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons name="close" size={18} color="rgba(255,255,255,0.85)" />
-                <Text style={styles.actionBtnSkipText}>Not Interested</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.actionBtnInterest}
-                onPress={() => onInterested(item)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons name="heart" size={18} color="#FFF" />
-                <Text style={styles.actionBtnInterestText}>Send Interest</Text>
-              </TouchableOpacity>
+            <View style={styles.detailsRow}>
+              <Ionicons name="school-outline" size={12} color="rgba(255,255,255,0.65)" />
+              <Text style={styles.detailsText} numberOfLines={1}>
+                {item.highest_qualification || 'Graduate'}
+              </Text>
+            </View>
+
+            <View style={styles.detailsRow}>
+              <Ionicons name="location-outline" size={12} color="rgba(255,255,255,0.65)" />
+              <Text style={styles.detailsText} numberOfLines={1}>
+                {item.city}{item.district ? `, ${item.district}` : ''}
+              </Text>
             </View>
           </LinearGradient>
         </View>
       </TouchableOpacity>
+
+      {/* FIX #1: Action buttons — independent touch targets, NOT nested inside card's touchable.
+          FIX #5: Sits in its own reserved strip, no longer overlapping the text above it. */}
+      <View style={styles.actionsRowOverlay}>
+        <TouchableOpacity
+          style={styles.actionBtnSkip}
+          activeOpacity={0.7}
+          onPress={() => onDecline(item, index)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="close" size={18} color="rgba(255,255,255,0.9)" />
+          <Text style={styles.actionBtnSkipText}>Not Interested</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionBtnInterest}
+          activeOpacity={0.7}
+          onPress={() => onInterested(item, index)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="heart" size={18} color="#FFF" />
+          <Text style={styles.actionBtnInterestText}>Send Interest</Text>
+        </TouchableOpacity>
+      </View>
     </Animated.View>
   );
 }, (prev, next) => (
@@ -244,6 +286,22 @@ const MatchesScreen = ({ navigation }) => {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Prefetched once per screen visit, not awaited inside the tap handler —
+  // so tapping "Send Interest" reacts instantly with no network wait,
+  // even on the very first tap.
+  const { data: hasSavedPhoto = false } = useQuery({
+    queryKey: ['hasProfilePhoto', user?.id],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('profile_photos')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+      return (count || 0) > 0;
+    },
+    enabled: !!user?.id,
+    staleTime: 5 * 60 * 1000,
+  });
+
 
 
   const rawData = activeTab === 'daily' ? (dailyMatches || [])
@@ -282,18 +340,11 @@ const MatchesScreen = ({ navigation }) => {
     );
   }, [navigation]);
 
-  const handleDecline = useCallback(async (targetProfile) => {
-    if (!targetProfile || !user?.id) {
-      Alert.alert('Error', 'Missing user profile data.');
-      return;
-    }
-
-    // Snapshot previous caches
-    const prevAllMatches = queryClient.getQueryData(['allMatches', user?.id]);
-    const prevDailyUpdates = queryClient.getQueryData(['dailyUpdates', user?.id]);
-    const prevPassed = queryClient.getQueryData(['passedInterests', user?.id]);
-
-    // Optimistically remove from matches lists
+  // Remove the profile from caches. This one clean removal is all Reanimated
+  // needs — it detects the item leaving the array, keeps its last frame on
+  // screen, and plays the card's own `exiting` animation automatically, while
+  // `layout` on the remaining cards slides them up to close the gap.
+  const removeFromCaches = useCallback((targetProfile) => {
     const filterPage = (old) => {
       if (!old || !old.pages) return old;
       return {
@@ -303,6 +354,20 @@ const MatchesScreen = ({ navigation }) => {
     };
     queryClient.setQueryData(['allMatches', user?.id], filterPage);
     queryClient.setQueryData(['dailyUpdates', user?.id], filterPage);
+  }, [user?.id, queryClient]);
+
+  const handleDecline = useCallback(async (targetProfile, index) => {
+    if (!targetProfile || !user?.id) {
+      Alert.alert('Error', 'Missing user profile data.');
+      return;
+    }
+
+    // Snapshot previous caches (for rollback on error)
+    const prevAllMatches = queryClient.getQueryData(['allMatches', user?.id]);
+    const prevDailyUpdates = queryClient.getQueryData(['dailyUpdates', user?.id]);
+    const prevPassed = queryClient.getQueryData(['passedInterests', user?.id]);
+
+    removeFromCaches(targetProfile);
 
     // Optimistically add to passed interests
     queryClient.setQueryData(['passedInterests', user?.id], (old) => {
@@ -318,33 +383,26 @@ const MatchesScreen = ({ navigation }) => {
 
     try {
       await passProfile(user.id, targetProfile.id);
-      // No need to invalidate matches cache immediately as optimistic cache removal works perfectly.
       queryClient.invalidateQueries({ queryKey: ['passedInterests', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['userInteractions', user?.id] });
     } catch (err) {
-      // Revert on error
+      // Revert: restoring the caches brings the card back and it
+      // plays its entering animation naturally.
       queryClient.setQueryData(['allMatches', user?.id], prevAllMatches);
       queryClient.setQueryData(['dailyUpdates', user?.id], prevDailyUpdates);
       queryClient.setQueryData(['passedInterests', user?.id], prevPassed);
       console.warn('Failed to pass profile:', err);
       Alert.alert('Error', 'Failed to pass profile. Please try again.');
     }
-  }, [user?.id, queryClient]);
+  }, [user?.id, queryClient, removeFromCaches]);
 
-  const handleInterested = useCallback(async (targetProfile) => {
+  const handleInterested = useCallback(async (targetProfile, index) => {
     if (!targetProfile || !user?.id) {
       Alert.alert('Error', 'Missing user profile data.');
       return;
     }
 
-    let hasPhoto = (profile?.photos?.length || 0) > 0 || (myPhotos?.length || 0) > 0;
-    if (!hasPhoto) {
-      const { count } = await supabase
-        .from('profile_photos')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-      hasPhoto = (count || 0) > 0;
-    }
+    const hasPhoto = (profile?.photos?.length || 0) > 0 || (myPhotos?.length || 0) > 0 || hasSavedPhoto;
 
     if (!hasPhoto) {
       Alert.alert(
@@ -363,16 +421,7 @@ const MatchesScreen = ({ navigation }) => {
     const prevDailyUpdates = queryClient.getQueryData(['dailyUpdates', user?.id]);
     const prevSent = queryClient.getQueryData(['interestsSent', user?.id]);
 
-    // Optimistically remove from matches lists
-    const filterPage = (old) => {
-      if (!old || !old.pages) return old;
-      return {
-        ...old,
-        pages: old.pages.map(page => page.filter(p => p.id !== targetProfile.id))
-      };
-    };
-    queryClient.setQueryData(['allMatches', user?.id], filterPage);
-    queryClient.setQueryData(['dailyUpdates', user?.id], filterPage);
+    removeFromCaches(targetProfile);
 
     // Optimistically add to sent interests
     queryClient.setQueryData(['interestsSent', user?.id], (old) => {
@@ -397,8 +446,10 @@ const MatchesScreen = ({ navigation }) => {
       setInterestSent(true);
     } catch (err) {
       console.warn('Failed to send interest:', err);
+      // Revert: restoring the caches brings the card back and it
+      // plays its entering animation naturally.
+
       if (err.message?.includes('QUOTA_EXCEEDED') || err.message?.includes('Insufficient interest credits')) {
-        // Revert on error
         queryClient.setQueryData(['allMatches', user?.id], prevAllMatches);
         queryClient.setQueryData(['dailyUpdates', user?.id], prevDailyUpdates);
         queryClient.setQueryData(['interestsSent', user?.id], prevSent);
@@ -417,20 +468,22 @@ const MatchesScreen = ({ navigation }) => {
       ) {
         // Already sent! Keep the optimistic UI (mark as sent) and skip error popup
       } else {
-        // Revert on error
         queryClient.setQueryData(['allMatches', user?.id], prevAllMatches);
         queryClient.setQueryData(['dailyUpdates', user?.id], prevDailyUpdates);
         queryClient.setQueryData(['interestsSent', user?.id], prevSent);
         Alert.alert('Error', 'Failed to send interest. Please try again.');
       }
     }
-  }, [profile?.photos, myPhotos, user?.id, queryClient, navigation]);
+  }, [profile?.photos, myPhotos, hasSavedPhoto, user?.id, queryClient, navigation, removeFromCaches]);
 
   const handleProfilePress = useCallback((prof) => {
     navigation.navigate('UserProfile', { profileId: prof.id });
   }, [navigation]);
 
-  const itemCardHeight = containerHeight * 0.65;
+  // A little taller than before (0.65 → 0.70), with a sensible floor, so
+  // five lines of detail text plus the button row have comfortable room
+  // instead of feeling cramped or overlapping.
+  const itemCardHeight = Math.max(containerHeight * 0.70, 460);
 
   const renderListItem = useCallback(({ item, index }) => {
     if (item.__divider) {
@@ -503,9 +556,9 @@ const MatchesScreen = ({ navigation }) => {
               keyExtractor={(item) => item.id.toString()}
               renderItem={renderListItem}
               initialNumToRender={3}
-              maxToRenderPerBatch={3}
-              windowSize={5}
-              removeClippedSubviews={true}
+              maxToRenderPerBatch={5}
+              windowSize={7}
+              removeClippedSubviews={false}
               contentContainerStyle={styles.flatListContent}
               showsVerticalScrollIndicator={false}
               onEndReached={() => {
@@ -642,9 +695,11 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius['2xl'],
     ...shadows.card,
   },
-  card: {
+  // FIX #1: The card-level touchable only covers the photo/info area.
+  // Action buttons are rendered as siblings, not children, of this touchable.
+  cardTappableArea: {
     width: '100%',
-    height: '100%',
+    flex: 1,
     backgroundColor: colors.surfaceElevated,
     position: 'relative',
     overflow: 'hidden',
@@ -695,13 +750,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  // FIX #5: paddingBottom now reserves ACTION_BAR_HEIGHT + a visual gap for
+  // the action-bar overlay, so the gradient/text never sits underneath
+  // the buttons.
   infoContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 20,
+    paddingHorizontal: 20,
     paddingTop: 80,
+    paddingBottom: ACTION_BAR_HEIGHT + ACTION_BAR_GAP,
   },
   infoHeader: {
     flexDirection: 'row',
@@ -719,23 +778,31 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontWeight: '600',
   },
+  detailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+  },
   detailsText: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginTop: 4,
+    color: 'rgba(255, 255, 255, 0.78)',
+    flexShrink: 1,
   },
-  locationText: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginTop: 4,
-  },
-  spacer: {
-    height: 16,
-  },
-  actionsRow: {
+  // FIX #1 / FIX #5: Action buttons sit in their own fixed-height strip at
+  // the very bottom, as a SIBLING of the tappable card area (not nested
+  // inside it), and with a height that matches what infoContainer reserves.
+  actionsRowOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: ACTION_BAR_HEIGHT,
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
-    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
   },
   actionBtnSkip: {
     flex: 1,
@@ -744,15 +811,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 12,
     borderRadius: borderRadius.full,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.35)',
     gap: 6,
   },
   actionBtnSkipText: {
     fontSize: 14,
     fontWeight: '700',
-    color: 'rgba(255, 255, 255, 0.85)',
+    color: 'rgba(255, 255, 255, 0.9)',
   },
   actionBtnInterest: {
     flex: 1,

@@ -1,21 +1,84 @@
+/**
+ * Wedring Matrimony — Main App Entry Point
+ */
 import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import React, { useEffect } from 'react';
+import * as Linking from 'expo-linking';
+import supabase from './src/api/supabaseClient';
+import { StatusBar, LogBox } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import ErrorBoundary from './src/components/common/ErrorBoundary';
 import AppNavigator from './src/navigation/AppNavigator';
+import GlobalToast from './src/components/common/GlobalToast';
+import './src/i18n';
 
-const queryClient = new QueryClient();
+// Suppress specific warnings in development
+LogBox.ignoreLogs([
+  'Non-serializable values were found in the navigation state',
+  'AsyncStorage has been extracted',
+  'SafeAreaView has been deprecated',
+]);
+
+// Configure React Query with optimized defaults
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes
+      retry: 2,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+    },
+    mutations: {
+      retry: 1,
+    },
+  },
+});
 
 const App = () => {
+  useEffect(() => {
+    // Handle deep links when app is opened from a URL (magic link / OAuth callback)
+    const handleDeepLink = async (event) => {
+      const url = event.url;
+      if (url && url.includes('lotmatch://')) {
+        try {
+          // supabase-js v2: exchange the auth code in the URL for a session
+          await supabase.auth.exchangeCodeForSession(url);
+        } catch (err) {
+          console.error('Session from URL error', err);
+        }
+      }
+    };
+
+    // Listen to foreground deep links
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+
+    // Check if app was opened from a deep link initially
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink({ url });
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <AppNavigator />
+          <ErrorBoundary>
+            <StatusBar
+              barStyle="dark-content"
+              backgroundColor="#FFFFFF"
+              translucent={false}
+            />
+            <AppNavigator />
+            <GlobalToast />
+          </ErrorBoundary>
         </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

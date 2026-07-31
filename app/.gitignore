@@ -1,0 +1,9 @@
+
+# Environment files — never commit or ship these
+.env
+.env.local
+.env.*.local
+
+# Backup files — never commit or ship these
+*.bak
+*.orig

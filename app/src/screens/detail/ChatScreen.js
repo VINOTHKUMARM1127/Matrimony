@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
   StatusBar,
   Alert,
+  AppState,
 } from 'react-native';
 import { SafeAreaView as SafeAreaContextView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -27,16 +28,45 @@ import useAuthStore from '../../store/useAuthStore';
 import * as chatApi from '../../api/chat';
 import { getPrimaryPhotoUrl } from '../../api/profiles';
 import usePremium from '../../hooks/usePremium';
+import * as Notifications from 'expo-notifications';
 
 const ChatScreen = ({ route, navigation }) => {
-  const { chatId, otherUser } = route.params || {};
+  const { chatId, otherUser: otherUserParam } = route.params || {};
   const currentUser = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
 
   const [messageText, setMessageText] = useState('');
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const [otherUser, setOtherUser] = useState(otherUserParam || null);
+
+  // Track which chatId the current otherUser actually belongs to,
+  // so we can detect stale data when React Navigation merges params
+  // for a different chat without remounting the screen.
+  const otherUserChatIdRef = useRef(otherUserParam ? chatId : null);
 
   const flatListRef = useRef(null);
+
+  // 0a. Reset otherUser when chatId changes (merged-params navigation).
+  //     If the chatId no longer matches what we stored, clear the stale
+  //     otherUser so the fetch effect below re-fires for the new chat.
+  useEffect(() => {
+    if (chatId !== otherUserChatIdRef.current) {
+      setOtherUser(null);
+      otherUserChatIdRef.current = null;
+    }
+  }, [chatId]);
+
+  // 0b. If opened from a push notification (no otherUser in route params),
+  //     look up the other participant from the chats table.
+  useEffect(() => {
+    if (otherUser || !chatId || !currentUser?.id) return;
+    chatApi.getChatParticipant(chatId, currentUser.id)
+      .then((result) => {
+        setOtherUser(result);
+        otherUserChatIdRef.current = chatId;
+      })
+      .catch((err) => console.warn('getChatParticipant error:', err));
+  }, [chatId, currentUser?.id, otherUser]);
 
   // 1. Fetch messages
   const {
@@ -66,9 +96,58 @@ const ChatScreen = ({ route, navigation }) => {
     }
   }, [chatId, currentUser?.id, messages]);
 
-  // 3. Realtime message subscription
+  // 3. Realtime message subscription, Push Suppression & Presence Heartbeat
   useEffect(() => {
-    if (!chatId) return;
+    if (!chatId || !currentUser?.id) return;
+
+    // Suppress push notifications for this specific chat while screen is open
+    Notifications.setNotificationHandler({
+      handleNotification: async (notification) => {
+        const data = notification.request.content.data;
+        if (data?.type === 'new_message' && data?.entity_id === chatId) {
+          return {
+            shouldShowAlert: false,
+            shouldPlaySound: false,
+            shouldSetBadge: false,
+          };
+        }
+        return {
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+        };
+      },
+    });
+
+    // --- Presence heartbeat (server-side push suppression) ---
+    // Upsert immediately on mount
+    chatApi.upsertChatPresence(chatId, currentUser.id);
+
+    // Keep upserting every 15s while the screen stays mounted & app is active
+    let heartbeatInterval = setInterval(() => {
+      chatApi.upsertChatPresence(chatId, currentUser.id);
+    }, 15000);
+
+    // AppState listener: pause heartbeat + delete presence on background,
+    // resume on active
+    const appStateSubscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        // App backgrounded — stop heartbeat and clear presence
+        if (heartbeatInterval) {
+          clearInterval(heartbeatInterval);
+          heartbeatInterval = null;
+        }
+        chatApi.deleteChatPresence(chatId, currentUser.id);
+      } else if (nextState === 'active') {
+        // App foregrounded while still on this chat — re-upsert and restart
+        chatApi.upsertChatPresence(chatId, currentUser.id);
+        if (!heartbeatInterval) {
+          heartbeatInterval = setInterval(() => {
+            chatApi.upsertChatPresence(chatId, currentUser.id);
+          }, 15000);
+        }
+      }
+    });
 
     const subscription = chatApi.subscribeToMessages(
       chatId,
@@ -92,6 +171,14 @@ const ChatScreen = ({ route, navigation }) => {
         queryClient.setQueryData(['chatMessages', chatId], (oldMessages = []) => {
           return oldMessages.filter((m) => m.id !== deletedMessage.id);
         });
+      },
+      (updatedMessage) => {
+        // Merge updated fields (e.g. is_read) into cached message
+        queryClient.setQueryData(['chatMessages', chatId], (oldMessages = []) => {
+          return oldMessages.map((m) =>
+            m.id === updatedMessage.id ? { ...m, ...updatedMessage } : m
+          );
+        });
       }
     );
 
@@ -103,10 +190,31 @@ const ChatScreen = ({ route, navigation }) => {
     setIsSubscribed(true);
 
     return () => {
+      // Stop heartbeat and clean up presence
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      appStateSubscription.remove();
+      chatApi.deleteChatPresence(chatId, currentUser.id);
+
       if (subscription) subscription.unsubscribe();
       if (blockSub) blockSub.unsubscribe();
+      
+      // Restore default notification handler
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+        }),
+      });
     };
   }, [chatId, queryClient, currentUser?.id]);
+
+  // NOTE: Tick status (single/double/blue) is now driven by the persistent
+  // delivered_at column on each message row, not by live user_presence.
+  // delivered_at is set server-side (trigger at insert time + heartbeat backfill)
+  // and flows through the existing getMessages() / realtime onUpdate handler.
+  // No subscription needed here — the message UPDATE event already triggers
+  // a re-render when delivered_at changes.
 
   // 4. Send Message Mutation
   const sendMessageMutation = useMutation({
@@ -263,8 +371,8 @@ const ChatScreen = ({ route, navigation }) => {
               <ActivityIndicator size="small" color={colors.textInverse} style={{ marginLeft: 4, transform: [{ scale: 0.6 }] }} />
             ) : (
               isMe && (
-                <Text style={styles.statusIndicator}>
-                  {item.is_read ? ' ✓✓' : ' ✓'}
+                <Text style={[styles.statusIndicator, item.is_read && { color: '#53bdeb' }]}>
+                   {item.is_read ? ' ✓✓' : item.delivered_at ? ' ✓✓' : ' ✓'}
                 </Text>
               )
             )}

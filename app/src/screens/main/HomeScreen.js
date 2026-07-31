@@ -180,15 +180,7 @@ const HomeScreen = ({ navigation }) => {
         >
           <Icon name="settings" size={20} color={colors.textPrimary} strokeWidth={2} />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.iconButton}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          onPress={() => navigation.navigate('Notifications')}
-        >
-          <Icon name="bell" size={20} color={colors.textPrimary} strokeWidth={2} />
-          <View style={styles.notifDot} />
-        </TouchableOpacity>
+
       </View>
     </View>
   );

@@ -12,6 +12,7 @@ import PremiumSettings from './pages/admin/PremiumSettings';
 import DistributionManager from './pages/admin/DistributionManager';
 import PaymentHistory from './pages/admin/PaymentHistory';
 import ReportsManager from './pages/admin/ReportsManager';
+import NotificationManager from './pages/admin/NotificationManager';
 
 const App = () => {
   const { initialize, isInitializing } = useAuthStore();
@@ -38,6 +39,7 @@ const App = () => {
           <Route path="distribution" element={<DistributionManager />} />
           <Route path="payments" element={<PaymentHistory />} />
           <Route path="reports" element={<ReportsManager />} />
+          <Route path="notifications" element={<NotificationManager />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

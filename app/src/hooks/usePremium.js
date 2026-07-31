@@ -21,12 +21,15 @@ export const usePremium = () => {
         .order('position', { ascending: true });
 
       const tier = dashboard?.tier || 'free';
+      const expiresAt = dashboard?.plan_expires_at || dashboard?.expires_at;
+      const isExpired = expiresAt ? new Date(expiresAt) < new Date() : false;
+      const isPremium = tier !== 'free' && !isExpired;
 
       return {
         ...dashboard,
-        tier: tier === 'free' ? 'FREE' : tier.toUpperCase(),
-        is_premium: tier !== 'free',
-        expires_at: dashboard?.plan_expires_at || dashboard?.expires_at,
+        tier: isPremium ? tier.toUpperCase() : 'FREE',
+        is_premium: isPremium,
+        expires_at: expiresAt,
         total_recommended_unlocked: dashboard?.all_matches_count || 0,
         total_nearby_unlocked: dashboard?.daily_updates_count || 0,
         other_plans: queue?.map(q => ({

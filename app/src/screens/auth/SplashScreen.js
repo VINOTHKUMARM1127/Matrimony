@@ -6,17 +6,22 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, StatusBar, TouchableOpacity, Image } from 'react-native';
 import { colors } from '../../theme';
 import useAuthStore from '../../store/useAuthStore';
+import useProfileStore from '../../store/useProfileStore';
 
 const SplashScreen = ({ navigation }) => {
   const initialize = useAuthStore((s) => s.initialize);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const isLoading = useAuthStore((s) => s.isLoading);
+  const authError = useAuthStore((s) => s.error);
+  
+  const isProfileLoaded = useProfileStore((s) => s.isProfileLoaded);
+  const profileError = useProfileStore((s) => s.error);
+  const loadProfile = useProfileStore((s) => s.loadProfile);
 
   const logoScale = useRef(new Animated.Value(0.3)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const taglineOpacity = useRef(new Animated.Value(0)).current;
 
-  const [showRetry, setShowRetry] = useState(false);
+  const showRetry = !!authError || !!profileError;
 
   useEffect(() => {
     // Animate logo
@@ -41,35 +46,22 @@ const SplashScreen = ({ navigation }) => {
       }),
     ]).start();
 
-    // Initialize auth
+    // Initialize auth (AppNavigator also does this, but it's idempotent)
     initialize();
-
-    // Set a timeout to show a retry button if the app gets stuck
-    const timeout = setTimeout(() => {
-      setShowRetry(true);
-    }, 8000); // 8 seconds
-
-    return () => clearTimeout(timeout);
   }, []);
 
   const handleRetry = () => {
-    setShowRetry(false);
-    initialize();
-    
-    // Set a new timeout
-    setTimeout(() => {
-      setShowRetry(true);
-    }, 8000);
+    // Re-run initialization or profile load
+    if (isAuthenticated && profileError) {
+      const user = useAuthStore.getState().user;
+      if (user?.id) {
+        loadProfile(user.id);
+      }
+    } else {
+      initialize();
+    }
   };
 
-  useEffect(() => {
-    if (!isLoading) {
-      const timer = setTimeout(() => {
-        // Navigation will be handled by AppNavigator based on auth state
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [isLoading, isAuthenticated]);
 
   return (
     <View style={styles.container}>

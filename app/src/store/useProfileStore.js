@@ -45,9 +45,28 @@ const useProfileStore = create((set, get) => ({
     try {
       set({ isLoading: true, error: null });
       
-      const profilePromise = profilesApi.getMyProfile(userId);
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('loadProfile timeout')), 30000));
-      const data = await Promise.race([profilePromise, timeoutPromise]);
+      let data = null;
+      let lastError = null;
+      let delay = 2000;
+
+      // Exponential backoff for network/cold-start resilience
+      for (let i = 0; i < 3; i++) {
+        try {
+          const profilePromise = profilesApi.getMyProfile(userId);
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+          data = await Promise.race([profilePromise, timeoutPromise]);
+          lastError = null;
+          break; // Success
+        } catch (e) {
+          lastError = e;
+          if (i < 2) {
+            await new Promise(r => setTimeout(r, delay));
+            delay *= 2;
+          }
+        }
+      }
+
+      if (lastError) throw lastError;
       
       set({
         profile: data,
@@ -66,13 +85,13 @@ const useProfileStore = create((set, get) => ({
     } catch (error) {
       console.warn('Profile load error:', error);
 
-      // No mock-profile fallback: faking a profile here hid real auth/RLS
-      // failures. Surface the error and let the UI route to login/retry while
-      // ensuring we never get stuck on the splash screen.
+      // Distinguish network/timeout errors from "user has no profile"
+      const isNetworkError = error.message?.toLowerCase().includes('network') || error.message?.includes('timeout') || error.message?.includes('fetch');
+
       set({
         profile: null,
         isProfileComplete: false,
-        isProfileLoaded: true,
+        isProfileLoaded: !isNetworkError, // Don't proceed if it's a transient failure
         isLoading: false,
         error: error.message,
       });

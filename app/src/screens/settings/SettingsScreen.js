@@ -90,7 +90,6 @@ const SettingsScreen = ({ navigation }) => {
     {
       title: 'Preferences',
       rows: [
-        { icon: 'bell', tint: colors.primary, title: 'Notifications', desc: 'Manage alerts and emails', screen: 'Notifications' },
         { icon: 'privacy', tint: colors.textSecondary, title: 'Privacy & Security', desc: 'Control who can see your profile', screen: 'Privacy' },
       ],
     },

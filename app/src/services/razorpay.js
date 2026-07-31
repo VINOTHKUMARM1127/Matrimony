@@ -9,6 +9,16 @@ import { RAZORPAY_KEY_ID, APP_NAME } from '../utils/constants';
 import supabase from '../api/supabaseClient';
 import { Platform } from 'react-native';
 
+// Guard: a live key must never run outside production.
+const isLiveKey = RAZORPAY_KEY_ID.startsWith('rzp_live_');
+const isProduction = process.env.EXPO_PUBLIC_APP_ENV === 'production';
+if (isLiveKey && !isProduction) {
+  throw new Error(
+    `Refusing to start: a LIVE Razorpay key is configured under APP_ENV="${process.env.EXPO_PUBLIC_APP_ENV}". ` +
+    `Use a rzp_test_ key for development/preview builds.`
+  );
+}
+
 /**
  * Create Razorpay order via Supabase Edge Function
  * @param {string} planId — UUID of the membership_plans row

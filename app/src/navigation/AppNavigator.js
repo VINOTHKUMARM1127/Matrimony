@@ -3,7 +3,7 @@
  * Premium 5-tab navigation with elegant styling
  */
 import React, { useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, View, StyleSheet, Platform } from 'react-native';
@@ -32,7 +32,7 @@ import PartnerPreferenceScreen from '../screens/registration/PartnerPreferenceSc
 
 // Main Screens
 import HomeScreen from '../screens/main/HomeScreen';
-import NotificationsScreen from '../screens/main/NotificationsScreen';
+
 import MatchesScreen from '../screens/main/MatchesScreen';
 import InterestsScreen from '../screens/main/InterestsScreen';
 
@@ -56,6 +56,10 @@ import PremiumScreen from '../screens/premium/PremiumScreen';
 // Stores
 import useAuthStore from '../store/useAuthStore';
 import useProfileStore from '../store/useProfileStore';
+import useNotifications from '../hooks/useNotifications';
+import PresenceHeartbeat from '../components/PresenceHeartbeat';
+
+export const navigationRef = createNavigationContainerRef();
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -201,6 +205,9 @@ const AppNavigator = () => {
   const { isAuthenticated, isInitializing, user, initialize } = useAuthStore();
   const { isProfileComplete, isProfileLoaded, loadProfile } = useProfileStore();
 
+  // Initialize push notifications if authenticated
+  useNotifications();
+
   useEffect(() => {
     initialize();
   }, []);
@@ -216,7 +223,8 @@ const AppNavigator = () => {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
+      <PresenceHeartbeat />
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!isAuthenticated ? (
           <Stack.Screen name="Auth" component={AuthNavigator} />
@@ -228,7 +236,7 @@ const AppNavigator = () => {
             <Stack.Screen name="UserProfile" component={UserProfileScreen} />
             <Stack.Screen name="Premium" component={PremiumScreen} />
             <Stack.Screen name="UpgradesTab" component={PremiumScreen} />
-            <Stack.Screen name="Notifications" component={NotificationsScreen} />
+
             <Stack.Screen name="PhotoViewer" component={PhotoViewerScreen} />
             <Stack.Screen name="HoroscopeDetail" component={HoroscopeDetailScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />

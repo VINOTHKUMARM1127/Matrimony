@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Outlet, Navigate, NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, UploadCloud, Settings, LogOut, Heart, ChevronLeft, Menu, SlidersHorizontal, CreditCard, Download, KeyRound, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { LayoutDashboard, Users, UploadCloud, Settings, LogOut, Heart, ChevronLeft, Menu, SlidersHorizontal, CreditCard, Download, KeyRound, Eye, EyeOff, Loader2, Bell } from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
 import supabase from '../../api/supabaseClient';
 import * as adminApi from '../../api/adminApi';
@@ -90,6 +90,7 @@ const AdminLayout = () => {
         { to: '/users', icon: Users, label: 'Manage Users' },
         { to: '/bulk-upload', icon: UploadCloud, label: 'Bulk Upload' },
         { to: '/payments', icon: CreditCard, label: 'Payments' },
+        { to: '/notifications', icon: Bell, label: 'Notifications' },
       ],
     },
     {

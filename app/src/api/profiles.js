@@ -117,7 +117,28 @@ export const getProfile = async (profileId) => {
   const { data, error } = await supabase
     .from('profiles')
     .select(`
-      *,
+      id,
+      full_name,
+      dob,
+      gender,
+      height_cm,
+      marital_status,
+      about_me,
+      annual_income,
+      city_id,
+      district_id,
+      state_id,
+      religion_id,
+      caste_id,
+      sub_caste_text,
+      city_text,
+      degree,
+      education_level_id,
+      occupation_id,
+      is_active,
+      is_verified,
+      profile_completion,
+      updated_at,
       cities ( name ),
       districts ( name ),
       education_levels ( name ),
@@ -299,7 +320,25 @@ export const upsertProfileContact = async (contactData) => {
 export const searchProfiles = async (filters = {}, page = 0) => {
   let query = supabase
     .from('profiles')
-    .select('*', { count: 'exact' })
+    .select(`
+      id,
+      full_name,
+      dob,
+      gender,
+      height_cm,
+      marital_status,
+      city_id,
+      district_id,
+      state_id,
+      religion_id,
+      caste_id,
+      education_level_id,
+      occupation_id,
+      is_active,
+      is_verified,
+      profile_completion,
+      updated_at
+    `, { count: 'exact' })
     .eq('is_active', true)
     .neq('id', filters.excludeUserId);
 

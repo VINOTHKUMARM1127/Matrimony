@@ -1030,3 +1030,34 @@ export const triggerDailyDistribution = async () => {
   if (error) throw error;
   return data;
 };
+
+// ============================================================
+// ADMIN PUSH NOTIFICATIONS
+// ============================================================
+
+export const adminSendNotification = async (targetType, targetTier, targetUserId, title, body, type, screen) => {
+  const { data, error } = await supabase.rpc('fn_admin_send_notification', {
+    p_target_type: targetType,
+    p_target_tier: targetType === 'tier' ? targetTier : null,
+    p_target_user_id: targetType === 'user' ? targetUserId : null,
+    p_title: title,
+    p_body: body,
+    p_type: type,
+    p_screen: screen || null
+  });
+
+  if (error) throw new Error(error.message || 'Failed to send notifications');
+  return data;
+};
+
+export const fetchAdminNotificationLogs = async (limit = 50) => {
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('*')
+    .eq('data->>source', 'admin')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return data || [];
+};

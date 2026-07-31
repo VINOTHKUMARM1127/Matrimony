@@ -71,10 +71,19 @@ export const registerForPushNotifications = async () => {
 export const savePushToken = async (userId, token) => {
   if (!token) return;
 
+  const deviceName = Device.deviceName || 'Unknown Device';
+  const platform = Platform.OS;
+
   const { error } = await supabase
-    .from('profiles')
-    .update({ push_token: token })
-    .eq('id', userId);
+    .from('user_devices')
+    .upsert({
+      user_id: userId,
+      expo_push_token: token,
+      device_name: deviceName,
+      platform: platform,
+      last_seen_at: new Date().toISOString(),
+      is_active: true,
+    }, { onConflict: 'expo_push_token' });
 
   if (error) console.warn('Failed to save push token:', error);
 };

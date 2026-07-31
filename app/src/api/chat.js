@@ -14,6 +14,53 @@ import { getR2PhotoUrl } from './profiles';
 /**
  * Get user's chat list
  */
+
+/**
+ * Look up the other participant's profile for a given chat.
+ * Used when ChatScreen is opened from a push notification tap,
+ * where only chatId is available (no otherUser object in route params).
+ */
+export const getChatParticipant = async (chatId, currentUserId) => {
+  // 1. Get the chat row to find the other participant
+  const { data: chat, error: chatErr } = await supabase
+    .from('chats')
+    .select('participant_1, participant_2')
+    .eq('id', chatId)
+    .single();
+
+  if (chatErr || !chat) throw chatErr || new Error('Chat not found');
+
+  const otherUserId = chat.participant_1 === currentUserId
+    ? chat.participant_2
+    : chat.participant_1;
+
+  // 2. Fetch their profile + photos
+  const [
+    { data: profile, error: profErr },
+    { data: photos },
+  ] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('id, full_name, city')
+      .eq('id', otherUserId)
+      .single(),
+    supabase
+      .from('profile_photos')
+      .select('id, user_id, r2_key, thumbnail_key, is_primary')
+      .eq('user_id', otherUserId),
+  ]);
+
+  if (profErr || !profile) throw profErr || new Error('Profile not found');
+
+  return {
+    ...profile,
+    profile_photos: (photos || []).map(p => ({
+      ...p,
+      photo_url: getR2PhotoUrl(p.r2_key),
+      thumbnail_url: getR2PhotoUrl(p.thumbnail_key),
+    })),
+  };
+};
 export const getChatList = async (userId) => {
   // 1. Fetch all accepted interests where the user is either sender or receiver
   const { data: interests, error: intError } = await supabase
@@ -125,10 +172,19 @@ export const getMessages = async (chatId, limit = 25, before = null) => {
   return (data || []).reverse();
 };
 
-/**
- * Send a message
- */
 export const sendMessage = async (chatId, senderId, content, messageType = 'text') => {
+  // 1. Verify active session before attempting insert
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  
+  if (sessionError || !session?.user?.id) {
+    throw new Error('Session expired. Please close the app and log in again.');
+  }
+
+  if (session.user.id !== senderId) {
+    throw new Error('Auth mismatch. Local user does not match live session.');
+  }
+
+  // 2. Perform the insert
   const { data, error } = await supabase
     .from('messages')
     .insert({
@@ -142,14 +198,11 @@ export const sendMessage = async (chatId, senderId, content, messageType = 'text
 
   if (error) throw error;
 
-  // Update chat last message
-  await supabase
-    .from('chats')
-    .update({
-      last_message_text: content,
-      last_message_at: new Date().toISOString(),
-    })
-    .eq('id', chatId);
+  // NOTE: No client-side chats.update() here — the DB trigger
+  // trg_fn_after_message_insert already sets last_message_text and
+  // last_message_at atomically using the server clock. A redundant
+  // client write with new Date().toISOString() would use the device
+  // clock, which can corrupt sort order if the phone's time is off.
 
   return data;
 };
@@ -199,9 +252,9 @@ export const markMessagesRead = async (chatId, userId) => {
 };
 
 /**
- * Subscribe to new messages and deletions in a chat
+ * Subscribe to new messages, updates, and deletions in a chat
  */
-export const subscribeToMessages = (chatId, onInsert, onDelete) => {
+export const subscribeToMessages = (chatId, onInsert, onDelete, onUpdate) => {
   return supabase
     .channel(`chat:${chatId}`)
     .on(
@@ -213,6 +266,16 @@ export const subscribeToMessages = (chatId, onInsert, onDelete) => {
         filter: `chat_id=eq.${chatId}`,
       },
       (payload) => onInsert && onInsert(payload.new)
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'messages',
+        filter: `chat_id=eq.${chatId}`,
+      },
+      (payload) => onUpdate && onUpdate(payload.new)
     )
     .on(
       'postgres_changes',
@@ -250,6 +313,40 @@ export const getUnreadCount = async (userId) => {
 
   if (error) return 0;
   return count || 0;
+};
+
+/**
+ * Get unread message count per chat (for badge display on chat list).
+ * Returns a map: { [chatId]: number }.
+ * PostgREST can't do GROUP BY, so we fetch the chat_id of each unread
+ * message and count client-side — the cap of 25 messages per chat keeps
+ * the result set very small.
+ */
+export const getUnreadCountPerChat = async (userId) => {
+  // Get all chat IDs where user is a participant
+  const { data: chats } = await supabase
+    .from('chats')
+    .select('id')
+    .or(`participant_1.eq.${userId},participant_2.eq.${userId}`);
+
+  if (!chats || chats.length === 0) return {};
+
+  const chatIds = chats.map(c => c.id);
+
+  const { data, error } = await supabase
+    .from('messages')
+    .select('chat_id')
+    .in('chat_id', chatIds)
+    .neq('sender_id', userId)
+    .eq('is_read', false);
+
+  if (error || !data) return {};
+
+  const counts = {};
+  for (const row of data) {
+    counts[row.chat_id] = (counts[row.chat_id] || 0) + 1;
+  }
+  return counts;
 };
 
 /**
@@ -293,4 +390,162 @@ export const getBlockStatus = async (userId, targetId) => {
   const blockedByOther = (rows || []).some(r => r.blocker_id === targetId);
   
   return { isBlocked: !!data, blockedByMe, blockedByOther };
+};
+
+/**
+ * Upsert presence row — signals that this user is actively viewing the chat.
+ * Called on ChatScreen mount and every ~15s as a heartbeat.
+ */
+export const upsertChatPresence = async (chatId, userId) => {
+  const { error } = await supabase
+    .from('chat_presence')
+    .upsert(
+      {
+        chat_id: chatId,
+        user_id: userId,
+        last_active_at: new Date().toISOString(),
+      },
+      { onConflict: 'chat_id,user_id' }
+    );
+  if (error) console.warn('upsertChatPresence error:', error);
+};
+
+/**
+ * Delete presence row — signals that this user has left the chat screen.
+ * Called on ChatScreen unmount and when app backgrounds.
+ */
+export const deleteChatPresence = async (chatId, userId) => {
+  const { error } = await supabase
+    .from('chat_presence')
+    .delete()
+    .eq('chat_id', chatId)
+    .eq('user_id', userId);
+  if (error) console.warn('deleteChatPresence error:', error);
+};
+
+/**
+ * Get the other participant's presence row for a chat
+ */
+export const getChatPresence = async (chatId, excludeUserId) => {
+  const { data, error } = await supabase
+    .from('chat_presence')
+    .select('*')
+    .eq('chat_id', chatId)
+    .neq('user_id', excludeUserId)
+    .maybeSingle();
+  if (error && error.code !== 'PGRST116') {
+    console.warn('getChatPresence error:', error);
+  }
+  return data;
+};
+
+/**
+ * Subscribe to realtime changes in chat presence for a specific chat
+ */
+export const subscribeToChatPresence = (chatId, onChange) => {
+  return supabase
+    .channel(`presence:${chatId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'chat_presence',
+        filter: `chat_id=eq.${chatId}`,
+      },
+      (payload) => onChange && onChange(payload)
+    )
+    .subscribe();
+};
+
+// ─── App-wide User Presence (drives grey double-tick for "online") ───
+
+/**
+ * Upsert the current user's app-wide presence row AND backfill delivered_at
+ * for any messages received while offline.
+ * Uses the fn_upsert_user_presence_and_backfill RPC which atomically:
+ *   1. Upserts user_presence (same as before)
+ *   2. Sets delivered_at = now() on any received messages where delivered_at IS NULL
+ * Called from PresenceHeartbeat component every 15s while app is foregrounded.
+ */
+export const upsertUserPresence = async (userId) => {
+  const { error } = await supabase.rpc('fn_upsert_user_presence_and_backfill', {
+    p_user_id: userId,
+  });
+  if (error) console.warn('upsertUserPresence error:', error);
+};
+
+/**
+ * Get another user's app-wide presence row (one-off check).
+ */
+export const getUserPresence = async (userId) => {
+  const { data, error } = await supabase
+    .from('user_presence')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error && error.code !== 'PGRST116') {
+    console.warn('getUserPresence error:', error);
+  }
+  return data;
+};
+
+/**
+ * Subscribe to realtime changes in a specific user's app-wide presence.
+ */
+export const subscribeToUserPresence = (userId, onChange) => {
+  return supabase
+    .channel(`user-presence:${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'user_presence',
+        filter: `user_id=eq.${userId}`,
+      },
+      (payload) => onChange && onChange(payload)
+    )
+    .subscribe();
+};
+
+// ─── Batch presence helpers (for ChatListScreen) ───
+
+/**
+ * Fetch presence for multiple users in a single query.
+ * Returns an array of { user_id, last_active_at } rows.
+ * RLS on user_presence_select already restricts to chat partners.
+ */
+export const getBatchUserPresence = async (userIds) => {
+  if (!userIds || userIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('user_presence')
+    .select('user_id, last_active_at')
+    .in('user_id', userIds);
+  if (error) {
+    console.warn('getBatchUserPresence error:', error);
+    return [];
+  }
+  return data || [];
+};
+
+/**
+ * Subscribe to ALL user_presence changes visible to the current user.
+ * No per-user filter — RLS on user_presence_select already restricts
+ * visible rows to users who share a chat with the caller. This is the
+ * correct pattern for a list screen with many contacts.
+ */
+export const subscribeToAllUserPresence = (onChange) => {
+  return supabase
+    .channel(`user-presence-all:${Date.now()}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'user_presence',
+      },
+      (payload) => onChange && onChange(payload)
+    )
+    .subscribe();
 };

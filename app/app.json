@@ -22,7 +22,8 @@
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#E8631A"
       },
-      "package": "com.vinoth_kumarm_27.MATRIMONY"
+      "package": "com.vinoth_kumarm_27.MATRIMONY",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {},
     "plugins": [
@@ -46,6 +47,14 @@
               "cropScreenBackgroundColor": "#121212"
             }
           }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#E8631A",
+          "defaultChannel": "default"
         }
       ]
     ],

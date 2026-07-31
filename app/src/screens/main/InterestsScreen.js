@@ -980,6 +980,7 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     height: 40,
+    paddingHorizontal: 20,
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
